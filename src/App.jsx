@@ -25,7 +25,7 @@ import {
   PlayoffProbTab,
   WeeklyOutlookTab,
   ScenarioTab,
-  LuckIndexTab, 
+  LuckIndexTab,
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
 const LS_KEY = "FL_STORE_v1";
@@ -126,12 +126,13 @@ function upsertLeague({
       espnOwnerFullByTeamByYear || prev.espnOwnerFullByTeamByYear || {},
     espnTeamNamesByOwner:
       espnTeamNamesByOwner || prev.espnTeamNamesByOwner || {},
-      espnRostersByYear: espnRostersByYear || prev.espnRostersByYear || {},
+    espnRostersByYear: espnRostersByYear || prev.espnRostersByYear || {},
     espnLineupSlotsByYear:
       espnLineupSlotsByYear || prev.espnLineupSlotsByYear || {},
     espnRosterAcqByYear: espnRosterAcqByYear || prev.espnRosterAcqByYear || {},
     espnPlayoffTeamsBySeason:
       espnPlayoffTeamsBySeason || prev.espnPlayoffTeamsBySeason || {},
+
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
       : Array.from(prev.hiddenManagers || []),
@@ -369,6 +370,59 @@ function extractPlayoffTeamsBySeason(seasons = []) {
     if (Number.isFinite(n) && n > 0) out[yr] = n;
   });
   return out;
+}
+function buildScheduleFromRows(rows = []) {
+  const byYear = {};
+  const seen = new Set();
+
+  for (const r of rows || []) {
+    const year = Number(r.season);
+    const week = Number(r.week);
+    if (!Number.isFinite(year) || !Number.isFinite(week)) continue;
+
+    const a = String(r.manager || "");
+    const b = String(r.opponent || "");
+    if (!a || !b) continue;
+
+    const lo = [a, b].sort();
+    const key = `${year}|${week}|${lo[0]}|${lo[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const opp = (rows || []).find(
+      (x) =>
+        Number(x.season) === year &&
+        Number(x.week) === week &&
+        String(x.manager || "") === b &&
+        String(x.opponent || "") === a
+    );
+
+    const homePts = Number(r.points_for) || 0;
+    const awayPts = Number(opp?.points_for) || Number(r.points_against) || 0;
+
+    const game = {
+      matchupPeriodId: week,
+      home: {
+        teamName: r.team_name || a,
+        ownerName: a,
+        totalPoints: homePts,
+      },
+      away: {
+        teamName: opp?.team_name || b,
+        ownerName: b,
+        totalPoints: awayPts,
+      },
+      playoffTierType: r.is_playoff ? "PLAYOFF" : "NONE",
+    };
+
+    if (!byYear[year]) byYear[year] = [];
+    byYear[year].push(game);
+  }
+
+  Object.values(byYear).forEach((arr) =>
+    arr.sort((x, y) => (x.matchupPeriodId || 0) - (y.matchupPeriodId || 0))
+  );
+  return byYear;
 }
 
 /* ---------------- Draft helpers (robust) ------------------- */
@@ -937,6 +991,30 @@ function attachFinishPosFromLocal(draftByYear, scoringLabel = "PPR") {
 
 /* ---------------- ROSTER BUILD (for Roster tab & adds inference) --- */
 function buildRostersByYear(seasons = []) {
+  const toFinite = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
+  const firstDefined = (...cands) => {
+    for (const cand of cands) {
+      if (cand !== undefined && cand !== null) return cand;
+    }
+    return null;
+  };
+  const collectWeekNums = (value, outSet) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach((v) => collectWeekNums(v, outSet));
+      return;
+    }
+    if (typeof value === "object") {
+      Object.values(value || {}).forEach((v) => collectWeekNums(v, outSet));
+      return;
+    }
+    const n = toFinite(value);
+    if (n != null) outSet.add(n);
+  };
+
   const out = {};
   seasons.forEach((s) => {
     const yr = Number(s?.seasonId);
@@ -977,26 +1055,68 @@ function buildRostersByYear(seasons = []) {
                 e?.lineupSlotIdFinal
             );
             const pts =
-            Number(
-              e?.appliedTotal ??
-              e?.playerPoints?.appliedTotal ??
-              e?.appliedStatTotal ??
-              0
-            ) || 0;
+              Number(
+                e?.appliedTotal ??
+                  e?.playerPoints?.appliedTotal ??
+                  e?.appliedStatTotal ??
+                  0
+              ) || 0;
 
             const proj = (() => {
               const v =
                 e?.proj ??
                 e?.projectedPoints ??
                 e?.playerPoolEntry?.projectedPoints ??
-                e?.projStart ??            // legacy support
+                e?.projStart ?? // legacy support
                 null;
               const n = Number(v);
               return Number.isFinite(n) ? n : 0;
             })();
-            
-            list.push({ pid, name, posId, slotId, pts, proj });
-            
+
+            const entry = { pid, name, posId, slotId, pts, proj };
+
+            const injuredSource = firstDefined(
+              e?.injured,
+              e?.player?.injured,
+              e?.playerPoolEntry?.injured,
+              p?.injured
+            );
+            if (injuredSource != null) entry.injured = Boolean(injuredSource);
+
+            const onByeSource = firstDefined(
+              e?.onBye,
+              e?.player?.onBye,
+              e?.playerPoolEntry?.onBye,
+              p?.onBye
+            );
+            if (onByeSource != null) entry.onBye = Boolean(onByeSource);
+
+            const byeWeeksSet = new Set();
+            collectWeekNums(e?.byeWeeks, byeWeeksSet);
+            collectWeekNums(e?.player?.byeWeeks, byeWeeksSet);
+            collectWeekNums(e?.playerPoolEntry?.byeWeeks, byeWeeksSet);
+            collectWeekNums(p?.byeWeeks, byeWeeksSet);
+            collectWeekNums(p?.byeWeekSchedule, byeWeeksSet);
+            collectWeekNums(p?.proTeamByeWeekSchedule, byeWeeksSet);
+            if (byeWeeksSet.size) entry.byeWeeks = Array.from(byeWeeksSet);
+
+            const byeWeek = firstDefined(
+              toFinite(e?.byeWeek),
+              toFinite(e?.player?.byeWeek),
+              toFinite(e?.playerPoolEntry?.byeWeek),
+              toFinite(p?.byeWeek)
+            );
+            if (byeWeek != null) entry.byeWeek = byeWeek;
+
+            const proTeamByeWeek = firstDefined(
+              toFinite(e?.proTeamByeWeek),
+              toFinite(e?.player?.proTeamByeWeek),
+              toFinite(e?.playerPoolEntry?.proTeamByeWeek),
+              toFinite(p?.proTeamByeWeek)
+            );
+            if (proTeamByeWeek != null) entry.proTeamByeWeek = proTeamByeWeek;
+
+            list.push(entry);
           });
           weeks[Number(spid)] = list;
         });
@@ -1283,8 +1403,12 @@ export default function App() {
       setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
       setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
       setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
-      setScheduleByYear(rec?.espnScheduleByYear || {});
-      setHiddenManagers(new Set(rec?.hiddenManagers || [])); 
+      const sched =
+        rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
+          ? rec.espnScheduleByYear
+          : buildScheduleFromRows(rec?.rows || []);
+      setScheduleByYear(sched);
+      setHiddenManagers(new Set(rec?.hiddenManagers || []));
     } else {
       setSelectedLeagueKey("");
       setSelectedLeague("");
@@ -1332,7 +1456,11 @@ export default function App() {
     setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
     setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
-    setScheduleByYear(rec?.espnScheduleByYear || {});
+    const sched =
+      rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
+        ? rec.espnScheduleByYear
+        : buildScheduleFromRows(rec?.rows || []);
+    setScheduleByYear(sched);
     setHiddenManagers(new Set(rec?.hiddenManagers || []));
   }
 
@@ -1846,12 +1974,12 @@ export default function App() {
         return out;
       })();
       const rosterMap =
-      data.rostersByYear && Object.keys(data.rostersByYear).length
-        ? data.rostersByYear
-        : buildRostersByYear(seasons);
-    const lineupSlots = data.lineupSlotsByYear || {};
-    const rosterAcq = data.rosterAcqByYear || {};
-    const existingMoney =
+        data.rostersByYear && Object.keys(data.rostersByYear).length
+          ? data.rostersByYear
+          : buildRostersByYear(seasons);
+      const lineupSlots = data.lineupSlotsByYear || {};
+      const rosterAcq = data.rosterAcqByYear || {};
+      const existingMoney =
         readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
       const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
 
@@ -1978,14 +2106,18 @@ export default function App() {
               name: e?.name,
               pid,
               slotId: e?.lineupSlotId ?? e?.slotId ?? e?.slot,
-              defaultPositionId: e?.defaultPositionId ?? e?.player?.defaultPositionId,
-              eligibleSlots: JSON.stringify(e?.eligibleSlots ?? e?.player?.eligibleSlots ?? null),
-              pts: e?.appliedTotal ?? e?.playerPoints?.appliedTotal ?? e?.pts ?? 0,
+              defaultPositionId:
+                e?.defaultPositionId ?? e?.player?.defaultPositionId,
+              eligibleSlots: JSON.stringify(
+                e?.eligibleSlots ?? e?.player?.eligibleSlots ?? null
+              ),
+              pts:
+                e?.appliedTotal ?? e?.playerPoints?.appliedTotal ?? e?.pts ?? 0,
               proj: e?.proj ?? 0,
             };
           })
         );
-        
+
         console.log("acqMap (for team/year):", acqMap);
         console.groupEnd();
 
@@ -2300,19 +2432,19 @@ export default function App() {
               Playoff Probability
             </SidebarButton>
             <SidebarButton
-  active={section === "luck"}
-  onClick={() => setSection("luck")}
-  disabled={!league}
->
-  Luck Index
-</SidebarButton>
+              active={section === "luck"}
+              onClick={() => setSection("luck")}
+              disabled={!league}
+            >
+              Luck Index
+            </SidebarButton>
             <SidebarButton
-  active={section === "scenario"}        // 👈 new
-  onClick={() => setSection("scenario")} // 👈 new
-  disabled={!league}
->
-  Scenario
-</SidebarButton>
+              active={section === "scenario"} // 👈 new
+              onClick={() => setSection("scenario")} // 👈 new
+              disabled={!league}
+            >
+              Scenario
+            </SidebarButton>
           </aside>
           {/* MAIN */}
           <main className="space-y-6">
@@ -2388,11 +2520,10 @@ export default function App() {
                 {leagueWithHidden && section === "h2h" && (
                   <H2HTab league={leagueWithHidden} />
                 )}
-                {leagueWithHidden && section === "scenario" && (   // 👈 new
-  <ScenarioTab                                     
-    league={leagueWithHidden}
-  />
-)}
+                {leagueWithHidden &&
+                  section === "scenario" && ( // 👈 new
+                    <ScenarioTab league={leagueWithHidden} />
+                  )}
                 {league && section === "placements" && (
                   <PlacementsTab
                     league={leagueWithHidden} // ← important
@@ -2409,21 +2540,20 @@ export default function App() {
                     setMoneyInputs={handleMoneyInputsChanged}
                   />
                 )}
-             {leagueWithHidden && section === "records" && (
-  <RecordsTab
-    league={leagueWithHidden}
-    scheduleByYear={scheduleByYear}
-    ownerByTeamByYear={ownerByTeamByYear}
-  />
-)}
-{leagueWithHidden && section === "luck" && (
-  <LuckIndexTab
-  league={leagueWithHidden}
-  rawRows={rawRows}
-  rostersByYear={rostersByYear}
-/>
-
-)}
+                {leagueWithHidden && section === "records" && (
+                  <RecordsTab
+                    league={leagueWithHidden}
+                    scheduleByYear={scheduleByYear}
+                    ownerByTeamByYear={ownerByTeamByYear}
+                  />
+                )}
+                {leagueWithHidden && section === "luck" && (
+                  <LuckIndexTab
+                    league={leagueWithHidden}
+                    rawRows={rawRows}
+                    rostersByYear={rostersByYear}
+                  />
+                )}
 
                 {leagueWithHidden && section === "playoffprob" && (
                   <PlayoffProbTab
@@ -2434,13 +2564,13 @@ export default function App() {
                 )}
                 {/* ✅ Roster route */}
                 {league && section === "roster" && (
-                <RosterTab
-                rostersByYear={rostersByYear}
-                ownerByTeamByYear={ownerByTeamByYear}
-                lineupSlotsByYear={lineupSlotsByYear}
-                currentWeekByYear={currentWeekBySeason}
-                rosterAcqByYear={rosterAcqByYear}
-              />              
+                  <RosterTab
+                    rostersByYear={rostersByYear}
+                    ownerByTeamByYear={ownerByTeamByYear}
+                    lineupSlotsByYear={lineupSlotsByYear}
+                    currentWeekByYear={currentWeekBySeason}
+                    rosterAcqByYear={rosterAcqByYear}
+                  />
                 )}
                 {league &&
                   section === "trades" &&

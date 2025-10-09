@@ -5558,6 +5558,61 @@ const __entryEligibleSlots = (e) =>
   e?.player?.eligibleSlots ??
   e?.playerPoolEntry?.player?.eligibleSlots ??
   null;
+const __entryIsMarkedInjured = (entry) => {
+  if (!entry) return false;
+  if (entry?.injured === true) return true;
+  const sid = Number(__entrySlotId(entry));
+  if (sid === SLOT.IR) return true;
+  return false;
+};
+const __collectWeekNums = (value, outSet) => {
+  if (!value) return;
+  if (Array.isArray(value)) {
+    value.forEach((v) => __collectWeekNums(v, outSet));
+    return;
+  }
+  if (typeof value === "object") {
+    Object.values(value || {}).forEach((v) => __collectWeekNums(v, outSet));
+    return;
+  }
+  const n = Number(value);
+  if (Number.isFinite(n)) outSet.add(n);
+};
+const __entryByeWeekNumbers = (entry) => {
+  const set = new Set();
+  __collectWeekNums(entry?.byeWeeks, set);
+  __collectWeekNums(entry?.byeWeekSchedule, set);
+  __collectWeekNums(entry?.proTeamByeWeekSchedule, set);
+  __collectWeekNums(entry?.player?.byeWeeks, set);
+  __collectWeekNums(entry?.player?.byeWeekSchedule, set);
+  __collectWeekNums(entry?.playerPoolEntry?.byeWeeks, set);
+  __collectWeekNums(entry?.playerPoolEntry?.byeWeekSchedule, set);
+  __collectWeekNums(entry?.playerPoolEntry?.player?.byeWeeks, set);
+  __collectWeekNums(entry?.playerPoolEntry?.player?.byeWeekSchedule, set);
+  return Array.from(set);
+};
+const __entryIsOnByeForWeek = (entry, week) => {
+  if (!entry) return false;
+  if (entry?.onBye != null) return Boolean(entry.onBye);
+  const w = Number(week);
+  if (!Number.isFinite(w) || w <= 0) return false;
+  const singles = [
+    entry?.byeWeek,
+    entry?.proTeamByeWeek,
+    entry?.player?.byeWeek,
+    entry?.player?.proTeamByeWeek,
+    entry?.playerPoolEntry?.byeWeek,
+    entry?.playerPoolEntry?.proTeamByeWeek,
+    entry?.playerPoolEntry?.player?.byeWeek,
+    entry?.playerPoolEntry?.player?.proTeamByeWeek,
+  ];
+  for (const cand of singles) {
+    const n = Number(cand);
+    if (Number.isFinite(n) && n === w) return true;
+  }
+  const weeks = __entryByeWeekNumbers(entry);
+  return weeks.some((n) => n === w);
+};
 
 // Build the list of starting slotIds for this league (exclude BENCH/IR)
 function __buildStartSlots(lineupCounts = {}) {
@@ -10908,22 +10963,30 @@ export function LuckIndexTab({
     };
 
     const resolvePlayerName = (seasonKey, seasonNum, entry) => {
+      const playerNameParts = [
+        entry?.player?.firstName,
+        entry?.player?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const poolNameParts = [
+        entry?.playerPoolEntry?.player?.firstName,
+        entry?.playerPoolEntry?.player?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
       const direct =
         entry?.name ??
         entry?.playerName ??
         entry?.player?.fullName ??
         entry?.player?.name ??
-        [entry?.player?.firstName, entry?.player?.lastName]
-          .filter(Boolean)
-          .join(" ") ||
+        (playerNameParts ? playerNameParts : undefined) ??
         entry?.playerPoolEntry?.player?.fullName ??
         entry?.playerPoolEntry?.player?.name ??
-        [
-          entry?.playerPoolEntry?.player?.firstName,
-          entry?.playerPoolEntry?.player?.lastName,
-        ]
-          .filter(Boolean)
-          .join(" ");
+        (poolNameParts ? poolNameParts : undefined);
       if (direct) return direct;
 
       const pid = resolvePlayerId(entry);
@@ -10968,7 +11031,8 @@ export function LuckIndexTab({
             if (proj > 0) continue;
 
             const pid = resolvePlayerId(entry);
-            const seenKey = pid != null ? `pid:${pid}` : `slot:${slotId}|${weekNum}`;
+            const seenKey =
+              pid != null ? `pid:${pid}` : `slot:${slotId}|${weekNum}`;
             if (seen.has(seenKey)) continue;
             seen.add(seenKey);
 
@@ -10987,7 +11051,10 @@ export function LuckIndexTab({
       }
     }
 
-    console.log("[Luck] comp2 (injury weeks via proj=0) by owner/year:", totals);
+    console.log(
+      "[Luck] comp2 (injury weeks via proj=0) by owner/year:",
+      totals
+    );
     return { totals, details };
   }, [
     rostersByYear,
@@ -11013,7 +11080,6 @@ export function LuckIndexTab({
       .filter((name) => !hiddenManagersSet.has(name))
       .sort((a, b) => a.localeCompare(b));
   }, [ownersBase, comp1ByOwnerYear, injuryByOwnerYear, hiddenManagersSet]);
-
   const [comp1Detail, setComp1Detail] = React.useState(null);
   React.useEffect(() => {
     if (comp1Detail?.owner && hiddenManagersSet.has(comp1Detail.owner)) {
