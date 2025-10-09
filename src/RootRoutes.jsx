@@ -1,0 +1,21 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+import ApitonHome from "./ApitonHome.jsx";
+import App from "./App.jsx";
+import ProtectedRoute from "./ProtectedRoute.jsx";
+
+export default function RootRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<ApitonHome />} />
+      <Route
+        path="/app/*"
+        element={
+          <ProtectedRoute>
+            <App />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

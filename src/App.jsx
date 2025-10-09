@@ -1,0 +1,2500 @@
+// App.jsx
+import React, { useEffect, useState } from "react";
+import {
+  SidebarButton,
+  Footer,
+} from "/project/workspace/src/Components/ui.jsx";
+import { FP_ADP_BY_YEAR } from "/project/workspace/src/Data/adpData.jsx";
+import {
+  primeOwnerMaps,
+  ownerMapFor,
+} from "/project/workspace/src/ownerMaps.jsx";
+
+import {
+  UploadBox,
+  SetupTab,
+  MembersTab,
+  CareerTab,
+  H2HTab,
+  PlacementsTab,
+  MoneyTab,
+  RecordsTab,
+  TradesTab,
+  DraftTab,
+  RosterTab,
+  PlayoffProbTab,
+  WeeklyOutlookTab,
+  ScenarioTab,
+  LuckIndexTab, 
+} from "/project/workspace/src/Components/tabs.jsx";
+import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
+const LS_KEY = "FL_STORE_v1";
+/*
+  Storage shape:
+  {
+    leaguesById: {
+      [leagueId]: {
+        leagueId, leagueKey, name, platform, scoring, lastUpdated,
+        rows, draftByYear, adpSourceByYear, moneyInputs,
+        activityBySeason,
+        espnTransactionsByYear,
+        espnWeeklyPtsByYear,
+        espnOwnerByTeamByYear,   // { [year]: { [teamId]: "Owner Name" } }
+        espnOwnerMapByYear,      // alias kept for back-compat
+        espnRostersByYear        // { [year]: { [teamId]: { [week]: [{pid,name,posId,slotId,pts,projStart?}] } } }
+        espnPlayoffTeamsBySeason // { [year]: number }
+        hiddenManagers            // [ "Name A", "Name B", ... ] — globally hidden in UI
+
+      }
+    },
+    lastSelectedLeagueId
+  }
+*/
+function readStore() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return { leaguesById: {}, lastSelectedLeagueId: "" };
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object")
+      return { leaguesById: {}, lastSelectedLeagueId: "" };
+    return {
+      leaguesById: obj.leaguesById || {},
+      lastSelectedLeagueId: obj.lastSelectedLeagueId || "",
+    };
+  } catch {
+    return { leaguesById: {}, lastSelectedLeagueId: "" };
+  }
+}
+function writeStore(next) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(next));
+  } catch {}
+}
+function upsertLeague({
+  leagueId,
+  leagueKey,
+  name,
+  platform,
+  scoring,
+  rows,
+  draftByYear,
+  adpSourceByYear,
+  moneyInputs,
+  activityBySeason,
+  espnTransactionsByYear,
+  espnWeeklyPtsByYear,
+  espnOwnerByTeamByYear,
+  espnOwnerFullByTeamByYear,
+  espnTeamNamesByOwner,
+  espnRostersByYear,
+  espnLineupSlotsByYear,
+  espnRosterAcqByYear,
+  espnPlayoffTeamsBySeason,
+  playoffTeamsOverrides,
+  espnCurrentWeekBySeason,
+  espnScheduleByYear: scheduleByYear,
+  hiddenManagers,
+}) {
+  const store = readStore();
+  const prev = store.leaguesById[leagueId] || {};
+  const keepIfNonEmpty = (next, prevVal = {}) =>
+    next && typeof next === "object" && Object.keys(next).length > 0
+      ? next
+      : prevVal;
+  store.leaguesById[leagueId] = {
+    leagueId,
+    leagueKey,
+    name: name || prev.name || `League ${leagueId}`,
+    platform: platform || prev.platform || "ESPN",
+    scoring: scoring || prev.scoring || "Standard",
+    lastUpdated: Date.now(),
+    rows: Array.isArray(rows) ? rows : prev.rows || [],
+    draftByYear: draftByYear || prev.draftByYear || {},
+    adpSourceByYear: adpSourceByYear || prev.adpSourceByYear || {},
+    moneyInputs: moneyInputs || prev.moneyInputs || {},
+    activityBySeason: activityBySeason || prev.activityBySeason || {},
+    espnTransactionsByYear:
+      espnTransactionsByYear || prev.espnTransactionsByYear || {},
+    espnWeeklyPtsByYear: espnWeeklyPtsByYear || prev.espnWeeklyPtsByYear || {},
+    espnOwnerByTeamByYear:
+      espnOwnerByTeamByYear ||
+      prev.espnOwnerByTeamByYear ||
+      prev.espnOwnerMapByYear ||
+      {},
+    espnOwnerMapByYear: espnOwnerByTeamByYear || prev.espnOwnerMapByYear || {},
+    espnOwnerFullByTeamByYear:
+      espnOwnerFullByTeamByYear || prev.espnOwnerFullByTeamByYear || {},
+    espnTeamNamesByOwner:
+      espnTeamNamesByOwner || prev.espnTeamNamesByOwner || {},
+      espnRostersByYear: espnRostersByYear || prev.espnRostersByYear || {},
+    espnLineupSlotsByYear:
+      espnLineupSlotsByYear || prev.espnLineupSlotsByYear || {},
+    espnRosterAcqByYear: espnRosterAcqByYear || prev.espnRosterAcqByYear || {},
+    espnPlayoffTeamsBySeason:
+      espnPlayoffTeamsBySeason || prev.espnPlayoffTeamsBySeason || {},
+    hiddenManagers: Array.isArray(hiddenManagers)
+      ? hiddenManagers
+      : Array.from(prev.hiddenManagers || []),
+    playoffTeamsOverrides:
+      playoffTeamsOverrides || prev.playoffTeamsOverrides || {},
+    espnCurrentWeekBySeason: keepIfNonEmpty(
+      espnCurrentWeekBySeason,
+      prev.espnCurrentWeekBySeason || {}
+    ),
+  };
+  store.lastSelectedLeagueId = leagueId;
+  writeStore(store);
+  return store;
+}
+function deleteLeagueById(leagueId) {
+  const store = readStore();
+  if (store.leaguesById[leagueId]) {
+    delete store.leaguesById[leagueId];
+    if (store.lastSelectedLeagueId === leagueId) {
+      store.lastSelectedLeagueId = Object.keys(store.leaguesById)[0] || "";
+    }
+    writeStore(store);
+  }
+  return readStore();
+}
+
+/* ---------------- Rows-only helpers (kept lightweight) ------------- */
+
+function buildRowsLight(seasons) {
+  const out = { rows: [], txRows: [], draftByYear: {}, leagueNameGuess: "" };
+  if (!Array.isArray(seasons)) return out;
+
+  for (const season of seasons) {
+    const year =
+      Number(season?.seasonId) ||
+      Number(season?.scoringPeriodId) ||
+      new Date().getFullYear();
+
+    const leagueName =
+      season?.settings?.name ||
+      season?.settings?.leagueName ||
+      season?.settings?.leagueNickname ||
+      "";
+    if (leagueName && !out.leagueNameGuess) out.leagueNameGuess = leagueName;
+    const memberMap = new Map();
+    (season?.members || []).forEach((m) => {
+      const dn = m?.displayName || "";
+      const fn = m?.firstName || "";
+      const ln = m?.lastName || "";
+      const best = dn || [fn, ln].filter(Boolean).join(" ").trim() || "Unknown";
+      if (m?.id != null) memberMap.set(m.id, best);
+    });
+    const teamMap = new Map();
+    (season?.teams || []).forEach((t) => {
+      const tName =
+        `${t?.location || ""} ${t?.nickname || ""}`.trim() ||
+        t?.name ||
+        `Team ${t?.id}`;
+      const ownerId =
+        t?.primaryOwner || (t?.owners && t?.owners[0]) || "__unknown__";
+      const finalRank = t?.finalRank ?? t?.rankCalculatedFinal ?? null;
+      if (t?.id != null) teamMap.set(t.id, { name: tName, ownerId, finalRank });
+    });
+
+    const scoringName =
+      season?.scoringSettings?.name ||
+      season?.settings?.scoringSettings?.name ||
+      season?.settings?.scoringType ||
+      undefined;
+
+    (season?.schedule || []).forEach((g) => {
+      const hId = g?.home?.teamId ?? g?.homeTeamId ?? g?.homeId;
+      const aId = g?.away?.teamId ?? g?.awayTeamId ?? g?.awayId;
+      if (hId == null || aId == null) return;
+
+      const home = teamMap.get(hId);
+      const away = teamMap.get(aId);
+      if (!home || !away) return;
+
+      const hPts =
+        Number(g?.home?.totalPoints ?? g?.home?.score ?? g?.homePoints ?? 0) ||
+        0;
+      const aPts =
+        Number(g?.away?.totalPoints ?? g?.away?.score ?? g?.awayPoints ?? 0) ||
+        0;
+
+      // Projections (live/scoreboard fallbacks)
+      const hProjRaw =
+        g?.home?.totalProjectedPointsLive ??
+        g?.home?.totalProjectedPoints ??
+        g?.home?.totalProjectedScore ??
+        g?.home?.overallProjectedScore ??
+        null;
+      const aProjRaw =
+        g?.away?.totalProjectedPointsLive ??
+        g?.away?.totalProjectedPoints ??
+        g?.away?.totalProjectedScore ??
+        g?.away?.overallProjectedScore ??
+        null;
+      const hProj = hProjRaw != null ? Number(hProjRaw) : null;
+      const aProj = aProjRaw != null ? Number(aProjRaw) : null;
+
+      const week =
+        Number(g?.matchupPeriodId ?? g?.scoringPeriodId ?? g?.period) || null;
+
+      const tier = String(g?.playoffTierType || "").toUpperCase();
+      const mtype = String(g?.matchupType || "").toUpperCase();
+      const isPlayoff =
+        g?.playoffMatchup === true ||
+        (tier && tier !== "NONE") ||
+        /PLAYOFF|CHAMP/.test(mtype);
+
+      const homeOwner = memberMap.get(home.ownerId) || "Unknown";
+      const awayOwner = memberMap.get(away.ownerId) || "Unknown";
+
+      out.rows.push({
+        season: year,
+        week,
+        manager: homeOwner,
+        opponent: awayOwner,
+        team_name: home.name,
+        points_for: hPts,
+        points_against: aPts,
+        proj_for: Number.isFinite(hProj) ? hProj : null,
+        proj_against: Number.isFinite(aProj) ? aProj : null,
+        result: hPts > aPts ? "W" : hPts < aPts ? "L" : "T",
+        final_rank: home.finalRank ?? "",
+        league_name: leagueName,
+        platform: "ESPN",
+        scoring: scoringName,
+        is_playoff: !!isPlayoff,
+      });
+
+      out.rows.push({
+        season: year,
+        week,
+        manager: awayOwner,
+        opponent: homeOwner,
+        team_name: away.name,
+        points_for: aPts,
+        points_against: hPts,
+        proj_for: Number.isFinite(aProj) ? aProj : null,
+        proj_against: Number.isFinite(hProj) ? hProj : null,
+        result: aPts > hPts ? "W" : aPts < hPts ? "L" : "T",
+        final_rank: away.finalRank ?? "",
+        league_name: leagueName,
+        platform: "ESPN",
+        scoring: scoringName,
+        is_playoff: !!isPlayoff,
+      });
+    });
+
+    teamMap.forEach((t) => {
+      const ownerName = memberMap.get(t.ownerId) || "Unknown";
+      out.txRows.push({
+        season: year,
+        manager: ownerName,
+        opponent: "",
+        team_name: t.name,
+        points_for: "",
+        points_against: "",
+        result: "",
+        final_rank: t.finalRank ?? "",
+        league_name: leagueName,
+        platform: "ESPN",
+        is_playoff: false,
+      });
+    });
+  }
+  return out;
+}
+function coerceLegacyRows(legacy, { seasons, leagueId, leagueName }) {
+  const nameFromSeasons =
+    seasons?.[0]?.settings?.name ||
+    seasons?.[0]?.settings?.leagueName ||
+    seasons?.[0]?.settings?.leagueNickname ||
+    null;
+
+  const idFromSeasons =
+    String(
+      seasons?.[0]?.id || seasons?.[0]?.leagueId || leagueId || ""
+    ).trim() || null;
+
+  const finalName =
+    (leagueName || nameFromSeasons || "").trim() ||
+    (idFromSeasons ? `League ${idFromSeasons}` : "");
+
+  const finalId = (leagueId || idFromSeasons || "").trim();
+
+  return (Array.isArray(legacy) ? legacy : []).map((r) => ({
+    ...r,
+    league_name: (r.league_name || finalName || "").trim(),
+    league_id: String(r.league_id || finalId || "").trim(),
+    manager: r.manager ?? r.manager_name ?? r.owner ?? r.manager,
+    platform: r.platform || "ESPN",
+  }));
+}
+function preferRealMemberNames(rows, seasons) {
+  const replaceMap = new Map();
+  (seasons || []).forEach((s) => {
+    (s?.members || []).forEach((m) => {
+      const real = [m?.firstName || "", m?.lastName || ""].join(" ").trim();
+      const disp = (m?.displayName || "").trim();
+      if (real && disp) replaceMap.set(disp, real);
+    });
+  });
+  return (rows || []).map((r) => {
+    const mgr = replaceMap.get((r.manager || "").trim()) || r.manager;
+    const opp = replaceMap.get((r.opponent || "").trim()) || r.opponent;
+    return { ...r, manager: mgr, opponent: opp };
+  });
+}
+function lockLeagueIdentity(rows, id, name) {
+  const idStr = String(id || "").trim();
+  const nameStr = String(name || "").trim();
+  return (rows || []).map((r) => ({
+    ...r,
+    league_id: idStr,
+    league_name: nameStr,
+    platform: r.platform || "ESPN",
+  }));
+}
+
+function extractPlayoffTeamsBySeason(seasons = []) {
+  const out = {};
+  (seasons || []).forEach((s) => {
+    const yr = Number(s?.seasonId);
+    if (!yr) return;
+    const n = Number(
+      s?.settings?.scheduleSettings?.playoffTeamCount ??
+        s?.settings?.playoffTeamCount ??
+        s?.scheduleSettings?.playoffTeamCount ??
+        s?.playoffTeamCount
+    );
+    if (Number.isFinite(n) && n > 0) out[yr] = n;
+  });
+  return out;
+}
+
+/* ---------------- Draft helpers (robust) ------------------- */
+
+const POS_LITE = { 0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "DST", 17: "K" };
+const NFL_LITE = {
+  1: "ATL",
+  2: "BUF",
+  3: "CHI",
+  4: "CIN",
+  5: "CLE",
+  6: "DAL",
+  7: "DEN",
+  8: "DET",
+  9: "GB",
+  10: "TEN",
+  11: "IND",
+  12: "KC",
+  13: "LV",
+  14: "LAR",
+  15: "MIA",
+  16: "MIN",
+  17: "NE",
+  18: "NO",
+  19: "NYG",
+  20: "NYJ",
+  21: "PHI",
+  22: "ARI",
+  23: "PIT",
+  24: "LAC",
+  25: "SF",
+  26: "SEA",
+  27: "TB",
+  28: "WSH",
+  29: "CAR",
+  30: "JAX",
+  33: "BAL",
+  34: "HOU",
+};
+function buildPlayerIndexLight(season) {
+  const idx = new Map();
+  const put = (id, fullName, posId, teamId) => {
+    if (id == null) return;
+    const name = String(fullName || "").trim();
+    const pos = POS_LITE[posId] || "";
+    const nfl = NFL_LITE[teamId] || "";
+    const prev = idx.get(Number(id));
+    if (!prev || (name && name.length > (prev.fullName || "").length)) {
+      idx.set(Number(id), { fullName: name, pos, nfl });
+    }
+  };
+  const fromPlayer = (p) => {
+    if (!p) return;
+    const id = p.id ?? p.playerId ?? p.player?.id;
+    if (id == null) return;
+    const full =
+      p.fullName ??
+      p.player?.fullName ??
+      (p.firstName && p.lastName
+        ? `${p.firstName} ${p.lastName}`
+        : p.name || p.displayName);
+    const posId =
+      p.defaultPositionId ??
+      p.player?.defaultPositionId ??
+      p.defaultPos ??
+      p.positionId;
+    const teamId =
+      p.proTeamId ?? p.player?.proTeamId ?? p.proTeam ?? p.proTeamIdCurrent;
+    put(id, full, posId, teamId);
+  };
+
+  (season?.playersLite || []).forEach(fromPlayer);
+  (season?.players || []).forEach(fromPlayer);
+  (season?.playerPool?.players || []).forEach(fromPlayer);
+
+  if (Array.isArray(season?.draftDetail?.players))
+    season.draftDetail.players.forEach(fromPlayer);
+
+  if (
+    season?.draftDetail?.playerIdMap &&
+    typeof season.draftDetail.playerIdMap === "object"
+  )
+    Object.values(season.draftDetail.playerIdMap).forEach(fromPlayer);
+
+  if (season?.playersMap && typeof season.playersMap === "object")
+    Object.values(season.playersMap).forEach(fromPlayer);
+
+  (season?.teams || []).forEach((t) => {
+    const entries =
+      t?.roster?.entries || t?.roster?.entriesByScoringPeriod || [];
+    const flat = Array.isArray(entries)
+      ? entries
+      : Object.values(entries).flat();
+    flat.forEach((e) => {
+      const p = e?.playerPoolEntry?.player || e?.playerPoolEntry || e?.player;
+      fromPlayer(p);
+    });
+  });
+  const seen = new WeakSet();
+  const visit = (node, depth = 0) => {
+    if (!node || typeof node !== "object" || seen.has(node) || depth > 3)
+      return;
+    seen.add(node);
+    const id = node.id ?? node.playerId ?? node?.player?.id;
+    const hasNameLike = !!(
+      node.fullName ||
+      node.displayName ||
+      (node.firstName && node.lastName)
+    );
+    if (id != null && hasNameLike) {
+      const full =
+        node.fullName ??
+        (node.firstName && node.lastName
+          ? `${node.firstName} ${node.lastName}`
+          : node.displayName);
+      const posId =
+        node.defaultPositionId ??
+        node.positionId ??
+        node.player?.defaultPositionId;
+      const teamId =
+        node.proTeamId ??
+        node.proTeam ??
+        node.player?.proTeamId ??
+        node.proTeamIdCurrent;
+      put(id, full, posId, teamId);
+    }
+    if (Array.isArray(node)) node.forEach((x) => visit(x, depth + 1));
+    else Object.values(node).forEach((v) => visit(v, depth + 1));
+  };
+  visit(season);
+
+  return idx;
+}
+function extractSeasonPicks(season) {
+  const cands = [
+    season?.draftDetail?.picks,
+    season?.draftDetail?.draft?.picks,
+    season?.draft?.picks,
+    season?.draftDetail?.picks?.items,
+  ];
+  let picks = [];
+  cands.forEach((a) => Array.isArray(a) && (picks = picks.concat(a)));
+  return picks;
+}
+function reconstructFromRosters(season, ownerByTeam, pIdx) {
+  const out = [];
+  (season?.teams || []).forEach((t) => {
+    const teamId = t?.id;
+    const entries =
+      t?.roster?.entries || t?.roster?.entriesByScoringPeriod || [];
+    const flat = Array.isArray(entries)
+      ? entries
+      : Object.values(entries).flat();
+
+    flat.forEach((e) => {
+      const acq = String(
+        e?.acquisitionType || e?.playerPoolEntry?.acquisitionType || ""
+      ).toUpperCase();
+      if (acq !== "DRAFT" && acq !== "KEEPER") return;
+
+      const pid =
+        e?.playerId ?? e?.playerPoolEntry?.id ?? e?.playerPoolEntry?.player?.id;
+      const p = pid != null ? pIdx.get(Number(pid)) : null;
+
+      out.push({
+        owner: ownerByTeam.get(teamId) || "Unknown",
+        round: null,
+        overall: null,
+        playerId: pid != null ? Number(pid) : null,
+        player: p?.fullName || "",
+        pos: p?.pos || "",
+        nfl: p?.nfl || "",
+        adp: null,
+        posRank: null,
+        keeper: acq === "KEEPER",
+      });
+    });
+  });
+  return out;
+}
+function buildDraftRich(seasons) {
+  const byYear = {};
+  (seasons || []).forEach((season) => {
+    const year = Number(season?.seasonId);
+    if (!year) return;
+    const members = new Map();
+    (season?.members || []).forEach((m) => {
+      const dn =
+        m?.displayName || `${m?.firstName || ""} ${m?.lastName || ""}`.trim();
+      if (m?.id != null) members.set(m.id, dn || "Unknown");
+    });
+    const ownerByTeam = new Map();
+    (season?.teams || []).forEach((t) => {
+      const ownerId = t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+      if (t?.id != null)
+        ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
+    });
+
+    const pIdx = buildPlayerIndexLight(season);
+    const picks = extractSeasonPicks(season);
+
+    let rows = [];
+    if (picks.length) {
+      rows = picks.map((pk) => {
+        const teamId = pk?.teamId ?? pk?.franchiseId ?? pk?.team;
+        const owner = ownerByTeam.get(teamId) || "Unknown";
+
+        const pid = Number(
+          pk?.playerId ??
+            pk?.player?.id ??
+            pk?.draftedPlayerId ??
+            pk?.entityId ??
+            pk?.player?.playerId
+        );
+        const p = Number.isFinite(pid) ? pIdx.get(pid) : null;
+
+        const pObj =
+          pk?.player || pk?.draftedPlayer || pk?.playerPoolEntry?.player || {};
+        const pName =
+          p?.fullName ||
+          pObj?.fullName ||
+          (pObj?.firstName && pObj?.lastName
+            ? `${pObj.firstName} ${pObj.lastName}`.trim()
+            : pObj?.name ||
+              pObj?.displayName ||
+              (Number.isFinite(pid) ? `Player #${pid}` : "Unknown Player"));
+
+        const pos = p?.pos || POS_LITE[pObj?.defaultPositionId] || "";
+        const nfl =
+          p?.nfl ||
+          NFL_LITE[
+            pObj?.proTeamId ?? pObj?.proTeam ?? pObj?.proTeamIdCurrent
+          ] ||
+          "";
+
+        return {
+          owner,
+          round: Number(pk?.roundId ?? pk?.round ?? pk?.draftRound) || null,
+          overall:
+            Number(
+              pk?.overallPickNumber ?? pk?.overallPick ?? pk?.pickNumber
+            ) || null,
+          playerId: Number.isFinite(pid) ? pid : null,
+          player: String(pName || "Unknown Player"),
+          pos,
+          nfl,
+          adp: null,
+          posRank: null,
+          keeper: !!(pk?.keeper || pk?.isKeeper || pk?.reservedForKeeper),
+        };
+      });
+    } else {
+      rows = reconstructFromRosters(season, ownerByTeam, pIdx);
+    }
+
+    rows.sort((a, b) => {
+      const ao = a.overall ?? 1e9;
+      const bo = b.overall ?? 1e9;
+      return ao - bo;
+    });
+
+    byYear[year] = rows;
+  });
+  return byYear;
+}
+const _normName = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/'/g, "")
+    .replace(/\b(jr|sr|ii|iii|iv|v|vi)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+function overlayMissingAdpByNameOnly(draftByYear) {
+  const byYearIdx = {};
+  try {
+    for (const [yrStr, rows] of Object.entries(FP_ADP_BY_YEAR || {})) {
+      const yr = Number(yrStr);
+      const m = new Map();
+      (rows || []).forEach((r) => {
+        const nm = r?.name ?? r?.player ?? "";
+        const adp = Number(r?.adp ?? r?.ADP);
+        if (!nm || Number.isNaN(adp)) return;
+        m.set(_normName(nm), adp);
+      });
+      byYearIdx[yr] = m;
+    }
+  } catch {}
+  const out = {};
+  for (const [yrStr, rows] of Object.entries(draftByYear || {})) {
+    const yr = Number(yrStr);
+    const idx = byYearIdx[yr] || new Map();
+    out[yr] = (rows || []).map((r) => {
+      if (r?.adp != null && !Number.isNaN(Number(r.adp))) return r;
+      const adp = idx.get(_normName(r?.player));
+      return adp != null ? { ...r, adp, adpSource: "FP(stored)" } : r;
+    });
+  }
+  return out;
+}
+function attachAdpFromPopup(draftByYear, adpByYearObj) {
+  if (!draftByYear || !adpByYearObj) return draftByYear || {};
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/[.'"]/g, "")
+      .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const out = {};
+  for (const [yr, arr] of Object.entries(draftByYear || {})) {
+    const adpMap = new Map(
+      Object.entries(adpByYearObj[yr] || {}).map(([k, v]) => [
+        norm(k),
+        Number(v),
+      ])
+    );
+    out[yr] = (arr || []).map((r) => {
+      if (r?.adp != null) return r;
+      const v = adpMap.get(norm(r?.player));
+      return v != null && !Number.isNaN(v) ? { ...r, adp: v } : r;
+    });
+  }
+  return out;
+}
+function attachPosFromPopup(draftByYear, adpPosByYear) {
+  if (!draftByYear || !adpPosByYear) return draftByYear || {};
+  const out = {};
+  for (const [yrStr, rows] of Object.entries(draftByYear || {})) {
+    const yr = Number(yrStr);
+    const sourceMap = adpPosByYear?.[yr] || {};
+    const idx = new Map();
+    Object.entries(sourceMap).forEach(([name, v]) => {
+      const label = typeof v === "string" ? v : v && v.pos ? v.pos : null;
+      if (!name || !label) return;
+      idx.set(_normName(name), String(label).trim());
+    });
+    out[yr] = (rows || []).map((r) => {
+      const lbl = idx.get(_normName(r.player));
+      if (!lbl) return r;
+      const m = lbl.match(/^([A-Z]+)\s*([0-9]+)$/i);
+      const code = m
+        ? m[1].toUpperCase()
+        : lbl.replace(/[0-9]+/g, "").toUpperCase();
+      const rank = m ? Number(m[2]) : null;
+      return {
+        ...r,
+        adpPos: lbl,
+        adpPosRank: Number.isFinite(rank) ? rank : null,
+        pos: r.pos || code || r.pos,
+      };
+    });
+  }
+  return out;
+}
+function overlayMissingPosByNameOnly(draftByYear) {
+  const nameIdx = {};
+  try {
+    for (const [yrStr, rows] of Object.entries(FP_ADP_BY_YEAR || {})) {
+      const yr = Number(yrStr);
+      const m = new Map();
+      (rows || []).forEach((r) => {
+        const nm = r?.name ?? r?.player ?? "";
+        const lbl = r?.pos ?? r?.position ?? "";
+        if (!nm || !lbl) return;
+        const t = String(lbl).trim();
+        const mm = t.match(/^([A-Za-z]+)\s*([0-9]+)$/);
+        const code = mm
+          ? mm[1].toUpperCase()
+          : t.replace(/[0-9]+/g, "").toUpperCase();
+        const rank = mm ? Number(mm[2]) : null;
+        m.set(_normName(nm), {
+          lbl: t,
+          code,
+          rank: Number.isFinite(rank) ? rank : null,
+        });
+      });
+      nameIdx[yr] = m;
+    }
+  } catch {}
+  const out = {};
+  for (const [yrStr, rows] of Object.entries(draftByYear || {})) {
+    const yr = Number(yrStr);
+    const idx = nameIdx[yr] || new Map();
+    out[yr] = (rows || []).map((r) => {
+      if (r?.adpPos) return r;
+      const hit = idx.get(_normName(r?.player));
+      if (!hit) return r;
+      return {
+        ...r,
+        adpPos: hit.lbl,
+        adpPosRank: hit.rank,
+        pos: r.pos || hit.code || r.pos,
+      };
+    });
+  }
+  return out;
+}
+function attachPickPosFromDraftOrder(draftByYear) {
+  if (!draftByYear) return {};
+  const baseFrom = (r) => {
+    const p = (r.pos || r.position || "").toString().toUpperCase().trim();
+    if (p) return p;
+    const ap = (r.adpPos || "").toString().toUpperCase();
+    const m = ap.match(/^([A-Z]+)/);
+    return m ? m[1] : "";
+  };
+  const out = {};
+  for (const [yrStr, rows] of Object.entries(draftByYear || {})) {
+    const rowsArr = Array.isArray(rows) ? rows : [];
+    const sorted = rowsArr.slice().sort((a, b) => {
+      const ao = Number(a.overall ?? Infinity);
+      const bo = Number(b.overall ?? Infinity);
+      return ao - bo;
+    });
+    const counts = Object.create(null);
+    const rankMap = new WeakMap();
+    sorted.forEach((r) => {
+      const code = baseFrom(r);
+      if (!code) return;
+      counts[code] = (counts[code] || 0) + 1;
+      rankMap.set(r, {
+        posAtPick: counts[code],
+        posAtPickLabel: `${code}${counts[code]}`,
+      });
+    });
+    out[Number(yrStr)] = rowsArr.map((r) => {
+      const add = rankMap.get(r);
+      return add
+        ? { ...r, ...add }
+        : { ...r, posAtPick: null, posAtPickLabel: null };
+    });
+  }
+  return out;
+}
+/* -------- Finish-pos overlay (optional; driven by your CSV ingest) -------- */
+const FINISH_LS_KEY = "fl_finishpos_by_year";
+function _normFinishName(s = "") {
+  return s
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/'/g, "")
+    .replace(/\b(jr|sr|ii|iii|iv|v|vi)\b/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function _splitCSVLine(line) {
+  const out = [];
+  let cur = "",
+    inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else inQ = !inQ;
+    } else if (ch === "," && !inQ) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function parseFantasyDataLeadersCSV(text) {
+  const lines = String(text || "")
+    .trim()
+    .split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = _splitCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
+  const idx = (kList) => {
+    for (const k of kList) {
+      const j = headers.indexOf(k);
+      if (j !== -1) return j;
+    }
+    return -1;
+  };
+  const iName = idx(["name", "player"]);
+  const iPos = idx(["pos", "position"]);
+  const iFpts = idx([
+    "fpts",
+    "fantasy points",
+    "fantasy_points",
+    "fantasy points (ppr)",
+    "points",
+  ]);
+  if (iName === -1 || iPos === -1 || iFpts === -1) return [];
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = _splitCSVLine(lines[i]);
+    const name = (cols[iName] || "").trim();
+    const pos = (cols[iPos] || "").trim().toUpperCase();
+    const fpts = Number(
+      (cols[iFpts] || "").toString().replace(/[^0-9.\-]/g, "")
+    );
+    if (!name || !pos || !Number.isFinite(fpts)) continue;
+    out.push({ name, pos, fpts });
+  }
+  return out;
+}
+function buildFinishPosMap(rows) {
+  const byPos = new Map();
+  rows.forEach((r) => {
+    if (!byPos.has(r.pos)) byPos.set(r.pos, []);
+    byPos.get(r.pos).push(r);
+  });
+  const out = new Map();
+  for (const [pos, arr] of byPos.entries()) {
+    arr.sort((a, b) => b.fpts - a.fpts);
+    arr.forEach((r, i) => out.set(_normFinishName(r.name), `${pos}${i + 1}`));
+  }
+  return out;
+}
+function loadFinishStore() {
+  try {
+    const o = JSON.parse(localStorage.getItem(FINISH_LS_KEY) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch {
+    return {};
+  }
+}
+function saveFinishStore(obj) {
+  try {
+    localStorage.setItem(FINISH_LS_KEY, JSON.stringify(obj || {}));
+  } catch {}
+}
+window.FL_ingestFinishCSV = (year, scoring, csvText) => {
+  const y = Number(year);
+  const sc = (scoring || "PPR").toUpperCase();
+  const parsed = parseFantasyDataLeadersCSV(csvText);
+  if (!parsed.length) {
+    console.warn("No rows parsed.");
+    return;
+  }
+  const map = buildFinishPosMap(parsed);
+  const store = loadFinishStore();
+  if (!store[y]) store[y] = {};
+  store[y][sc] = Object.fromEntries(map.entries());
+  saveFinishStore(store);
+  try {
+    const app = window;
+    if (typeof app.FL_attachFinishNow === "function") app.FL_attachFinishNow();
+  } catch {}
+};
+function attachFinishPosFromLocal(draftByYear, scoringLabel = "PPR") {
+  const store = loadFinishStore();
+  const sc = (scoringLabel || "PPR").toUpperCase();
+  const out = {};
+  for (const [yrStr, rows] of Object.entries(draftByYear || {})) {
+    const yr = Number(yrStr);
+    const idx = store?.[yr]?.[sc] || {};
+    out[yr] = (rows || []).map((r) => {
+      const key = _normFinishName(r.player);
+      const label = idx[key];
+      return label ? { ...r, finishPos: label } : r;
+    });
+  }
+  return out;
+}
+
+/* ---------------- ROSTER BUILD (for Roster tab & adds inference) --- */
+function buildRostersByYear(seasons = []) {
+  const out = {};
+  seasons.forEach((s) => {
+    const yr = Number(s?.seasonId);
+    if (!yr) return;
+    const byTeam = (out[yr] = {});
+    (s?.teams || []).forEach((t) => {
+      const tid = Number(t?.id);
+      if (!Number.isFinite(tid)) return;
+      const weeks = {};
+      const bySp = t?.roster?.entriesByScoringPeriod;
+      if (bySp && typeof bySp === "object") {
+        Object.entries(bySp).forEach(([spid, arrOrObj]) => {
+          const arr = Array.isArray(arrOrObj)
+            ? arrOrObj
+            : Object.values(arrOrObj || {}).flat();
+          const list = [];
+          arr.forEach((e) => {
+            const p =
+              e?.playerPoolEntry?.player ||
+              e?.player ||
+              e?.playerPoolEntry ||
+              {};
+            const pid = Number(p?.id ?? e?.playerId);
+            if (!Number.isFinite(pid)) return;
+            const name =
+              p?.fullName ||
+              (p?.firstName && p?.lastName
+                ? `${p.firstName} ${p.lastName}`.trim()
+                : p?.name || "");
+            const posId = Number(
+              p?.defaultPositionId ??
+                e?.defaultPositionId ??
+                e?.playerPoolEntry?.player?.defaultPositionId
+            );
+            const slotId = Number(
+              e?.lineupSlotId ??
+                e?.playerPoolEntry?.lineupSlotId ??
+                e?.lineupSlotIdFinal
+            );
+            const pts =
+            Number(
+              e?.appliedTotal ??
+              e?.playerPoints?.appliedTotal ??
+              e?.appliedStatTotal ??
+              0
+            ) || 0;
+
+            const proj = (() => {
+              const v =
+                e?.proj ??
+                e?.projectedPoints ??
+                e?.playerPoolEntry?.projectedPoints ??
+                e?.projStart ??            // legacy support
+                null;
+              const n = Number(v);
+              return Number.isFinite(n) ? n : 0;
+            })();
+            
+            list.push({ pid, name, posId, slotId, pts, proj });
+            
+          });
+          weeks[Number(spid)] = list;
+        });
+      }
+      byTeam[tid] = weeks;
+    });
+  });
+  return out;
+}
+// --- User menu (profile dropdown) + dark-mode persistence
+function useTheme() {
+  const [isDark, setIsDark] = React.useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") return true;
+    if (saved === "light") return false;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  });
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      root.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
+  return { isDark, toggle: () => setIsDark((d) => !d) };
+}
+
+function UserMenu({
+  user = { name: "You", email: "" },
+  onNavigate = (path) => path && (window.location.href = path),
+  onSignOut = () => {
+    try {
+      if (window.FL_signOut) window.FL_signOut();
+    } catch {}
+    window.location.href = "/"; // back to home
+  },
+}) {
+  const { isDark, toggle } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const btnRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const onClick = (e) => {
+      if (!open) return;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target) &&
+        btnRef.current &&
+        !btnRef.current.contains(e.target)
+      )
+        setOpen(false);
+    };
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const initials = React.useMemo(() => {
+    const s = String(user?.name || "You")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => (w[0] || "").toUpperCase())
+      .join("");
+    return s || "U"; // ✅ return the local var we computed
+  }, [user?.name]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 px-2 py-1 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+        title="Account"
+        aria-haspopup="menu"
+        aria-expanded={open ? "true" : "false"}
+      >
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs font-semibold">
+          {initials}
+        </span>
+        <span className="hidden sm:block text-sm text-zinc-700 dark:text-zinc-200 max-w-[120px] truncate">
+          {user?.name || "You"}
+        </span>
+        <svg
+          className={`h-4 w-4 opacity-70 transition ${
+            open ? "rotate-180" : ""
+          }`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          className="absolute right-0 mt-2 w-56 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden z-50"
+        >
+          <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Signed in as
+            <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
+              {user?.name || "You"}
+            </div>
+            {user?.email ? <div className="truncate">{user.email}</div> : null}
+          </div>
+          <div className="h-px bg-zinc-200 dark:bg-zinc-800" />
+
+          <button
+            role="menuitem"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            onClick={() => {
+              setOpen(false);
+              onNavigate("/profile");
+            }}
+          >
+            My Profile
+          </button>
+          <button
+            role="menuitem"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            onClick={() => {
+              setOpen(false);
+              onNavigate("/settings");
+            }}
+          >
+            Settings
+          </button>
+
+          <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1" />
+          <div className="px-3 py-2 flex items-center justify-between text-sm">
+            <span>Dark Mode</span>
+            <button
+              aria-label="Toggle dark mode"
+              onClick={toggle}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition border ${
+                isDark
+                  ? "bg-zinc-900 border-zinc-700"
+                  : "bg-zinc-300 border-zinc-400"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white dark:bg-zinc-200 transition ${
+                  isDark ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1" />
+          <button
+            role="menuitem"
+            className="w-full text-left px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+            onClick={() => {
+              setOpen(false);
+              onSignOut();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+/* --------------------------------- App ------------------------------------ */
+export default function App() {
+  const [section, setSection] = useState("setup");
+  const [leagueName, setLeagueName] = useState("Your Fantasy League");
+  const [derivedAll, setDerivedAll] = useState(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState("");
+  const [selectedLeagueKey, setSelectedLeagueKey] = useState("");
+  const [selectedLeague, setSelectedLeague] = useState("");
+  const [moneyInputs, setMoneyInputs] = useState({});
+  const [error, setError] = useState("");
+  const [rawRows, setRawRows] = useState([]);
+  const [draftByYear, setDraftByYear] = useState({});
+  const [adpSourceByYear, setAdpSourceByYear] = useState({});
+  const [activityBySeason, setActivityBySeason] = useState({});
+  const [rostersByYear, setRostersByYear] = useState({});
+  const [ownerByTeamByYear, setOwnerByTeamByYear] = useState({});
+  const [teamNamesByOwner, setTeamNamesByOwner] = useState({});
+  const [lineupSlotsByYear, setLineupSlotsByYear] = useState({});
+  const [rosterAcqByYear, setRosterAcqByYear] = useState({});
+  const [currentWeekBySeason, setCurrentWeekBySeason] = useState({});
+  const [ownerFullByTeamByYear, setOwnerFullByTeamByYear] = useState({});
+  const [playoffTeamsBySeason, setPlayoffTeamsBySeason] = useState({});
+  const [playoffTeamsOverrides, setPlayoffTeamsOverrides] = useState({});
+  const [hiddenManagers, setHiddenManagers] = useState(new Set());
+  const [seasonsByYear, setSeasonsByYear] = useState({});
+  const [scheduleByYear, setScheduleByYear] = useState({});
+  const currentYear = React.useMemo(() => {
+    const yrs = Object.keys(currentWeekBySeason || {})
+      .map(Number)
+      .filter(Number.isFinite);
+    return yrs.length ? Math.max(...yrs) : null;
+  }, [currentWeekBySeason]);
+
+  const scheduleThisYearNormalized = React.useMemo(() => {
+    const arr = scheduleByYear?.[currentYear] || [];
+    return arr.map((g) => {
+      const homeProj =
+        g?.home?.totalProjectedPointsLive ??
+        g?.home?.totalProjectedPoints ??
+        g?.home?.totalProjectedScore ??
+        g?.home?.overallProjectedScore ??
+        null;
+      const awayProj =
+        g?.away?.totalProjectedPointsLive ??
+        g?.away?.totalProjectedPoints ??
+        g?.away?.totalProjectedScore ??
+        g?.away?.overallProjectedScore ??
+        null;
+      return {
+        ...g,
+        __proj: {
+          home: Number.isFinite(Number(homeProj)) ? Number(homeProj) : null,
+          away: Number.isFinite(Number(awayProj)) ? Number(awayProj) : null,
+        },
+      };
+    });
+  }, [scheduleByYear, currentYear]);
+
+  const seasonThisYear = React.useMemo(() => {
+    if (!currentYear) return null;
+    const n = Number(currentWeekBySeason?.[currentYear]);
+    return Number.isFinite(n) ? { year: currentYear, currentWeek: n } : null;
+  }, [currentYear, currentWeekBySeason]);
+  function rebuildFromStore() {
+    const store = readStore();
+    const allRows = Object.values(store.leaguesById).flatMap(
+      (L) => L.rows || []
+    );
+    const built = buildFromRows(allRows);
+    setDerivedAll(built);
+
+    let nextLeagueId = selectedLeagueId || store.lastSelectedLeagueId;
+    if (!nextLeagueId) {
+      const ids = Object.keys(store.leaguesById);
+      if (ids.length) nextLeagueId = ids[0];
+    }
+    setSelectedLeagueId(nextLeagueId || "");
+
+    if (nextLeagueId) {
+      const rec = store.leaguesById[nextLeagueId];
+      let key = rec?.leagueKey || "";
+      if (!key) {
+        const keys = built?.leagues || [];
+        key =
+          keys.find((k) => {
+            const meta = built.byLeague[k]?.meta || {};
+            return String(meta.id || "") === String(nextLeagueId);
+          }) ||
+          keys.find((k) => built.byLeague[k]?.meta?.name === rec?.name) ||
+          keys[0] ||
+          "";
+      }
+      setSelectedLeagueKey(key);
+      setSelectedLeague(key);
+      setRawRows(rec?.rows || []);
+      setDraftByYear(rec?.draftByYear || {});
+      setAdpSourceByYear(rec?.adpSourceByYear || {});
+      setLeagueName(rec?.name || leagueName);
+      setMoneyInputs(rec?.moneyInputs || {});
+      setActivityBySeason(rec?.activityBySeason || {});
+      setRostersByYear(rec?.espnRostersByYear || {});
+      setOwnerByTeamByYear(
+        rec?.espnOwnerByTeamByYear || rec?.espnOwnerMapByYear || {}
+      );
+      setOwnerFullByTeamByYear(rec?.espnOwnerFullByTeamByYear || {});
+      setTeamNamesByOwner(rec?.espnTeamNamesByOwner || {});
+      setLineupSlotsByYear(rec?.espnLineupSlotsByYear || {});
+      setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
+      setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
+      setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
+      setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+      setScheduleByYear(rec?.espnScheduleByYear || {});
+      setHiddenManagers(new Set(rec?.hiddenManagers || [])); 
+    } else {
+      setSelectedLeagueKey("");
+      setSelectedLeague("");
+      setRawRows([]);
+      setDraftByYear({});
+      setAdpSourceByYear({});
+      setMoneyInputs({});
+      setActivityBySeason({});
+      setRostersByYear({});
+      setOwnerByTeamByYear({});
+      setTeamNamesByOwner({});
+      setLineupSlotsByYear({});
+      setRosterAcqByYear({});
+      setSeasonsByYear({});
+      setPlayoffTeamsBySeason({});
+      setPlayoffTeamsOverrides({});
+      setCurrentWeekBySeason({});
+      setScheduleByYear({});
+    }
+  }
+
+  function switchLeagueById(id) {
+    const store = readStore();
+    if (!store.leaguesById[id]) return;
+    store.lastSelectedLeagueId = id;
+    writeStore(store);
+    const rec = store.leaguesById[id];
+    setSelectedLeagueId(id);
+    setSelectedLeagueKey(rec.leagueKey || "");
+    setSelectedLeague(rec.leagueKey || "");
+    setRawRows(rec.rows || []);
+    setDraftByYear(rec.draftByYear || {});
+    setAdpSourceByYear(rec.adpSourceByYear || {});
+    setLeagueName(rec.name || "Your Fantasy League");
+    setMoneyInputs(rec.moneyInputs || {});
+    setActivityBySeason(rec.activityBySeason || {});
+    setRostersByYear(rec?.espnRostersByYear || {});
+    setOwnerByTeamByYear(
+      rec?.espnOwnerByTeamByYear || rec?.espnOwnerMapByYear || {}
+    );
+    setOwnerFullByTeamByYear(rec?.espnOwnerFullByTeamByYear || {});
+    setTeamNamesByOwner(rec?.espnTeamNamesByOwner || {});
+    setLineupSlotsByYear(rec?.espnLineupSlotsByYear || {});
+    setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
+    setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
+    setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
+    setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+    setScheduleByYear(rec?.espnScheduleByYear || {});
+    setHiddenManagers(new Set(rec?.hiddenManagers || []));
+  }
+
+  const handleDeleteCurrentLeague = (idToDelete) => {
+    const targetId = idToDelete || selectedLeagueId;
+    if (!targetId) return;
+    const ok = window.confirm("Delete this league and all its stored data?");
+    if (!ok) return;
+    deleteLeagueById(targetId);
+    setSelectedLeagueId("");
+    setSelectedLeagueKey("");
+    setSelectedLeague("");
+    setRawRows([]);
+    setDraftByYear({});
+    setAdpSourceByYear({});
+    setMoneyInputs({});
+    setActivityBySeason({});
+    setRostersByYear({});
+    setOwnerByTeamByYear({});
+    setLeagueName("Your Fantasy League");
+    rebuildFromStore();
+    setLineupSlotsByYear({});
+    setHiddenManagers(new Set());
+  };
+
+  const handleFileParsed = (built, rawRowsIn) => {
+    setDerivedAll(built);
+    setRawRows(rawRowsIn || []);
+    setDraftByYear({});
+    const leagues = built.leagues || [];
+    if (leagues.length && !selectedLeague) setSelectedLeague(leagues[0]);
+    const ln =
+      rawRowsIn?.[0]?.["league_name"] ||
+      rawRowsIn?.[0]?.["league"] ||
+      rawRowsIn?.[0]?.["espn_league"];
+    if (ln) setLeagueName(String(ln));
+  };
+
+  function handleMoneyInputsChanged(update) {
+    setMoneyInputs((prev) => {
+      const next =
+        typeof update === "function" ? update(prev) ?? {} : update || {};
+      const { leagueId, leagueName, platform, scoring } =
+        getCurrentLeagueIdentity();
+      upsertLeague({
+        leagueId,
+        leagueKey: selectedLeague,
+        name: leagueName,
+        platform,
+        scoring,
+        rows: rawRows,
+        draftByYear,
+        adpSourceByYear,
+        moneyInputs: next,
+        activityBySeason,
+        espnOwnerByTeamByYear: ownerByTeamByYear,
+        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+        espnTeamNamesByOwner: teamNamesByOwner,
+        espnRostersByYear: rostersByYear,
+        espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+        playoffTeamsOverrides: playoffTeamsOverrides,
+        espnCurrentWeekBySeason: currentWeekBySeason,
+        espnScheduleByYear: scheduleByYear,
+        hiddenManagers: Array.from(hiddenManagers),
+      });
+      return next;
+    });
+  }
+  // ---------------- BOOTSTRAP --------------------
+  useEffect(() => {
+    const MERGE_KEY = (leagueId) =>
+      `fl_merge_map::${String(leagueId || "").trim()}`;
+    function loadMergeMap(leagueId) {
+      try {
+        const raw = localStorage.getItem(MERGE_KEY(leagueId));
+        const obj = raw ? JSON.parse(raw) : {};
+        return obj && typeof obj === "object" ? obj : {};
+      } catch {
+        return {};
+      }
+    }
+    function saveMergeMap(leagueId, mapObj) {
+      try {
+        localStorage.setItem(MERGE_KEY(leagueId), JSON.stringify(mapObj || {}));
+      } catch {}
+    }
+    function canonicalize(name, map) {
+      let cur = (name || "").trim();
+      if (!cur) return cur;
+      const seen = new Set();
+      while (map[cur] && !seen.has(cur)) {
+        seen.add(cur);
+        cur = String(map[cur] || "").trim();
+      }
+      return cur || name;
+    }
+    function flattenMergeMap(map) {
+      const flat = {};
+      Object.keys(map || {}).forEach((alias) => {
+        const canon = canonicalize(alias, map);
+        if (canon && alias && alias !== canon) flat[alias] = canon;
+      });
+      return flat;
+    }
+    function applyMergeMap(rows, map) {
+      const keys = Object.keys(map || {});
+      if (!rows || !keys.length) return rows || [];
+      return rows.map((r) => {
+        const mgr = canonicalize(r.manager, map);
+        const opp = canonicalize(r.opponent, map);
+        return { ...r, manager: mgr, opponent: opp };
+      });
+    }
+    window.FL_mergeHelpers = {
+      MERGE_KEY,
+      loadMergeMap,
+      saveMergeMap,
+      canonicalize,
+      flattenMergeMap,
+      applyMergeMap,
+    };
+    window.FL_applyOwnerMergesNow = (leagueId) => {
+      try {
+        window.__FL_LAST_MERGE_LEAGUE_ID__ = String(leagueId || "");
+        rebuildFromStore();
+      } catch (e) {
+        console.warn("FL_applyOwnerMergesNow failed:", e);
+      }
+    };
+    try {
+      const raw = window.name;
+      if (!raw || typeof raw !== "string") {
+        rebuildFromStore();
+        return;
+      }
+      const data = JSON.parse(raw);
+      window.__FL_PAYLOAD = data;
+      (function normalizePickupsPayload(p) {
+        let txByYear = {};
+        let weeklyByYear = {};
+        if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
+          txByYear = p.transactionsSlim;
+        }
+        if (
+          p &&
+          p.weeklyPointsByPlayer &&
+          !Array.isArray(p.weeklyPointsByPlayer)
+        ) {
+          weeklyByYear = p.weeklyPointsByPlayer;
+        }
+        if (
+          (!txByYear || !Object.keys(txByYear).length) &&
+          Array.isArray(p?.seasons)
+        ) {
+          p.seasons.forEach((s) => {
+            const y = Number(s?.seasonId);
+            if (!y) return;
+            if (
+              Array.isArray(s?.transactionsSlim) &&
+              s.transactionsSlim.length
+            ) {
+              txByYear[y] = s.transactionsSlim;
+            }
+          });
+        }
+        if (
+          (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
+          Array.isArray(p?.seasons)
+        ) {
+          p.seasons.forEach((s) => {
+            const y = Number(s?.seasonId);
+            if (!y) return;
+            if (
+              s?.weeklyPointsByPlayer &&
+              Object.keys(s.weeklyPointsByPlayer).length
+            ) {
+              weeklyByYear[y] = s.weeklyPointsByPlayer;
+            }
+          });
+        }
+        p.transactionsSlim = txByYear;
+        p.weeklyPointsByPlayer = weeklyByYear;
+        p.transactionsSlimFlat = Object.entries(txByYear).flatMap(([yr, arr]) =>
+          (Array.isArray(arr) ? arr : []).map((r) => ({
+            ...r,
+            seasonId: Number(yr),
+          }))
+        );
+      })(data);
+
+      const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+      if (typeof window !== "undefined") {
+        window.__espnSeasons = seasons;
+      }
+      const seasonsMap = Object.fromEntries(
+        seasons.map((s) => [Number(s.seasonId), s])
+      );
+
+      setSeasonsByYear(seasonsMap);
+      const scheduleMap = Object.fromEntries(
+        (seasons || []).map((s) => [
+          Number(s?.seasonId),
+          Array.isArray(s?.schedule) ? s.schedule : [],
+        ])
+      );
+      setScheduleByYear(scheduleMap);
+
+      // ✅ Prefer what popup already computed from ESPN json.status.currentMatchupPeriod
+      const currentWeekBySeasonMap =
+        data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
+          ? data.currentWeekByYear
+          : {};
+
+      setCurrentWeekBySeason(currentWeekBySeasonMap);
+      const playoffTeamsFromSeasons = {};
+      for (const s of seasons || []) {
+        const yr = Number(s?.seasonId);
+        if (!yr) continue;
+        const cnt =
+          Number(
+            s?.settings?.playoffTeamCount ??
+              s?.settings?.scheduleSettings?.playoffTeamCount ??
+              s?.playoffTeamCount ??
+              0
+          ) || 0;
+        playoffTeamsFromSeasons[yr] = cnt;
+      }
+      setPlayoffTeamsBySeason(playoffTeamsFromSeasons);
+
+      const playoffTeamsBySeasonMap = extractPlayoffTeamsBySeason(seasons);
+      setPlayoffTeamsBySeason(playoffTeamsBySeasonMap);
+      const legacy = Array.isArray(data.legacyRows) ? data.legacyRows : [];
+      const legacyLite = Array.isArray(data.legacySeasonsLite)
+        ? data.legacySeasonsLite
+        : [];
+      if (!seasons.length && !legacy.length) {
+        rebuildFromStore();
+        window.name = "";
+        return;
+      }
+      const light = buildRowsLight(seasons);
+      const combinedRows = [...light.rows, ...light.txRows];
+      let draftMinimal = buildDraftRich(seasons);
+      draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
+      draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
+      draftMinimal = attachPosFromPopup(
+        draftMinimal,
+        data.adpPosByYear || data.adpRichByYear || null
+      );
+      draftMinimal = overlayMissingPosByNameOnly(draftMinimal);
+      draftMinimal = attachPickPosFromDraftOrder(draftMinimal);
+      draftMinimal = attachFinishPosFromLocal(draftMinimal, "PPR"); // optional
+      setDraftByYear(draftMinimal);
+      function buildActivityFromSeasons(seasonsArr = []) {
+        const out = {};
+        seasonsArr.forEach((s) => {
+          const year = Number(s?.seasonId);
+          if (!year) return;
+          const members = new Map();
+          (s?.members || []).forEach((m) => {
+            const dn = m?.displayName || "";
+            const fn = m?.firstName || "";
+            const ln = m?.lastName || "";
+            const best = dn || `${fn} ${ln}`.trim() || "Unknown";
+            if (m?.id != null) members.set(m.id, best);
+          });
+          const ownerByTeam = new Map();
+          (s?.teams || []).forEach((t) => {
+            const ownerId =
+              t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+            if (t?.id != null)
+              ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
+          });
+          const yearMap = (out[year] = out[year] || {});
+          (s?.teams || []).forEach((t) => {
+            const owner = ownerByTeam.get(t?.id) || "Unknown";
+            const tc = t?.transactionCounter || {};
+            const row = yearMap[owner] || {
+              acquisitions: 0,
+              drops: 0,
+              trades: 0,
+              moveToActive: 0,
+              ir: 0,
+            };
+            row.acquisitions += Number(tc.acquisitions || 0);
+            row.drops += Number(tc.drops || 0);
+            row.trades += Number(tc.trades || 0);
+            row.moveToActive += Number(tc.moveToActive || 0);
+            row.ir += Number(tc.moveToIR || 0);
+            yearMap[owner] = row;
+          });
+        });
+        return out;
+      }
+      const activityNewRaw = buildActivityFromSeasons(seasons);
+
+      function buildLegacyActivityFromLite(legacyLiteArr) {
+        const out = {};
+        for (const s of legacyLiteArr || []) {
+          const year = Number(s?.seasonId);
+          if (!year) continue;
+
+          const idToName = {};
+          (s?.members || []).forEach((m) => {
+            const nm =
+              (m?.displayName || "").trim() ||
+              [m?.firstName || "", m?.lastName || ""].join(" ").trim();
+            if (m?.id && nm) idToName[m.id] = nm;
+          });
+
+          (s?.teams || []).forEach((t) => {
+            const owner =
+              idToName[t?.primaryOwner] ||
+              idToName[(t?.owners || [])[0]] ||
+              "Unknown";
+            const tc = t?.transactionCounter || {};
+            out[year] = out[year] || {};
+            const prev = out[year][owner] || {
+              acquisitions: 0,
+              drops: 0,
+              trades: 0,
+              moveToActive: 0,
+              ir: 0,
+            };
+            out[year][owner] = {
+              acquisitions: prev.acquisitions + (tc.acquisitions || 0),
+              drops: prev.drops + (tc.drops || 0),
+              trades: prev.trades + (tc.trades || 0),
+              moveToActive: prev.moveToActive + (tc.moveToActive || 0),
+              ir: prev.ir + (tc.moveToIR || 0),
+            };
+          });
+        }
+        return out;
+      }
+      const activityLegacyBySeason =
+        data.activityLegacyBySeason || buildLegacyActivityFromLite(legacyLite);
+
+      const activityPreMerge = {};
+      const addYear = (yr, map) => {
+        const y = Number(yr);
+        activityPreMerge[y] = activityPreMerge[y] || {};
+        Object.entries(map || {}).forEach(([owner, st]) => {
+          const prev = activityPreMerge[y][owner] || {
+            acquisitions: 0,
+            drops: 0,
+            trades: 0,
+            moveToActive: 0,
+            ir: 0,
+          };
+          activityPreMerge[y][owner] = {
+            acquisitions: prev.acquisitions + (st?.acquisitions || 0),
+            drops: prev.drops + (st?.drops || 0),
+            trades: prev.trades + (st?.trades || 0),
+            moveToActive: prev.moveToActive + (st?.moveToActive || 0),
+            ir: prev.ir + (st?.ir || 0),
+          };
+        });
+      };
+      Object.entries(activityNewRaw || {}).forEach(([yr, m]) => addYear(yr, m));
+      Object.entries(activityLegacyBySeason || {}).forEach(([yr, m]) =>
+        addYear(yr, m)
+      );
+      setActivityBySeason(activityPreMerge);
+      const legacyNorm = coerceLegacyRows(legacy, {
+        seasons,
+        leagueId: data.leagueId,
+        leagueName: data.leagueName,
+      });
+      const combinedPlusLegacy = preferRealMemberNames(
+        [...combinedRows, ...legacyNorm],
+        seasons
+      );
+      const provisional = buildFromRows(combinedPlusLegacy);
+      const candidateName = (
+        data.leagueName ||
+        light.leagueNameGuess ||
+        ""
+      ).trim();
+      const keys0 = provisional.leagues || [];
+      const meta0 = keys0.length
+        ? provisional.byLeague[keys0[0]]?.meta || {}
+        : {};
+      const resolvedLeagueId =
+        String(data.leagueId || meta0.id || "").trim() || `espn_${Date.now()}`;
+      const resolvedLeagueName =
+        candidateName || meta0.name || `League ${resolvedLeagueId}`;
+
+      const savedForLeague =
+        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+      if (
+        savedForLeague &&
+        Object.keys(savedForLeague).length > 0 &&
+        JSON.stringify(savedForLeague) !== JSON.stringify(moneyInputs)
+      ) {
+        setMoneyInputs(savedForLeague);
+      }
+
+      const rowsLocked = lockLeagueIdentity(
+        combinedPlusLegacy,
+        resolvedLeagueId,
+        resolvedLeagueName
+      );
+      const rawMergeMap = loadMergeMap(resolvedLeagueId);
+      const flatMergeMap = flattenMergeMap(rawMergeMap);
+      if (JSON.stringify(rawMergeMap) !== JSON.stringify(flatMergeMap)) {
+        saveMergeMap(resolvedLeagueId, flatMergeMap);
+      }
+      const rowsAfterMerges = (function apply() {
+        const keys = Object.keys(flatMergeMap || {});
+        if (!keys.length) return rowsLocked;
+        return rowsLocked.map((r) => {
+          const mgr = canonicalize(r.manager, flatMergeMap);
+          const opp = canonicalize(r.opponent, flatMergeMap);
+          return { ...r, manager: mgr, opponent: opp };
+        });
+      })();
+      let rowsFinal = rowsAfterMerges;
+      (() => {
+        const key = (r) =>
+          `${r.season}|${r.week}|${String(
+            r.team_name || ""
+          ).trim()}|${Math.round(Number(r.points_for) || 0)}|${Math.round(
+            Number(r.points_against) || 0
+          )}`;
+        const playoffMap = new Map(
+          (light.rows || []).map((r) => [key(r), r.is_playoff === true])
+        );
+        rowsFinal = (rowsAfterMerges || []).map((r) =>
+          r.is_playoff === true || r.is_playoff === false
+            ? r
+            : { ...r, is_playoff: !!playoffMap.get(key(r)) }
+        );
+      })();
+      const built = buildFromRows(rowsFinal);
+      setDerivedAll(built);
+      const keys = built.leagues || [];
+      const selectedKey =
+        keys.find(
+          (k) =>
+            (built.byLeague[k]?.meta?.name || "").trim() === resolvedLeagueName
+        ) ||
+        keys.find(
+          (k) =>
+            String(built.byLeague[k]?.meta?.id || "").trim() ===
+            resolvedLeagueId
+        ) ||
+        keys[0] ||
+        "";
+      if (selectedKey) setSelectedLeague(selectedKey);
+      const adpSrc = {};
+      Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
+        adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
+          ? "FantasyPros (from extension)"
+          : "—";
+      });
+      const ownerMap =
+        data.ownerByTeamByYear && Object.keys(data.ownerByTeamByYear).length
+          ? data.ownerByTeamByYear
+          : (() => {
+              const tmp = {};
+              for (const s of seasons || []) {
+                const yr = Number(s?.seasonId);
+                if (!yr) continue;
+                const memberName = {};
+                (s?.members || []).forEach((m) => {
+                  const fn = (m?.firstName || "").trim();
+                  const ln = (m?.lastName || "").trim();
+                  const full = [fn, ln].filter(Boolean).join(" ").trim();
+                  const dn = (m?.displayName || "").trim();
+                  const preferred = full || dn || "Unknown";
+                  if (m?.id != null) memberName[m.id] = preferred;
+                });
+                const inner = {};
+                (s?.teams || []).forEach((t) => {
+                  const ownerId =
+                    t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+                  if (t?.id != null)
+                    inner[t.id] = (ownerId && memberName[ownerId]) || "Unknown";
+                });
+                tmp[yr] = inner;
+              }
+              return tmp;
+            })();
+      const teamNamesFromData = data.teamNamesByOwner || {};
+      const ownerFullByTeamByYear = (() => {
+        const out = {};
+        for (const s of seasons || []) {
+          const yr = Number(s?.seasonId);
+          if (!yr) continue;
+          const fullByMember = {};
+          (s?.members || []).forEach((m) => {
+            const fn = (m?.firstName || "").trim();
+            const ln = (m?.lastName || "").trim();
+            const full = [fn, ln].filter(Boolean).join(" ").trim();
+            const dn = (m?.displayName || "").trim();
+            if (m?.id != null) fullByMember[m.id] = full || dn || "Unknown";
+          });
+          const inner = {};
+          (s?.teams || []).forEach((t) => {
+            const ownerId =
+              t?.primaryOwner ||
+              (Array.isArray(t?.owners) && t.owners[0]) ||
+              null;
+            const tid = Number(t?.id);
+            if (!Number.isFinite(tid)) return;
+            inner[tid] = ownerId ? fullByMember[ownerId] : "Unknown";
+          });
+          out[yr] = inner;
+        }
+        return out;
+      })();
+      const rosterMap =
+      data.rostersByYear && Object.keys(data.rostersByYear).length
+        ? data.rostersByYear
+        : buildRostersByYear(seasons);
+    const lineupSlots = data.lineupSlotsByYear || {};
+    const rosterAcq = data.rosterAcqByYear || {};
+    const existingMoney =
+        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+      const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
+
+      upsertLeague({
+        leagueId: resolvedLeagueId,
+        leagueKey: selectedKey,
+        name: resolvedLeagueName,
+        platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
+        scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
+        rows: rowsFinal,
+        draftByYear: draftMinimal,
+        adpSourceByYear: adpSrc,
+        moneyInputs: mergedMoney,
+        activityBySeason: activityPreMerge,
+        espnTransactionsByYear: data.transactionsSlim || {},
+        espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
+        espnOwnerByTeamByYear: ownerMap,
+        espnTeamNamesByOwner: teamNamesFromData,
+        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+        espnRostersByYear: rosterMap,
+        espnLineupSlotsByYear: lineupSlots,
+        espnRosterAcqByYear: rosterAcq,
+        espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
+        espnCurrentWeekBySeason: currentWeekBySeasonMap,
+        espnScheduleByYear: scheduleMap,
+      });
+
+      setOwnerByTeamByYear(ownerMap);
+      setTeamNamesByOwner(teamNamesFromData);
+      setRostersByYear(rosterMap);
+      setLineupSlotsByYear(lineupSlots);
+      setRosterAcqByYear(rosterAcq);
+      console.debug("Loaded from popup:", {
+        lineupSlotsByYear: Object.keys(lineupSlots || {}).length,
+        rosterAcqByYear: Object.keys(rosterAcq || {}).length,
+        rostersByYear: Object.keys(rosterMap || {}).length,
+      });
+      rebuildFromStore();
+    } catch (e) {
+      console.warn("Bootstrap failed; falling back to stored leagues:", e);
+      rebuildFromStore();
+    }
+  }, []);
+
+  const league =
+    selectedLeague && derivedAll?.byLeague?.[selectedLeague]
+      ? derivedAll.byLeague[selectedLeague]
+      : null;
+  const leagueWithHidden = React.useMemo(() => {
+    if (!league) return null;
+    return { ...league, hiddenManagers: Array.from(hiddenManagers) }; // ← NEW
+  }, [league, hiddenManagers]);
+
+  const currentWeekResolved = React.useMemo(() => {
+    const wk = currentWeekBySeason?.[currentYear];
+    const n = Number(wk);
+    return Number.isFinite(n) ? n : null;
+  }, [currentYear, currentWeekBySeason]);
+  const leagueForWeekly = React.useMemo(() => {
+    if (!leagueWithHidden || currentWeekResolved == null)
+      return leagueWithHidden;
+    const meta = leagueWithHidden.meta || {};
+    return {
+      ...leagueWithHidden,
+      meta: {
+        ...meta,
+        currentWeek: currentWeekResolved,
+        status: {
+          ...(meta.status || {}),
+          currentMatchupPeriod: currentWeekResolved,
+        },
+      },
+    };
+  }, [league, currentWeekResolved]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__sources = {
+        league,
+        selectedLeague,
+        ownerByTeamByYear,
+        currentWeekBySeason,
+        rostersByYear,
+        lineupSlotsByYear,
+        rosterAcqByYear,
+        seasonsByYear,
+        scheduleByYear,
+      };
+      window.__FL_SOURCES = {
+        seasonsByYear,
+        currentWeekBySeason,
+        scheduleByYear,
+      };
+      console.debug("FL sources ready", window.__sources);
+    }
+  }, [
+    league,
+    selectedLeague,
+    ownerByTeamByYear,
+    currentWeekBySeason,
+    rostersByYear,
+    lineupSlotsByYear,
+    rosterAcqByYear,
+    seasonsByYear,
+    scheduleByYear,
+  ]);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.FL_debugRoster = (year, teamId, week) => {
+        const y = Number(year) || Number(Object.keys(rostersByYear || {})[0]);
+        const t =
+          Number(teamId) || Number(Object.keys(rostersByYear?.[y] || {})[0]);
+        const w =
+          Number(week) || Number(Object.keys(rostersByYear?.[y]?.[t] || {})[0]);
+
+        const entries = rostersByYear?.[y]?.[t]?.[w] || [];
+        const acqMap = rosterAcqByYear?.[y]?.[t] || {};
+
+        console.group(`[FL_debugRoster] y=${y} t=${t} w=${w}`);
+        console.table(
+          entries.map((e) => {
+            const pid = e?.pid ?? e?.playerId ?? e?.player?.id;
+            return {
+              name: e?.name,
+              pid,
+              slotId: e?.lineupSlotId ?? e?.slotId ?? e?.slot,
+              defaultPositionId: e?.defaultPositionId ?? e?.player?.defaultPositionId,
+              eligibleSlots: JSON.stringify(e?.eligibleSlots ?? e?.player?.eligibleSlots ?? null),
+              pts: e?.appliedTotal ?? e?.playerPoints?.appliedTotal ?? e?.pts ?? 0,
+              proj: e?.proj ?? 0,
+            };
+          })
+        );
+        
+        console.log("acqMap (for team/year):", acqMap);
+        console.groupEnd();
+
+        return { entries, acqMap };
+      };
+    }
+  }, [rostersByYear, rosterAcqByYear]);
+
+  // Prime centralized owner-name maps for the whole app (auto-build displayName -> First Last)
+  useEffect(() => {
+    if (!derivedAll || !selectedLeague) return;
+
+    const leagueObj = derivedAll.byLeague?.[selectedLeague];
+    if (!leagueObj) return;
+
+    // Auto-build alias overrides from ESPN members: displayName/nickname/username => "First Last"
+    const manualAliases = {};
+    Object.values(seasonsByYear || {}).forEach((s) => {
+      (s?.members || []).forEach((m) => {
+        const disp = (m?.displayName || "").trim();
+        const full = [m?.firstName || "", m?.lastName || ""].join(" ").trim();
+        if (disp && full && full !== disp) manualAliases[disp] = full;
+        if (m?.username && full && m.username !== full)
+          manualAliases[m.username] = full;
+        if (m?.userName && full && m.userName !== full)
+          manualAliases[m.userName] = full;
+        if (m?.nickname && full && m.nickname !== full)
+          manualAliases[m.nickname] = full;
+      });
+    });
+
+    primeOwnerMaps({
+      league: {
+        owners: leagueObj.owners || [],
+        meta: leagueObj.meta || {},
+        teamNamesByOwner,
+        ownerByTeamByYear,
+      },
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      manualAliases, // 👈 auto-built from ESPN data; no typing needed
+    });
+
+    if (typeof window !== "undefined") {
+      console.debug("Owner map sources ready", {
+        league: leagueObj?.meta,
+        ownerByTeamByYear,
+        manualAliases,
+      });
+    }
+  }, [
+    derivedAll,
+    selectedLeague,
+    ownerByTeamByYear,
+    teamNamesByOwner,
+    seasonsByYear,
+  ]);
+
+  const storeSnapshot = readStore();
+  const leagueOptions = Object.values(storeSnapshot.leaguesById).map((L) => ({
+    id: L.leagueId,
+    name: L.name || `League ${L.leagueId}`,
+  }));
+
+  function getCurrentLeagueIdentity() {
+    const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
+    const leagueId =
+      String(
+        meta.id ??
+          meta.leagueId ??
+          meta.espnLeagueId ??
+          meta.name ??
+          selectedLeague ??
+          ""
+      )
+        .trim()
+        .replace(/\s+/g, "_") || `league_${Date.now()}`;
+    const leagueName = meta.name || "Your Fantasy League";
+    const platform = meta.platform || "ESPN";
+    const scoring = meta.scoring || "Standard";
+    return { leagueId, leagueName, platform, scoring, meta };
+  }
+
+  function savePlayoffOverrides(nextOverrides) {
+    const safe = nextOverrides || {};
+    setPlayoffTeamsOverrides(safe);
+    const { leagueId, leagueName, platform, scoring } =
+      getCurrentLeagueIdentity();
+    upsertLeague({
+      leagueId,
+      leagueKey: selectedLeague,
+      name: leagueName,
+      platform,
+      scoring,
+      rows: rawRows,
+      draftByYear,
+      adpSourceByYear,
+      moneyInputs,
+      activityBySeason,
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+      espnTeamNamesByOwner: teamNamesByOwner,
+      espnRostersByYear: rostersByYear,
+      espnLineupSlotsByYear: lineupSlotsByYear,
+      espnRosterAcqByYear: rosterAcqByYear,
+      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+      playoffTeamsOverrides: safe,
+      espnCurrentWeekBySeason: currentWeekBySeason,
+      espnScheduleByYear: scheduleByYear,
+      hiddenManagers: Array.from(hiddenManagers),
+    });
+  }
+
+  function handleLegacyCsvMerged(legacyRows) {
+    const all = [...(rawRows || []), ...(legacyRows || [])];
+    const built = buildFromRows(all);
+    setDerivedAll(built);
+    setRawRows(all);
+
+    const { leagueId, leagueName, platform, scoring } =
+      getCurrentLeagueIdentity();
+    upsertLeague({
+      leagueId,
+      leagueKey: selectedLeague,
+      name: leagueName,
+      platform,
+      scoring,
+      rows: all,
+      draftByYear,
+      adpSourceByYear,
+      moneyInputs,
+      activityBySeason,
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      espnTeamNamesByOwner: teamNamesByOwner,
+      espnRostersByYear: rostersByYear,
+      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+      playoffTeamsOverrides: playoffTeamsOverrides,
+      espnCurrentWeekBySeason: currentWeekBySeason,
+      espnScheduleByYear: scheduleByYear,
+      hiddenManagers: Array.from(hiddenManagers),
+    });
+  }
+  return (
+    <div
+      data-theme="luxury"
+      className="min-h-screen bg-base-100 text-base-content"
+    >
+      {/* NAVBAR */}
+      <div className="navbar bg-base-200 rounded-xl mb-4 shadow relative">
+        <div className="flex-1 items-center gap-3">
+          {leagueOptions.length > 0 && (
+            <div className="dropdown">
+              <label
+                tabIndex={0}
+                className="btn btn-sm btn-outline normal-case"
+              >
+                <span className="truncate max-w-[220px]">
+                  {leagueOptions.find(
+                    (o) =>
+                      o.id ===
+                      (selectedLeagueId || storeSnapshot.lastSelectedLeagueId)
+                  )?.name ||
+                    leagueName ||
+                    "Select league"}
+                </span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 opacity-70"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </label>
+
+              <ul
+                tabIndex={0}
+                className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-80 overflow-auto"
+              >
+                {leagueOptions.map((opt) => (
+                  <li key={opt.id} className="p-0">
+                    <div className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-base-200 rounded">
+                      <button
+                        onClick={() => switchLeagueById(opt.id)}
+                        className={`flex-1 text-left truncate text-sm ${
+                          opt.id === selectedLeagueId ? "font-semibold" : ""
+                        }`}
+                        title={opt.name}
+                      >
+                        {opt.name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCurrentLeague(opt.id)}
+                        className="shrink-0 text-red-500 hover:text-red-600 ml-1"
+                        title="Delete this league"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <h1 className="text-2xl md:text-4xl font-semibold tracking-tight">
+            {leagueName}
+          </h1>
+        </div>
+        <div className="flex-none">
+          <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
+        </div>
+      </div>
+      {/* PAGE CONTAINER */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="h-9 w-9 rounded-2xl bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold" />
+            <div className="text-lg font-semibold">{leagueName}</div>
+          </div>
+          <div />
+        </div>
+        <div className="mt-6 grid lg:grid-cols-[220px_1fr] gap-6">
+          {/* SIDEBAR */}
+          <aside className="space-y-2">
+            <SidebarButton
+              active={section === "setup"}
+              onClick={() => setSection("setup")}
+            >
+              League Setup
+            </SidebarButton>
+            <SidebarButton
+              active={section === "members"}
+              onClick={() => setSection("members")}
+              disabled={!league}
+            >
+              League Members
+            </SidebarButton>
+            <SidebarButton
+              active={section === "weekly"}
+              onClick={() => setSection("weekly")}
+              disabled={!league}
+            >
+              Weekly Outlook
+            </SidebarButton>
+            <SidebarButton
+              active={section === "career"}
+              onClick={() => setSection("career")}
+              disabled={!league}
+            >
+              Career Stats
+            </SidebarButton>
+            <SidebarButton
+              active={section === "h2h"}
+              onClick={() => setSection("h2h")}
+              disabled={!league}
+            >
+              H2H Matchups
+            </SidebarButton>
+            <SidebarButton
+              active={section === "placements"}
+              onClick={() => setSection("placements")}
+              disabled={!league}
+            >
+              Placements
+            </SidebarButton>
+            <SidebarButton
+              active={section === "money"}
+              onClick={() => setSection("money")}
+              disabled={!league}
+            >
+              Money
+            </SidebarButton>
+            <SidebarButton
+              active={section === "records"}
+              onClick={() => setSection("records")}
+              disabled={!league}
+            >
+              Records
+            </SidebarButton>
+            {/* ✅ Roster */}
+            <SidebarButton
+              active={section === "roster"}
+              onClick={() => setSection("roster")}
+              disabled={!league}
+            >
+              Roster
+            </SidebarButton>
+            <SidebarButton
+              active={section === "trades"}
+              onClick={() => setSection("trades")}
+              disabled={!league}
+            >
+              Trades / Transactions
+            </SidebarButton>
+            <SidebarButton
+              active={section === "draft"}
+              onClick={() => setSection("draft")}
+              disabled={!league}
+            >
+              Draft
+            </SidebarButton>
+            <SidebarButton
+              active={section === "playoffprob"}
+              onClick={() => setSection("playoffprob")}
+              disabled={!league}
+            >
+              Playoff Probability
+            </SidebarButton>
+            <SidebarButton
+  active={section === "luck"}
+  onClick={() => setSection("luck")}
+  disabled={!league}
+>
+  Luck Index
+</SidebarButton>
+            <SidebarButton
+  active={section === "scenario"}        // 👈 new
+  onClick={() => setSection("scenario")} // 👈 new
+  disabled={!league}
+>
+  Scenario
+</SidebarButton>
+          </aside>
+          {/* MAIN */}
+          <main className="space-y-6">
+            {section === "setup" && (
+              <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow">
+                <UploadBox
+                  onFileParsed={handleFileParsed}
+                  error={error}
+                  setError={setError}
+                />
+              </div>
+            )}
+            {derivedAll && (
+              <>
+                {section === "setup" && (
+                  <SetupTab
+                    derivedAll={derivedAll}
+                    selectedLeague={selectedLeague}
+                    setSelectedLeague={setSelectedLeague}
+                    onLegacyCsvMerged={handleLegacyCsvMerged}
+                    hiddenManagers={hiddenManagers} // ← NEW
+                    onChangeHiddenManagers={(nextSet) => {
+                      // ← NEW
+                      const nextArr = Array.from(nextSet || []);
+                      setHiddenManagers(new Set(nextArr));
+                      const { leagueId, leagueName, platform, scoring } =
+                        getCurrentLeagueIdentity();
+                      upsertLeague({
+                        leagueId,
+                        leagueKey: selectedLeague,
+                        name: leagueName,
+                        platform,
+                        scoring,
+                        rows: rawRows,
+                        draftByYear,
+                        adpSourceByYear,
+                        moneyInputs,
+                        activityBySeason,
+                        espnOwnerByTeamByYear: ownerByTeamByYear,
+                        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+                        espnTeamNamesByOwner: teamNamesByOwner,
+                        espnRostersByYear: rostersByYear,
+                        espnLineupSlotsByYear: lineupSlotsByYear,
+                        espnRosterAcqByYear: rosterAcqByYear,
+                        espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+                        playoffTeamsOverrides: playoffTeamsOverrides,
+                        espnCurrentWeekBySeason: currentWeekBySeason,
+                        espnScheduleByYear: scheduleByYear,
+                        hiddenManagers: nextArr, // persist
+                      });
+                    }}
+                  />
+                )}
+
+                {leagueWithHidden && section === "members" && (
+                  <MembersTab league={leagueWithHidden} />
+                )}
+
+                {league && section === "weekly" && (
+                  <WeeklyOutlookTab
+                    league={leagueForWeekly}
+                    playoffTeamsBase={playoffTeamsBySeason}
+                    playoffTeamsOverrides={playoffTeamsOverrides}
+                    seasonThisYear={seasonThisYear}
+                    scheduleThisYear={scheduleThisYearNormalized}
+                  />
+                )}
+
+                {leagueWithHidden && section === "career" && (
+                  <CareerTab league={leagueWithHidden} />
+                )}
+
+                {leagueWithHidden && section === "h2h" && (
+                  <H2HTab league={leagueWithHidden} />
+                )}
+                {leagueWithHidden && section === "scenario" && (   // 👈 new
+  <ScenarioTab                                     
+    league={leagueWithHidden}
+  />
+)}
+                {league && section === "placements" && (
+                  <PlacementsTab
+                    league={leagueWithHidden} // ← important
+                    playoffTeamsBase={playoffTeamsBySeason}
+                    playoffTeamsOverrides={playoffTeamsOverrides}
+                    onSavePlayoffOverrides={savePlayoffOverrides}
+                  />
+                )}
+
+                {leagueWithHidden && section === "money" && (
+                  <MoneyTab
+                    league={leagueWithHidden}
+                    moneyInputs={moneyInputs}
+                    setMoneyInputs={handleMoneyInputsChanged}
+                  />
+                )}
+             {leagueWithHidden && section === "records" && (
+  <RecordsTab
+    league={leagueWithHidden}
+    scheduleByYear={scheduleByYear}
+    ownerByTeamByYear={ownerByTeamByYear}
+  />
+)}
+{leagueWithHidden && section === "luck" && (
+  <LuckIndexTab
+  league={leagueWithHidden}
+  rawRows={rawRows}
+  rostersByYear={rostersByYear}
+/>
+
+)}
+
+                {leagueWithHidden && section === "playoffprob" && (
+                  <PlayoffProbTab
+                    league={leagueWithHidden}
+                    playoffTeamsBase={playoffTeamsBySeason}
+                    playoffTeamsOverrides={playoffTeamsOverrides}
+                  />
+                )}
+                {/* ✅ Roster route */}
+                {league && section === "roster" && (
+                <RosterTab
+                rostersByYear={rostersByYear}
+                ownerByTeamByYear={ownerByTeamByYear}
+                lineupSlotsByYear={lineupSlotsByYear}
+                currentWeekByYear={currentWeekBySeason}
+                rosterAcqByYear={rosterAcqByYear}
+              />              
+                )}
+                {league &&
+                  section === "trades" &&
+                  (() => {
+                    const store = readStore();
+                    const curId =
+                      selectedLeagueId ||
+                      store.lastSelectedLeagueId ||
+                      Object.keys(store.leaguesById || {})[0] ||
+                      "";
+                    const recForTrades =
+                      (curId &&
+                        store.leaguesById &&
+                        store.leaguesById[curId]) ||
+                      {};
+                    return (
+                      <TradesTab
+                        league={leagueWithHidden}
+                        rawRows={rawRows}
+                        selectedLeague={selectedLeague}
+                        activityBySeason={activityBySeason}
+                        espnAddsByYear={
+                          recForTrades.espnTransactionsByYear || {}
+                        }
+                        espnWeeklyPtsByYear={
+                          recForTrades.espnWeeklyPtsByYear || {}
+                        }
+                        espnOwnerByTeamByYear={
+                          recForTrades.espnOwnerByTeamByYear ||
+                          recForTrades.espnOwnerMapByYear ||
+                          {}
+                        }
+                        espnTeamNamesByOwner={
+                          recForTrades.espnTeamNamesByOwner || {}
+                        }
+                        espnRostersByYear={recForTrades.espnRostersByYear || {}}
+                        espnRosterAcqByYear={
+                          recForTrades.espnRosterAcqByYear || {}
+                        }
+                        espnOwnerFullByTeamByYear={
+                          recForTrades.espnOwnerFullByTeamByYear || {}
+                        }
+                      />
+                    );
+                  })()}
+                {league && section === "draft" && (
+                  <DraftTab draftByYear={draftByYear} />
+                )}
+              </>
+            )}
+          </main>
+        </div>
+        <Footer />
+      </div>
+    </div>
+  );
+}

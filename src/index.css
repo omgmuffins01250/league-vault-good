@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Keep your fonts + smoothing, but remove the dark background & forced centering */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* IMPORTANT: no flex/centering on body for a long landing page */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  display: block;
+  background: #ffffff; /* light background */
+  color: #213547; /* dark text */
+}
+
+/* Optional: keep your link/button tweaks or remove them if you prefer Tailwind */
+a {
+  font-weight: 500;
+  text-decoration: none;
+}
+a:hover {
+  opacity: 0.9;
+}
+
+/* Keep your table styles as-is... */
+.table-rows tr {
+  border-bottom: 1px solid rgba(113, 113, 122, 0.35);
+}
+:root .table-rows tr:nth-child(odd) {
+  background: rgba(244, 244, 245, 0.65);
+}
+:root .table-rows tr:hover {
+  background: rgba(244, 244, 245, 0.95);
+}
+.dark .table-rows tr {
+  border-color: rgba(63, 63, 70, 0.9);
+}
+.dark .table-rows tr:nth-child(odd) {
+  background: rgba(24, 24, 27, 0.6);
+}
+.dark .table-rows tr:hover {
+  background: rgba(39, 39, 42, 0.8);
+}

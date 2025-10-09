@@ -1,0 +1,41 @@
+<!doctype html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- FL boot shim: reads window.name and stashes JSON -->
+    <script>
+      (function () {
+        try {
+          var s = window.name || "";
+          if (!s || s.length < 8) return;
+          var header = s.slice(0, 8);
+          var body   = s.slice(8);
+          var json   = "";
+
+          // Works with both RAW and compressed payloads
+          if (header === "__RAW__") {
+            json = body;
+          } else if (header === "__FLZ__" && window.LZString && typeof LZString.decompressFromUTF16 === "function") {
+            json = LZString.decompressFromUTF16(body) || "";
+          }
+
+          if (json) {
+            sessionStorage.setItem("FL_PAYLOAD", json);
+            window.name = ""; // clear so refreshes don't re-import
+          }
+        } catch (e) {
+          console.warn("FL boot shim failed:", e);
+        }
+      })();
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+
+</html>
