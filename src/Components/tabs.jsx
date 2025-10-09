@@ -10524,7 +10524,7 @@ export function ScenarioTab({
     </div>
   );
 }
-
+//---------------------------------LuckIndex-------------------
 export function LuckIndexTab({
   league,
   rawRows = [],
@@ -10532,7 +10532,13 @@ export function LuckIndexTab({
   playerProjByYear = {},
 }) {
   if (!league) return null;
-
+  const hiddenManagersSet = React.useMemo(
+    () =>
+      new Set(
+        Array.isArray(league?.hiddenManagers) ? league.hiddenManagers : []
+      ),
+    [league?.hiddenManagers]
+  );
   if (typeof window !== "undefined") {
     window.__LDEBUG = {
       rostersByYear,
@@ -10766,8 +10772,10 @@ export function LuckIndexTab({
         if (owner) set.add(owner);
       });
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [league, rawRows]);
+    return Array.from(set)
+      .filter((name) => !hiddenManagersSet.has(name))
+      .sort((a, b) => a.localeCompare(b));
+  }, [league, rawRows, hiddenManagersSet]);
   const START_SLOTS = React.useMemo(
     () => new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]),
     []
@@ -10895,10 +10903,17 @@ export function LuckIndexTab({
   const owners = React.useMemo(() => {
     const s = new Set(ownersBase);
     Object.keys(comp1ByOwnerYear || {}).forEach((o) => s.add(o));
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [ownersBase, comp1ByOwnerYear]);
+    return Array.from(s)
+      .filter((name) => !hiddenManagersSet.has(name))
+      .sort((a, b) => a.localeCompare(b));
+  }, [ownersBase, comp1ByOwnerYear, hiddenManagersSet]);
 
   const [comp1Detail, setComp1Detail] = React.useState(null);
+  React.useEffect(() => {
+    if (comp1Detail?.owner && hiddenManagersSet.has(comp1Detail.owner)) {
+      setComp1Detail(null);
+    }
+  }, [comp1Detail, hiddenManagersSet]);
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : "—");
