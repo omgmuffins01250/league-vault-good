@@ -10533,8 +10533,24 @@ export function LuckIndexTab({
   playerProjByYear = {},
 }) {
   if (!league) return null;
-
-  // ---------- helpers ----------
+  React.useEffect(() => {
+    try {
+      const aliases =
+        (typeof window !== "undefined" && window.__FL_ALIASES) || {};
+      if (
+        typeof window !== "undefined" &&
+        window.__ownerMaps &&
+        typeof window.__ownerMaps.prime === "function"
+      ) {
+        window.__ownerMaps.prime({
+          league,
+          selectedLeague: league,
+          espnOwnerByTeamByYear: league.ownerByTeamByYear || {},
+          manualAliases: aliases,
+        });
+      }
+    } catch {}
+  }, [league]);
   const get = (obj, ...keys) =>
     keys.reduce((o, k) => (o == null ? o : o[k]), obj);
   const yn = (y) => [y, String(y)];
@@ -10547,6 +10563,28 @@ export function LuckIndexTab({
       typeof window.__ownerMaps.canon === "function" &&
       window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
     ((s) => (s == null ? "" : String(s)));
+
+  // Unified way to get the owner name for (year, teamId)
+  const ownerNameBy = (year, teamId) => {
+    // 1) preferred: global ownerMaps.name
+    const om =
+      (typeof window !== "undefined" &&
+        window.__ownerMaps &&
+        typeof window.__ownerMaps.name === "function" &&
+        window.__ownerMaps.name(year, teamId)) ||
+      null;
+    if (om) return canonicalize(om);
+
+    // 2) fall back to league.ownerByTeamByYear deep lookups
+    const raw =
+      get(league, "ownerByTeamByYear", year, teamId) ||
+      get(league, "ownerByTeamByYear", String(year), teamId) ||
+      get(league, "ownerByTeamByYear", year, String(teamId)) ||
+      get(league, "ownerByTeamByYear", String(year), String(teamId)) ||
+      null;
+
+    return canonicalize(raw);
+  };
 
   // count as starters only (QB,RB,WR,WR/TE,RB/WR,TE,OP,D/ST,K,FLEX)
   const START_SLOTS = React.useMemo(
@@ -10708,27 +10746,12 @@ export function LuckIndexTab({
       // respect current week cap but don't block early seasons with 0/undefined
       const cap = Number(league?.currentWeekByYear?.[y] ?? 0);
       if (Number.isFinite(cap) && cap > 0 && w > cap) continue;
+      // Resolve owners via global ownerMaps (fallback to league mapping)
+      const o1 = ownerNameBy(y, t1);
+      const o2 = ownerNameBy(y, t2);
+      if (!o1 || !o2) continue;
 
-      // raw owner names from mapping
-      const raw1 =
-        get(league, "ownerByTeamByYear", y, t1) ||
-        get(league, "ownerByTeamByYear", String(y), t1) ||
-        get(league, "ownerByTeamByYear", y, String(t1)) ||
-        get(league, "ownerByTeamByYear", String(y), String(t1));
-
-      const raw2 =
-        get(league, "ownerByTeamByYear", y, t2) ||
-        get(league, "ownerByTeamByYear", String(y), t2) ||
-        get(league, "ownerByTeamByYear", y, String(t2)) ||
-        get(league, "ownerByTeamByYear", String(y), String(t2));
-
-      if (!raw1 || !raw2) continue;
-
-      // ✅ ensure keys match table row names
-      const o1 = canonicalize(raw1);
-      const o2 = canonicalize(raw2);
-
-      const d1 = (opp1.proj || 0) - (opp1.actual || 0);
+      const d1 = (opp1.proj || 0) - (opp1.actual || 0); // opponent underperformed => positive (lucky)
       const d2 = (opp2.proj || 0) - (opp2.actual || 0);
 
       out[o1] ??= {};
