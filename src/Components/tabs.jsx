@@ -10893,20 +10893,126 @@ export function LuckIndexTab({
     console.log("[Luck] comp1 (opp proj - opp actual) by owner/year:", totals);
     return { totals, details };
   }, [games, teamWeekTotals, league?.currentWeekByYear, ownerNameOf]);
+  const comp2Data = React.useMemo(() => {
+    const totals = {};
+    const details = {};
+
+    const resolvePlayerId = (entry) => {
+      const cand =
+        entry?.pid ??
+        entry?.playerId ??
+        entry?.player?.id ??
+        entry?.playerPoolEntry?.player?.id;
+      const id = Number(cand);
+      return Number.isFinite(id) ? id : null;
+    };
+
+    const resolvePlayerName = (seasonKey, seasonNum, entry) => {
+      const direct =
+        entry?.name ??
+        entry?.playerName ??
+        entry?.player?.fullName ??
+        entry?.player?.name ??
+        [entry?.player?.firstName, entry?.player?.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        entry?.playerPoolEntry?.player?.fullName ??
+        entry?.playerPoolEntry?.player?.name ??
+        [
+          entry?.playerPoolEntry?.player?.firstName,
+          entry?.playerPoolEntry?.player?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ");
+      if (direct) return direct;
+
+      const pid = resolvePlayerId(entry);
+      if (pid != null) {
+        const keyA = `${seasonKey}|${pid}`;
+        const keyB = `${seasonNum}|${pid}`;
+        if (nameIndex.has(keyA)) return nameIndex.get(keyA);
+        if (nameIndex.has(keyB)) return nameIndex.get(keyB);
+      }
+      return "Unknown Player";
+    };
+
+    const pushDetail = (owner, season, row) => {
+      details[owner] ??= {};
+      details[owner][season] ??= [];
+      details[owner][season].push(row);
+    };
+
+    for (const [seasonKey, byTeam] of Object.entries(rostersByYear || {})) {
+      const seasonNum = Number(seasonKey);
+      const cap =
+        Number(
+          get(league, "currentWeekByYear", seasonNum) ??
+            get(league, "currentWeekByYear", seasonKey)
+        ) || 0;
+      const weekCap = cap > 0 ? cap : 99;
+
+      for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
+        const teamId = Number(teamKey);
+        const owner = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
+        if (!owner) continue;
+
+        for (const [weekKey, entries] of Object.entries(byWeek || {})) {
+          const weekNum = Number(weekKey);
+          if (weekNum > weekCap) continue;
+          const seen = new Set();
+
+          for (const entry of entries || []) {
+            const slotId = Number(__entrySlotId(entry));
+            if (!START_SLOTS.has(slotId)) continue;
+            const proj = __entryProj(entry);
+            if (proj > 0) continue;
+
+            const pid = resolvePlayerId(entry);
+            const seenKey = pid != null ? `pid:${pid}` : `slot:${slotId}|${weekNum}`;
+            if (seen.has(seenKey)) continue;
+            seen.add(seenKey);
+
+            totals[owner] ??= {};
+            totals[owner][seasonNum] = (totals[owner][seasonNum] || 0) + 1;
+
+            pushDetail(owner, seasonNum, {
+              week: weekNum,
+              player: resolvePlayerName(seasonKey, seasonNum, entry),
+              slot: __SLOT_LABEL[slotId] || `Slot ${slotId}`,
+              pid,
+              projection: proj,
+            });
+          }
+        }
+      }
+    }
+
+    console.log("[Luck] comp2 (injury weeks via proj=0) by owner/year:", totals);
+    return { totals, details };
+  }, [
+    rostersByYear,
+    league?.currentWeekByYear,
+    ownerNameOf,
+    nameIndex,
+    START_SLOTS,
+  ]);
 
   // This IS the Luck Index for now
   const comp1ByOwnerYear = comp1Data.totals;
   const comp1DetailByOwnerYear = comp1Data.details;
+  const injuryByOwnerYear = comp2Data.totals;
+  const injuryDetailByOwnerYear = comp2Data.details;
   const luckByOwnerYear = comp1ByOwnerYear;
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
   const owners = React.useMemo(() => {
     const s = new Set(ownersBase);
     Object.keys(comp1ByOwnerYear || {}).forEach((o) => s.add(o));
+    Object.keys(injuryByOwnerYear || {}).forEach((o) => s.add(o));
     return Array.from(s)
       .filter((name) => !hiddenManagersSet.has(name))
       .sort((a, b) => a.localeCompare(b));
-  }, [ownersBase, comp1ByOwnerYear, hiddenManagersSet]);
+  }, [ownersBase, comp1ByOwnerYear, injuryByOwnerYear, hiddenManagersSet]);
 
   const [comp1Detail, setComp1Detail] = React.useState(null);
   React.useEffect(() => {
@@ -10914,6 +11020,12 @@ export function LuckIndexTab({
       setComp1Detail(null);
     }
   }, [comp1Detail, hiddenManagersSet]);
+  const [comp2Detail, setComp2Detail] = React.useState(null);
+  React.useEffect(() => {
+    if (comp2Detail?.owner && hiddenManagersSet.has(comp2Detail.owner)) {
+      setComp2Detail(null);
+    }
+  }, [comp2Detail, hiddenManagersSet]);
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : "—");
@@ -11007,6 +11119,60 @@ export function LuckIndexTab({
             </table>
           </div>
         </Card>
+        <Card title="Component 2 — Injury Index (Player-Weeks Lost)">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm border-collapse">
+              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
+                <tr className="border-b border-zinc-300 dark:border-zinc-700">
+                  <th className="px-3 py-2 text-left">Manager</th>
+                  {seasons.map((y) => (
+                    <th key={y} className="px-3 py-2 text-center">
+                      {y}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                {owners.map((o) => (
+                  <tr key={`${o}-injury`}>
+                    <td className="px-3 py-2 font-medium">{o}</td>
+                    {seasons.map((y) => {
+                      const v = injuryByOwnerYear?.[o]?.[y];
+                      const rows = injuryDetailByOwnerYear?.[o]?.[y] || [];
+                      const hasDetail = Number.isFinite(v) && rows.length > 0;
+                      return (
+                        <td
+                          key={`${y}-injury`}
+                          className="px-3 py-2 text-center tabular-nums"
+                        >
+                          {hasDetail ? (
+                            <button
+                              type="button"
+                              className="underline decoration-dotted text-blue-600 hover:text-blue-800 dark:text-blue-300"
+                              onClick={() =>
+                                setComp2Detail({
+                                  owner: o,
+                                  season: y,
+                                  rows: rows.slice(),
+                                })
+                              }
+                            >
+                              {Math.round(v)}
+                            </button>
+                          ) : Number.isFinite(v) ? (
+                            Math.round(v)
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
         <div className="text-sm text-zinc-500 space-y-2">
           <p>
@@ -11014,12 +11180,10 @@ export function LuckIndexTab({
             projections.
           </p>
           <p>
-            Component 2: Team Over/Under — how much each team exceeded its own
-            projection.
+            Component 2: Injury Index — total starter player-weeks with a zero
+            projection (proxy for weeks lost to injury).
           </p>
-          <p>
-            Component 3: Injury Luck — TBD (future feature: injury weeks lost).
-          </p>
+          <p>Component 3: TBD (future feature).</p>
           <p>Additional ideas below.</p>
         </div>
       </Card>
@@ -11097,6 +11261,69 @@ export function LuckIndexTab({
                         className="px-3 py-4 text-center opacity-60"
                       >
                         No weekly results available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp2Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setComp2Detail(null)}
+          />
+          <div className="relative w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
+              <div className="text-base font-semibold">
+                {comp2Detail.owner} — {comp2Detail.season} Injury Weeks Lost
+              </div>
+              <button
+                className="btn btn-xs"
+                onClick={() => setComp2Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
+              Total player-weeks flagged as injured: {comp2Detail.rows.length}
+            </div>
+
+            <div className="px-4 py-3 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
+                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
+                    <th className="px-3 py-2 text-left">Week</th>
+                    <th className="px-3 py-2 text-left">Player</th>
+                    <th className="px-3 py-2 text-left">Slot</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {comp2Detail.rows
+                    .slice()
+                    .sort((a, b) => {
+                      const wDiff = Number(a?.week || 0) - Number(b?.week || 0);
+                      if (wDiff !== 0) return wDiff;
+                      return (a?.player || "").localeCompare(b?.player || "");
+                    })
+                    .map((row, idx) => (
+                      <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
+                        <td className="px-3 py-2 tabular-nums">W{row.week}</td>
+                        <td className="px-3 py-2">{row.player}</td>
+                        <td className="px-3 py-2">{row.slot || "—"}</td>
+                      </tr>
+                    ))}
+                  {comp2Detail.rows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="px-3 py-4 text-center opacity-60"
+                      >
+                        No injury weeks recorded.
                       </td>
                     </tr>
                   )}
