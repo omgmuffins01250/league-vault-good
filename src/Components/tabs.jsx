@@ -6152,12 +6152,12 @@ export function TradesTab({
   }, [ownersUnion, filtered, metricValue]);
 
   const FancySelect = ({ label, className = "", children, ...props }) => (
-    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-700 dark:text-amber-300">
       {label ? <span>{label}</span> : null}
       <div className="relative">
         <select
           {...props}
-          className={`appearance-none min-w-[8.75rem] px-4 py-2 pr-9 rounded-full border border-white/60 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60 transition-all ${className}`}
+          className={`appearance-none min-w-[8.75rem] px-4 py-2 pr-9 rounded-full border border-amber-300/60 bg-white/85 dark:bg-zinc-950/60 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800 dark:text-amber-100 shadow-[0_18px_40px_-28px_rgba(251,191,36,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 transition-all ${className}`}
         >
           {children}
         </select>
@@ -6169,22 +6169,24 @@ export function TradesTab({
   );
 
   const FancyStepper = ({ label, value, onDec, onInc }) => (
-    <div className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+    <div className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-700 dark:text-amber-300">
       <span>{label}</span>
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(59,130,246,0.6)] transition-transform hover:-translate-y-0.5"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/60 bg-white/85 dark:bg-zinc-950/60 text-amber-700 dark:text-amber-100 shadow-[0_18px_40px_-30px_rgba(251,191,36,0.7)] transition-transform hover:-translate-y-0.5"
           onClick={onDec}
         >
           –
         </button>
-        <span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/60 dark:bg-zinc-950/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
+
+        <span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full border border-amber-300/60 bg-amber-50/70 dark:bg-amber-900/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800 dark:text-amber-100">
           {value}
         </span>
+
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(168,85,247,0.55)] transition-transform hover:-translate-y-0.5"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/60 bg-white/85 dark:bg-zinc-950/60 text-amber-700 dark:text-amber-100 shadow-[0_18px_40px_-30px_rgba(251,191,36,0.7)] transition-transform hover:-translate-y-0.5"
           onClick={onInc}
         >
           +
@@ -6343,7 +6345,7 @@ export function TradesTab({
         <button
           onClick={() => setMoreGlobal(true)}
           title="Show more"
-          className="absolute bottom-6 right-6 inline-flex h-9 w-9 translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-indigo-500/30 via-violet-500/30 to-fuchsia-500/40 text-[13px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-26px_rgba(124,58,237,0.7)] backdrop-blur transition-all hover:scale-105"
+          className="absolute bottom-6 right-6 inline-flex h-9 w-9 translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-amber-300/60 bg-gradient-to-br from-amber-300/40 via-amber-200/35 to-amber-100/30 text-amber-800 dark:text-amber-100 shadow-[0_20px_45px_-26px_rgba(251,191,36,0.75)] backdrop-blur transition-all hover:scale-105"
         >
           +
         </button>
@@ -6377,7 +6379,7 @@ export function TradesTab({
                 <button
                   onClick={() => setMoreOwner(o)}
                   title="Show more"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-emerald-400/25 via-sky-400/25 to-indigo-500/30 text-[12px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-30px_rgba(56,189,248,0.65)] transition-transform hover:scale-105"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-300/60 bg-gradient-to-br from-amber-300/40 via-amber-200/35 to-amber-100/30 text-[12px] font-semibold text-amber-800 dark:text-amber-100 shadow-[0_18px_40px_-30px_rgba(251,191,36,0.7)] transition-transform hover:scale-105"
                 >
                   +
                 </button>
@@ -12612,10 +12614,7 @@ export function LuckIndexTab({
       return;
     }
     const fallback = seasons[seasons.length - 1];
-    if (
-      selectedLuckSeason == null ||
-      !seasons.includes(selectedLuckSeason)
-    ) {
+    if (selectedLuckSeason == null || !seasons.includes(selectedLuckSeason)) {
       setSelectedLuckSeason(fallback);
     }
   }, [seasons, selectedLuckSeason]);
@@ -13373,7 +13372,9 @@ export function LuckIndexTab({
                 {luckRows.length ? (
                   luckRows.map(({ owner, value, rank }) => (
                     <tr key={owner}>
-                      <td className={placeCellClass}>{renderLuckPlace(rank)}</td>
+                      <td className={placeCellClass}>
+                        {renderLuckPlace(rank)}
+                      </td>
                       <td className={managerCellClass}>{owner}</td>
                       <td className={valueCellClass}>{fmt(value)}</td>
                     </tr>
@@ -13406,7 +13407,8 @@ export function LuckIndexTab({
           {Number.isFinite(injuryMin) && Number.isFinite(injuryMax) && (
             <>
               {" "}
-              Injury weeks span: {injuryMin.toFixed(0)} to {injuryMax.toFixed(0)}.
+              Injury weeks span: {injuryMin.toFixed(0)} to{" "}
+              {injuryMax.toFixed(0)}.
             </>
           )}
         </p>
