@@ -10,6 +10,7 @@ import {
   CareerTab,
   H2HTab,
   PlacementsTab,
+  YearlyRecapTab,
   MoneyTab,
   RecordsTab,
   TradesTab,
@@ -2571,6 +2572,13 @@ export default function App() {
                   Placements
                 </SidebarButton>
                 <SidebarButton
+                  active={section === "yearlyrecap"}
+                  onClick={() => setSection("yearlyrecap")}
+                  disabled={!league}
+                >
+                  Yearly Recap
+                </SidebarButton>
+                <SidebarButton
                   active={section === "money"}
                   onClick={() => setSection("money")}
                   disabled={!league}
@@ -2723,6 +2731,15 @@ export default function App() {
                     playoffTeamsBase={playoffTeamsBySeason}
                     playoffTeamsOverrides={playoffTeamsOverrides}
                     onSavePlayoffOverrides={savePlayoffOverrides}
+                  />
+                )}
+                {leagueWithHidden && section === "yearlyrecap" && (
+                  <YearlyRecapTab
+                    league={leagueWithHidden}
+                    rostersByYear={rostersByYear}
+                    lineupSlotsByYear={lineupSlotsByYear}
+                    ownerByTeamByYear={ownerByTeamByYear}
+                    currentWeekByYear={currentWeekBySeason}
                   />
                 )}
 
