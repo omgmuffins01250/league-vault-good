@@ -9175,101 +9175,122 @@ export function PlayoffProbTab({
   };
   if (!weeksSorted.length) {
     return (
-      <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow">
-        <h2 className="text-lg font-semibold mb-2">
-          Playoff Probability by Record
-        </h2>
-        <p className="text-sm opacity-70">
-          No data yet. This view only includes completed seasons where the
-          number of playoff teams is known (from ESPN or your overrides) and
-          uses regular-season games only.
-        </p>
-      </div>
+      <Card
+        title="Playoff Probability Lab"
+        subtitle="Historical playoff odds by record after each week — now with a little extra shine."
+      >
+        <div className="flex flex-col gap-3 text-slate-600 dark:text-slate-300/90">
+          <div className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-emerald-300 to-sky-300 bg-clip-text text-transparent drop-shadow-sm">
+            Playoff Probability by Record
+          </div>
+          <p className="text-sm">
+            No data yet. This view only includes completed seasons where the
+            number of playoff teams is known (from ESPN or your overrides) and
+            uses regular-season games only.
+          </p>
+        </div>
+      </Card>
     );
   }
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow">
-        <h2 className="text-lg font-semibold">Playoff Probability by Record</h2>
-        <p className="text-sm opacity-70">
-          For each week N, this shows the probability of making the playoffs
-          conditional on the record after week N. Records are built from
-          regular-season games only (playoffs excluded), and a playoff
-          appearance is determined by placement ≤ the playoff-team count for
-          that season.
-        </p>
-        {/* (5) toggle: only show records with N games after week N */}
-        <div className="mt-3">
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-sm"
-              checked={strictWeekGames}
-              onChange={(e) => setStrictWeekGames(e.target.checked)}
-            />
-            Exclude Bye Weeks
-          </label>
-        </div>
-        {/* BAR CHART */}
-        <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-base font-semibold">
-              Playoff Odds by Record
+    <div className="space-y-6">
+      <Card
+        title="Playoff Probability Lab"
+        subtitle="Historical playoff odds by record after each week — now with a little extra shine."
+      >
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <div className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-emerald-300 to-sky-300 bg-clip-text text-transparent drop-shadow-sm">
+                Playoff Probability by Record
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300/90 max-w-2xl">
+                For each week N, explore the historical probability of making the playoffs given that week&apos;s record. The sample uses only regular-season games, and a playoff berth means finishing at or above the playoff-team line for that season.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm opacity-70">Week</label>
-              <select
-                className="select select-sm"
-                value={selectedWeek ?? ""}
-                onChange={(e) => setSelectedWeek(Number(e.target.value))}
-              >
-                {weeksSorted.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <label
+              className="inline-flex items-center gap-3 self-start rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-200 shadow-[0_18px_32px_-22px_rgba(15,23,42,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-25px_rgba(34,197,94,0.5)]"
+            >
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm border-slate-400/60"
+                checked={strictWeekGames}
+                onChange={(e) => setStrictWeekGames(e.target.checked)}
+              />
+              <span>Exclude Bye Weeks</span>
+            </label>
           </div>
-          <div className="h-64">
-            <div className="flex items-end gap-3 h-full">
-              {currentKeys.map((k) => {
-                const { made, total } = currentRecMap.get(k) || {
-                  made: 0,
-                  total: 0,
-                };
-                const p = total ? made / total : null;
-                const pctLabel = p == null ? "—" : `${Math.round(p * 100)}%`;
-                const h = p == null ? 0 : Math.max(2, Math.round(p * 100)); // 0..100%, min 2px
-                return (
-                  <div
-                    key={k}
-                    className="flex flex-col items-center w-12 h-full"
-                  >
-                    {/* rail with definite height so the % bar can size correctly */}
-                    <div className="h-full flex items-end">
-                      <div
-                        className="w-8 rounded-md transition-all"
-                        style={{
-                          height: `${h}%`,
-                          backgroundColor: pctToBarColor(p),
-                        }}
-                        title={
-                          p == null
-                            ? "No data"
-                            : `${pctLabel} (${made}/${total})`
-                        }
-                      />
+
+          {/* BAR CHART */}
+          <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 p-4 md:p-6 shadow-[0_26px_60px_-35px_rgba(15,23,42,0.85)]">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute inset-0 opacity-70 bg-[radial-gradient(130%_160%_at_0%_0%,rgba(253,224,71,0.22),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(110,231,183,0.18),transparent_60%)]" />
+              <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+            </div>
+            <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-base font-semibold text-slate-700 dark:text-slate-100">
+                Playoff Odds by Record
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Week
+                </label>
+                <select
+                  className="select select-sm rounded-full border border-slate-200/70 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/80 shadow-sm"
+                  value={selectedWeek ?? ""}
+                  onChange={(e) => setSelectedWeek(Number(e.target.value))}
+                >
+                  {weeksSorted.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="relative z-10 mt-5 h-64">
+              <div className="flex h-full items-end gap-5">
+                {currentKeys.map((k) => {
+                  const { made, total } = currentRecMap.get(k) || {
+                    made: 0,
+                    total: 0,
+                  };
+                  const p = total ? made / total : null;
+                  const pctLabel = p == null ? "—" : `${Math.round(p * 100)}%`;
+                  const h = p == null ? 0 : Math.max(2, Math.round(p * 100)); // 0..100%, min 2px
+                  return (
+                    <div
+                      key={k}
+                      className="flex h-full w-14 flex-col items-center"
+                    >
+                      <div className="flex h-full items-end">
+                        <div
+                          className="w-10 rounded-xl bg-gradient-to-t from-slate-800/10 via-slate-800/10 to-slate-50/80 dark:from-zinc-700/30 dark:via-zinc-600/40 dark:to-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_12px_24px_-16px_rgba(15,23,42,0.7)] transition-all"
+                          style={{
+                            height: `${h}%`,
+                            backgroundColor: pctToBarColor(p),
+                          }}
+                          title={
+                            p == null
+                              ? "No data"
+                              : `${pctLabel} (${made}/${total})`
+                          }
+                        />
+                      </div>
+                      <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                        {k}
+                      </div>
+                      <div className="text-[11px] font-medium text-slate-500 dark:text-slate-300">
+                        {pctLabel}
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs font-semibold">{k}</div>
-                    <div className="text-[11px] opacity-70">{pctLabel}</div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
       {weeksSorted.map((wk) => {
         const recMap = strictWeekGames
           ? aggByGames.get(wk)?.get(wk) || new Map() // exactly N games after week N
@@ -9278,10 +9299,16 @@ export function PlayoffProbTab({
         return (
           <div
             key={`week-${wk}`}
-            className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow"
+            className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-zinc-950/60 p-5 shadow-[0_24px_58px_-38px_rgba(15,23,42,0.85)] backdrop-blur-xl"
           >
-            <div className="text-base font-semibold mb-3">Week {wk}</div>
-            <div className="flex flex-wrap gap-3">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute inset-0 opacity-70 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(94,234,212,0.16),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(129,140,248,0.14),transparent_60%)]" />
+              <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+            </div>
+            <div className="relative z-10 text-sm font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-200 mb-3">
+              Week {wk}
+            </div>
+            <div className="relative z-10 flex flex-wrap gap-3">
               {keys.map((k) => {
                 const { made, total } = recMap.get(k);
                 const pct = total ? Math.round((made / total) * 100) : 0;
@@ -9289,10 +9316,12 @@ export function PlayoffProbTab({
                   <div
                     key={k}
                     onClick={() => setDetail({ week: wk, record: k })}
-                    className="px-3 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 cursor-pointer hover:ring-2 hover:ring-zinc-400/40"
+                    className="group cursor-pointer rounded-xl border border-white/50 dark:border-white/10 bg-gradient-to-br from-white/85 via-slate-50/60 to-slate-100/80 px-3 py-2 text-slate-700 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.9)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_52px_-25px_rgba(56,189,248,0.55)] dark:from-zinc-800/70 dark:via-zinc-900/60 dark:to-zinc-950/70"
                   >
-                    <div className="text-sm font-semibold">{k}</div>
-                    <div className="text-xs opacity-70">
+                    <div className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">
+                      {k}
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500 group-hover:text-sky-500 dark:text-slate-300">
                       {pct}% ({made}/{total})
                     </div>
                   </div>
@@ -9302,20 +9331,20 @@ export function PlayoffProbTab({
             {detail && detail.week === wk && (
               <div
                 id={`pp-detail-${wk}-${detail.record}`}
-                className="mt-3 rounded-xl bg-white dark:bg-zinc-900 p-4 shadow"
+                className="relative z-10 mt-4 overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70 p-4 shadow-[0_22px_55px_-32px_rgba(15,23,42,0.85)]"
               >
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="font-semibold">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-slate-700 dark:text-slate-200">
+                  <div className="font-semibold text-sm uppercase tracking-[0.18em]">
                     Week {detail.week} — {detail.record}
                     {detailStat && (
-                      <span className="ml-2 text-sm font-normal opacity-75">
+                      <span className="ml-2 text-[11px] font-normal text-slate-500 dark:text-slate-400">
                         • {detailStat.pct}% ({detailStat.made}/
                         {detailStat.total})
                       </span>
                     )}
                   </div>
                   <button
-                    className="btn btn-xs"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/10 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-20px_rgba(59,130,246,0.5)] dark:bg-zinc-900/70 dark:text-slate-200"
                     onClick={() => setDetail(null)}
                   >
                     Close
@@ -9325,7 +9354,7 @@ export function PlayoffProbTab({
                   <>
                     {/* header row for alignment */}
                     <div
-                      className="px-1 pb-1 text-xs uppercase opacity-60 grid
+                      className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400 grid
                         [grid-template-columns:minmax(0,1fr)_72px_84px_86px]"
                     >
                       <div>Manager</div>
@@ -9333,21 +9362,21 @@ export function PlayoffProbTab({
                       <div className="text-right">Finish</div>
                       <div className="text-center">Made PO</div>
                     </div>
-                    <ul className="text-sm divide-y divide-zinc-200/30 dark:divide-zinc-700/40">
+                    <ul className="text-sm divide-y divide-white/50 dark:divide-white/10">
                       {detailRows.map((r, i) => (
                         <li
                           key={i}
-                          className="py-1.5 grid items-center
-                         [grid-template-columns:minmax(0,1fr)_72px_84px_86px]"
+                          className="py-2 grid items-center
+                         [grid-template-columns:minmax(0,1fr)_72px_84px_86px] text-slate-700 dark:text-slate-200"
                         >
                           <div className="font-medium truncate">{r.owner}</div>
-                          <div className="text-right tabular-nums">
+                          <div className="text-right tabular-nums text-slate-500 dark:text-slate-300">
                             {r.year}
                           </div>
-                          <div className="text-right font-mono">
+                          <div className="text-right font-mono text-slate-600 dark:text-slate-200">
                             {r.finalRec}
                           </div>
-                          <div className="text-center">
+                          <div className="text-center font-semibold text-slate-600 dark:text-slate-200">
                             {r.made ? "Y" : "N"}
                           </div>
                         </li>
@@ -9355,7 +9384,9 @@ export function PlayoffProbTab({
                     </ul>
                   </>
                 ) : (
-                  <div className="text-sm opacity-70">No teams matched.</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    No teams matched.
+                  </div>
                 )}
               </div>
             )}
