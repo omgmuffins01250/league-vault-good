@@ -4664,14 +4664,6 @@ export function RecordsTab({ league }) {
   const Medal = ({ place }) =>
     place === 1 ? "🥇" : place === 2 ? "🥈" : place === 3 ? "🥉" : null;
 
-  // sizes small so 5 lines fit
-  const sizeForIdx = (i) =>
-    i === 0
-      ? "text-sm md:text-base"
-      : i === 1
-      ? "text-[13px] md:text-sm"
-      : "text-xs md:text-[13px]";
-
   // “see more” modal state
   const [moreKey, setMoreKey] = React.useState(null);
   const closeMore = () => setMoreKey(null);
@@ -4680,35 +4672,56 @@ export function RecordsTab({ league }) {
   const TopSection = ({ title, bigLine, listAll, renderRow, moreKeyName }) => {
     const top5 = listAll.slice(0, 5);
     const tail2to5 = top5.slice(1);
+    const badgeClass = (place) =>
+      place === 1
+        ? "bg-gradient-to-br from-amber-300/85 via-amber-200/70 to-emerald-200/70 text-amber-900 dark:from-amber-500/35 dark:via-amber-400/25 dark:to-emerald-400/25 dark:text-amber-100"
+        : place === 2
+        ? "bg-gradient-to-br from-zinc-200/85 via-zinc-100/60 to-zinc-200/70 text-zinc-900 dark:from-zinc-500/30 dark:via-zinc-400/20 dark:to-zinc-500/25 dark:text-zinc-100"
+        : place === 3
+        ? "bg-gradient-to-br from-orange-200/85 via-orange-100/60 to-amber-200/65 text-orange-900 dark:from-orange-500/30 dark:via-orange-400/20 dark:to-amber-500/25 dark:text-orange-100"
+        : "bg-white/80 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-white/50 dark:border-white/10";
 
     return (
-      <Card title={title}>
+      <Card
+        title={title}
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {bigLine ? (
-          <div className="text-lg md:text-xl font-semibold text-white/95 leading-snug">
-            {bigLine}
+          <div className="relative overflow-hidden rounded-2xl border border-white/35 dark:border-white/10 px-4 py-4 shadow-[0_32px_68px_-44px_rgba(15,23,42,0.95)]">
+            <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(115%_140%_at_0%_0%,rgba(251,191,36,0.22),transparent_58%),radial-gradient(120%_145%_at_100%_100%,rgba(45,212,191,0.18),transparent_62%)]" />
+            <div className="relative text-base md:text-xl font-semibold leading-snug text-slate-800 dark:text-slate-100 drop-shadow-[0_1px_0_rgba(255,255,255,0.35)] dark:drop-shadow-none">
+              {bigLine}
+            </div>
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
 
         {tail2to5.length > 0 && (
-          <ul className="mt-2 space-y-1.5">
+          <ul className="mt-4 space-y-2">
             {tail2to5.map((item, i) => {
               const overallPlace = i + 2;
               return (
-                <li
-                  key={i}
-                  className={`flex items-baseline gap-2 ${sizeForIdx(i)}`}
-                >
-                  <span className="w-5 shrink-0 text-sm md:text-base">
+                <li key={i} className="flex items-center gap-3">
+                  <div
+                    className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold uppercase tracking-[0.24em] shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${badgeClass(
+                      overallPlace
+                    )}`}
+                  >
                     {overallPlace <= 3 ? (
-                      <Medal place={overallPlace} />
+                      <span className="text-lg leading-none">
+                        <Medal place={overallPlace} />
+                      </span>
                     ) : (
-                      <span className="opacity-70">{overallPlace}.</span>
+                      <span>{overallPlace}</span>
                     )}
-                  </span>
-                  <div className="text-zinc-300">
-                    {renderRow(item, overallPlace)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-[13px] md:text-sm leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
+                      {renderRow(item, overallPlace)}
+                    </div>
                   </div>
                 </li>
               );
@@ -4718,10 +4731,11 @@ export function RecordsTab({ league }) {
 
         {listAll.length > 5 && (
           <button
-            className="btn btn-sm mt-3"
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/35 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-600 transition-colors duration-200 ease-out hover:border-amber-300/70 hover:text-amber-500 dark:text-slate-200 dark:hover:text-amber-300"
             onClick={() => setMoreKey(moreKeyName)}
           >
-            + See more
+            <span className="text-xs">View full list</span>
+            <span aria-hidden="true">↗</span>
           </button>
         )}
       </Card>
@@ -4733,12 +4747,13 @@ export function RecordsTab({ league }) {
     weeklyHigh: {
       title: "Highest Points (week) — more",
       items: topWeeklyHighAll.slice(5, 25),
-      render: (g, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
+      render: (g) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {g.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4748,8 +4763,7 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
+            )} pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -4758,11 +4772,13 @@ export function RecordsTab({ league }) {
     weeklyWinners: {
       title: "Most Highest-Scoring Weeks — more",
       items: topWeeklyWinnersAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
           </span>
         </div>
       ),
@@ -4771,12 +4787,13 @@ export function RecordsTab({ league }) {
     weeklyLow: {
       title: "Lowest Points (week) — more",
       items: topWeeklyLowAll.slice(5, 25),
-      render: (g, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
+      render: (g) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {g.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4786,8 +4803,7 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
+            )} pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -4795,11 +4811,13 @@ export function RecordsTab({ league }) {
     seasonPFHigh: {
       title: "Highest Points (season) — more",
       items: topSeasonPFHighAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pf)} pts (S{r.season})
           </span>
         </div>
       ),
@@ -4807,11 +4825,13 @@ export function RecordsTab({ league }) {
     seasonPFLow: {
       title: "Lowest Points (season) — more",
       items: topSeasonPFLowAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pf)} pts (S{r.season})
           </span>
         </div>
       ),
@@ -4819,11 +4839,13 @@ export function RecordsTab({ league }) {
     winsHigh: {
       title: "Most Wins (season) — more",
       items: topSeasonWinsHighAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.wins} wins (S{r.season})
           </span>
         </div>
       ),
@@ -4831,11 +4853,13 @@ export function RecordsTab({ league }) {
     winsLow: {
       title: "Least Wins (season) — more",
       items: topSeasonWinsLowAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.wins} wins (S{r.season})
           </span>
         </div>
       ),
@@ -4843,11 +4867,13 @@ export function RecordsTab({ league }) {
     streaks: {
       title: "Longest Win Streak — more",
       items: longestStreaks.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.best} (S{r.season} W{fmtWeek(r.startW)} → W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.best} straight (S{r.season} W{fmtWeek(r.startW)} → W
             {fmtWeek(r.endW)})
           </span>
         </div>
@@ -4856,11 +4882,13 @@ export function RecordsTab({ league }) {
     players: {
       title: "Highest Scoring Player — more",
       items: highestScoringPlayersAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.team} — {r.player} — {Math.round(r.pts)} (S{r.season} W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.team}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.player} — {Math.round(r.pts)} pts (S{r.season} W
             {fmtWeek(r.week)})
           </span>
         </div>
@@ -4869,11 +4897,13 @@ export function RecordsTab({ league }) {
     diff: {
       title: "Largest Win Differential — more",
       items: largestDiffAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.winner} over {r.loser} — {Math.round(r.diff)} (S{r.season} W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.winner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            over {r.loser} — {Math.round(r.diff)} diff (S{r.season} W
             {fmtWeek(r.week)})
           </span>
         </div>
@@ -4882,11 +4912,13 @@ export function RecordsTab({ league }) {
     pa: {
       title: "League Punching Bag — more (Highest Points Against, season)",
       items: topPunchingBagAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pa)} against (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pa)} against (S{r.season})
           </span>
         </div>
       ),
@@ -4894,14 +4926,14 @@ export function RecordsTab({ league }) {
     poapps: {
       title: "Most Playoff Appearances — more",
       items: poArr.slice(5, 25),
-      render: (r, idx) => {
+      render: (r) => {
         const [owner, cnt] = r;
         return (
-          <div className="flex gap-2">
-            <span className="opacity-60">{idx}.</span>
-            <span>
-              {owner} — {cnt}
+          <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+            <span className="font-semibold text-slate-800 dark:text-slate-100">
+              {owner}
             </span>
+            <span className="text-slate-500 dark:text-slate-300">— {cnt}</span>
           </div>
         );
       },
@@ -4912,33 +4944,44 @@ export function RecordsTab({ league }) {
 
   // ---------- UI ----------
   return (
-    <div className="grid md:grid-cols-2 gap-4 text-sm">
-      {/* Scope picker */}
-      <div className="md:col-span-2">
-        <Card
-          title="Records scope"
-          right={
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">Show:</span>
-              <select
-                className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-              >
-                <option value="regular">Regular season</option>
-                <option value="playoffs">Playoffs</option>
-                <option value="all">All games</option>
-              </select>
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-80 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(59,130,246,0.22),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(45,212,191,0.18),transparent_60%)]" />
+      <div className="grid md:grid-cols-2 gap-5 text-sm">
+        {/* Scope picker */}
+        <div className="md:col-span-2">
+          <Card
+            title="Records scope"
+            className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+            right={
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+                <span>Show</span>
+                <div className="relative">
+                  <select
+                    className="appearance-none rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 pr-8 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                    value={scope}
+                    onChange={(e) => setScope(e.target.value)}
+                  >
+                    <option value="regular">Regular season</option>
+                    <option value="playoffs">Playoffs</option>
+                    <option value="all">All games</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-400 dark:text-slate-500">
+                    ▾
+                  </span>
+                </div>
+              </div>
+            }
+          >
+            <div className="rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-40px_rgba(15,23,42,0.9)]">
+              Calculations use finished games only. Season totals use completed
+              seasons only. Current scope:{" "}
+              <span className="font-semibold text-amber-600 dark:text-amber-300">
+                {scopeLabel}
+              </span>
+              .
             </div>
-          }
-        >
-          <div className="text-xs text-zinc-500">
-            Calculations use finished games only. Season totals use completed
-            seasons only. Current scope:{" "}
-            <span className="font-medium">{scopeLabel}</span>.
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
 
       {/* Highest Points (week) */}
       <TopSection
@@ -5203,17 +5246,28 @@ export function RecordsTab({ league }) {
       />
 
       {/* Most Championships (all tied shown as 🥇) */}
-      <Card title="Most Championships">
+      <Card
+        title="Most Championships"
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {mostChamps.length ? (
-          <div className="space-y-1">
-            {mostChamps.slice(0, 5).map(([o, c]) => (
-              <div key={`mc-${o}`} className="text-sm md:text-base font-medium">
-                🥇 {o} — {c}
+          <div className="space-y-2">
+            {mostChamps.slice(0, 5).map(([o, c], idx) => (
+              <div key={`mc-${o}`} className="flex items-center gap-3">
+                <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300/90 via-yellow-200/75 to-emerald-200/70 text-lg shadow-[0_20px_55px_-32px_rgba(15,23,42,0.95)]">
+                  {idx === 0 ? "🏆" : "🥇"}
+                </div>
+                <div className="flex-1 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm md:text-base leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
+                  <span className="font-semibold">{o}</span>
+                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
       </Card>
 
@@ -5241,65 +5295,100 @@ export function RecordsTab({ league }) {
       />
 
       {/* Most Sackos */}
-      <Card title="Most Sackos">
+      <Card
+        title="Most Sackos"
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {sackoArr.length ? (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {sackoArr.slice(0, 5).map(([o, c], i) => (
-              <div
-                key={`ms-${o}`}
-                className={`${
-                  i === 0 ? "text-sm md:text-base font-medium" : ""
-                }`}
-              >
-                {i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : ""}
-                {o} — {c}
+              <div key={`ms-${o}`} className="flex items-center gap-3">
+                <div
+                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${
+                    i === 0
+                      ? "bg-gradient-to-br from-rose-300/85 via-red-200/65 to-amber-200/70 text-rose-900"
+                      : "bg-white/70 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border border-white/40 dark:border-white/10"
+                  }`}
+                >
+                  {i === 0 ? "💀" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                </div>
+                <div className="flex-1 rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm leading-snug text-slate-700 dark:text-slate-100">
+                  <span className="font-semibold">{o}</span>
+                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
       </Card>
 
       {/* footnote */}
-      <Card>
-        <div className="text-xs text-zinc-500">
-          Transactions/trades require extra data from ESPN or your CSV. If your
-          CSV includes per-season columns named <code>transactions</code> or{" "}
-          <code>trades</code>, the Trades / Transactions tab will show them.
-          Include <code>trade_partner</code> (or traded_with / partner /
-          trade_with) to get most common pairings.
+      <Card
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
+        <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-38px_rgba(15,23,42,0.92)]">
+          Transactions and trades need supplemental data from ESPN or your CSV.
+          If your file includes per-season columns named <code>transactions</code>{" "}
+          or <code>trades</code>, the Trades / Transactions tab will display
+          them. Include <code>trade_partner</code> (or traded_with / partner /
+          trade_with) to surface the most common pairings.
         </div>
       </Card>
+    </div>
 
       {/* See-more modal */}
       {activeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={closeMore} />
-          <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900">
-              <div className="text-base font-semibold">{activeModal.title}</div>
-              <button className="btn btn-xs" onClick={closeMore}>
-                Close
-              </button>
-            </div>
-            <div
-              className="p-3 overflow-y-auto"
-              style={{ maxHeight: "calc(85vh - 48px)" }}
-            >
-              {activeModal.items.length ? (
-                <ol className="space-y-1">
-                  {activeModal.items.map((item, i) => (
-                    <li key={i} className="text-sm text-zinc-200">
-                      {activeModal.render(item, i + 6 /* numbers start at 6 */)}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <div className="text-sm opacity-70 px-2 py-3">
-                  No more results.
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={closeMore}
+          />
+          <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/90 dark:bg-slate-950/85 shadow-[0_45px_110px_-50px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-0 opacity-85 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(59,130,246,0.18),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(45,212,191,0.16),transparent_62%)]" />
+            <div className="relative">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 border-b border-white/40 dark:border-white/10 bg-white/85 dark:bg-slate-950/80 backdrop-blur-xl">
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700 dark:text-slate-200">
+                  {activeModal.title}
                 </div>
-              )}
+                <button
+                  className="inline-flex items-center gap-1 rounded-full border border-white/40 dark:border-white/15 bg-white/80 dark:bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 transition hover:text-amber-500 dark:hover:text-amber-300"
+                  onClick={closeMore}
+                >
+                  Close
+                </button>
+              </div>
+              <div
+                className="p-5 overflow-y-auto text-sm text-slate-700 dark:text-slate-200"
+                style={{ maxHeight: "calc(85vh - 72px)" }}
+              >
+                {activeModal.items.length ? (
+                  <ol className="space-y-2">
+                    {activeModal.items.map((item, i) => {
+                      const place = i + 6;
+                      return (
+                        <li key={i}>
+                          <div className="flex items-center gap-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-white/[0.07] px-4 py-2 shadow-[0_24px_65px_-40px_rgba(15,23,42,0.95)]">
+                            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/85 dark:bg-white/10 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                              {place}
+                            </span>
+                            <div className="flex-1 leading-snug">
+                              {activeModal.render(item, place)}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-3 text-sm text-slate-500 dark:text-slate-300">
+                    No more results.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -5998,31 +6087,85 @@ export function TradesTab({
     return out;
   }, [ownersUnion, filtered, metricValue]);
 
-  const PickupRow = ({ a, showOwner = true }) => (
-    <div className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800">
-      <div className="truncate">
-        {showOwner ? (
-          <>
-            <span className="font-medium">{a.owner || "—"}</span>
-            <span className="mx-1 text-zinc-400">•</span>
-          </>
-        ) : null}
-        <span className="font-medium">{a.player}</span>
-        {a.pos ? (
-          <span className="ml-1 text-xs text-zinc-500">({a.pos})</span>
-        ) : null}
-        <span className="mx-1 text-zinc-400">•</span>
-        <span>
-          Wk {a.weekAcquired}, {a.season}
-        </span>
-        <span className="mx-1 text-zinc-400">•</span>
-        <span className="text-xs text-zinc-500">
-          {a.weeks} wk{a.weeks === 1 ? "" : "s"}
+  const FancySelect = ({ label, className = "", children, ...props }) => (
+    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+      {label ? <span>{label}</span> : null}
+      <div className="relative">
+        <select
+          {...props}
+          className={`appearance-none min-w-[8.75rem] px-4 py-2 pr-9 rounded-full border border-white/60 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60 transition-all ${className}`}
+        >
+          {children}
+        </select>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500">
+          ▾
         </span>
       </div>
-      <div className="text-right tabular-nums">
-        <div>{fmt1(a.totalPts)} pts</div>
-        <div className="text-xs text-zinc-500">{fmt2(a.ppg)} ppg</div>
+    </label>
+  );
+
+  const FancyStepper = ({ label, value, onDec, onInc }) => (
+    <div className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+      <span>{label}</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(59,130,246,0.6)] transition-transform hover:-translate-y-0.5"
+          onClick={onDec}
+        >
+          –
+        </button>
+        <span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/60 dark:bg-zinc-950/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
+          {value}
+        </span>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(168,85,247,0.55)] transition-transform hover:-translate-y-0.5"
+          onClick={onInc}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+
+  const PickupRow = ({ a, showOwner = true, rank }) => (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 px-4 py-3 shadow-[0_28px_60px_-40px_rgba(59,130,246,0.65)] transition-all hover:-translate-y-[1px] hover:shadow-[0_26px_55px_-32px_rgba(129,140,248,0.75)]">
+      <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(236,72,153,0.14),transparent_60%)]" />
+      <div className="relative flex items-center gap-4">
+        {rank ? (
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 dark:border-white/15 bg-gradient-to-br from-indigo-500/20 via-sky-400/20 to-emerald-400/30 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
+            #{rank}
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+            {showOwner ? (
+              <>
+                <span>{a.owner || "—"}</span>
+                <span className="mx-1 text-slate-400">•</span>
+              </>
+            ) : null}
+            <span>{a.player}</span>
+            {a.pos ? (
+              <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">({a.pos})</span>
+            ) : null}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
+            <span>
+              Wk {a.weekAcquired}, {a.season}
+            </span>
+            <span>{a.weeks} wk{a.weeks === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+            {fmt1(a.totalPts)} pts
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 tabular-nums">
+            {fmt2(a.ppg)} PPG
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -6034,10 +6177,9 @@ export function TradesTab({
           yearFilter === "all" ? " (All-time)" : ` (${yearFilter})`
         }`}
         right={
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* Season */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+          <div className="flex flex-wrap items-end gap-3 justify-end">
+            <FancySelect
+              label="Season"
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
               title="Season"
@@ -6048,11 +6190,10 @@ export function TradesTab({
                   {y}
                 </option>
               ))}
-            </select>
+            </FancySelect>
 
-            {/* Scope */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Scope"
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
               title="Scope"
@@ -6060,11 +6201,10 @@ export function TradesTab({
               <option value="regular">Regular season</option>
               <option value="playoffs">Playoffs</option>
               <option value="all">All games</option>
-            </select>
+            </FancySelect>
 
-            {/* Position */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Position"
               value={posFilter}
               onChange={(e) => setPosFilter(e.target.value)}
               title="Position"
@@ -6078,64 +6218,44 @@ export function TradesTab({
               <option value="K">K</option>
               <option value="WR/RB/TE">WR/RB/TE</option>
               <option value="WR/RB">WR/RB</option>
-            </select>
+            </FancySelect>
 
-            {/* Metric */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Metric"
               value={rankMetric}
               onChange={(e) => setRankMetric(e.target.value)}
               title="Ranking metric"
             >
               <option value="total">Rank by Total points</option>
               <option value="ppg">Rank by PPG</option>
-            </select>
+            </FancySelect>
 
-            {/* Min weeks */}
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-xs text-zinc-500">Min weeks:</span>
-              <button
-                className="px-2 py-1 border rounded"
-                onClick={() =>
-                  setMinWeeks((x) => Math.max(1, Number(x || 0) - 1))
-                }
-              >
-                –
-              </button>
-              <span className="px-2">{minWeeks}</span>
-              <button
-                className="px-2 py-1 border rounded"
-                onClick={() =>
-                  setMinWeeks((x) => Math.min(99, Number(x || 0) + 1))
-                }
-              >
-                +
-              </button>
-            </div>
+            <FancyStepper
+              label="Min Weeks"
+              value={minWeeks}
+              onDec={() => setMinWeeks((x) => Math.max(1, Number(x || 0) - 1))}
+              onInc={() => setMinWeeks((x) => Math.min(99, Number(x || 0) + 1))}
+            />
           </div>
         }
       >
         {filtered.length === 0 ? (
-          <div className="text-sm text-zinc-500">
+          <div className="text-sm text-slate-500 dark:text-slate-400">
             No qualifying free-agency acquisitions found.
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-3">
             {top5Global.map((a, i) => (
-              <div
+              <PickupRow
                 key={`${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                className="flex"
-              >
-                <div className="w-6 text-zinc-400">{i + 1}.</div>
-                <div className="flex-1">
-                  <PickupRow a={a} />
-                </div>
-              </div>
+                a={a}
+                rank={i + 1}
+              />
             ))}
           </div>
         )}
 
-        <div className="mt-3 text-xs text-zinc-500">
+        <div className="mt-4 text-[10px] uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
           {rankMetric === "ppg"
             ? "PPG since acquisition"
             : "Total points since acquisition"}{" "}
@@ -6155,10 +6275,7 @@ export function TradesTab({
         <button
           onClick={() => setMoreGlobal(true)}
           title="Show more"
-          className="absolute bottom-6 right-6 w-8 h-8 rounded-full border flex items-center justify-center
-                     translate-x-1/2 translate-y-1/2
-                     bg-white/80 dark:bg-zinc-900/80 backdrop-blur shadow-md
-                     hover:bg-white dark:hover:bg-zinc-800 transition-all"
+          className="absolute bottom-6 right-6 inline-flex h-9 w-9 translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-indigo-500/30 via-violet-500/30 to-fuchsia-500/40 text-[13px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-26px_rgba(124,58,237,0.7)] backdrop-blur transition-all hover:scale-105"
         >
           +
         </button>
@@ -6192,7 +6309,7 @@ export function TradesTab({
                 <button
                   onClick={() => setMoreOwner(o)}
                   title="Show more"
-                  className="w-6 h-6 rounded-full border flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-emerald-400/25 via-sky-400/25 to-indigo-500/30 text-[12px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-30px_rgba(56,189,248,0.65)] transition-transform hover:scale-105"
                 >
                   +
                 </button>
@@ -6200,21 +6317,18 @@ export function TradesTab({
             }
           >
             {list.length === 0 ? (
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
                 No qualifying pickups.
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {list.map((a, i) => (
-                  <div
+                  <PickupRow
                     key={`${o}-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                    className="flex"
-                  >
-                    <div className="w-6 text-zinc-400">{i + 1}.</div>
-                    <div className="flex-1">
-                      <PickupRow a={a} showOwner={false} />
-                    </div>
-                  </div>
+                    a={a}
+                    showOwner={false}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
@@ -6275,51 +6389,52 @@ export function TradesTab({
   const TransactionsTable = () => (
     <Card
       title={
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <span>{metricLabel} by Member (per season)</span>
-          <div className="flex items-center gap-2">
-            <label className="text-sm opacity-80">Metric:</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value)}
-              className="bg-transparent border rounded px-2 py-1 text-sm"
-            >
-              {METRIC_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FancySelect
+            label="Metric"
+            value={metric}
+            onChange={(e) => setMetric(e.target.value)}
+            title="Metric"
+          >
+            {METRIC_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </FancySelect>
         </div>
       }
     >
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm border-collapse">
-          <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-            <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-              <th className="px-3 py-2 text-left">Member</th>
+      <div className="overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-zinc-950/50 backdrop-blur">
+        <table className="min-w-full text-[13px]">
+          <thead className="sticky top-0 bg-gradient-to-r from-indigo-500/20 via-sky-400/20 to-emerald-400/25 text-[10px] uppercase tracking-[0.3em] text-slate-600 dark:text-slate-200">
+            <tr className="divide-x divide-white/40 dark:divide-white/10">
+              <th className="px-4 py-3 text-left font-semibold">Member</th>
               {seasonsForTable.map((yr) => (
-                <th key={`h-${yr}`} className="px-3 py-2 text-center">
+                <th key={`h-${yr}`} className="px-4 py-3 text-center font-semibold">
                   {yr}
                 </th>
               ))}
-              <th className="px-3 py-2 text-center">Total</th>
+              <th className="px-4 py-3 text-center font-semibold">Total</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          <tbody className="divide-y divide-white/45 dark:divide-white/10 text-sm text-slate-700 dark:text-slate-200">
             {rowsTx.map((r) => (
-              <tr key={r.owner} className="text-center">
-                <td className="text-left px-3 py-2 font-medium">{r.owner}</td>
+              <tr
+                key={r.owner}
+                className="transition-colors hover:bg-white/55 dark:hover:bg-white/5"
+              >
+                <td className="px-4 py-3 text-left font-semibold">{r.owner}</td>
                 {seasonsForTable.map((yr) => (
                   <td
                     key={`${r.owner}-${yr}`}
-                    className="px-3 py-2 tabular-nums"
+                    className="px-4 py-3 text-center tabular-nums"
                   >
                     {r[yr] || 0}
                   </td>
                 ))}
-                <td className="px-3 py-2 font-semibold tabular-nums">
+                <td className="px-4 py-3 text-center font-semibold tabular-nums text-indigo-600 dark:text-indigo-300">
                   {r.total || 0}
                 </td>
               </tr>
@@ -6347,37 +6462,36 @@ export function TradesTab({
     return (
       <div className="fixed inset-0 z-50">
         <div
-          className="absolute inset-0 bg-black/50"
+          className="absolute inset-0 bg-slate-950/75 backdrop-blur"
           onClick={onClose}
           aria-hidden="true"
         />
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(680px,92vw)] max-h-[80vh] overflow-auto rounded-xl bg-white dark:bg-zinc-900 shadow-xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="font-semibold">{owner} — Top 20 FA Pickups</div>
+        <div className="absolute left-1/2 top-1/2 w-[min(680px,92vw)] max-h-[82vh] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl border border-white/20 dark:border-white/10 bg-white/85 dark:bg-zinc-950/80 shadow-[0_35px_85px_-45px_rgba(59,130,246,0.8)] backdrop-blur-xl">
+          <div className="relative flex items-center justify-between gap-3 border-b border-white/40 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 px-6 py-4">
+            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600 dark:text-slate-200">
+              {owner} — Top 20 FA Pickups
+            </div>
             <button
-              className="px-2 py-1 rounded border hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-br from-rose-500/25 via-amber-400/20 to-emerald-400/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-30px_rgba(244,114,182,0.6)] transition-transform hover:scale-105"
               onClick={onClose}
             >
               Close
             </button>
           </div>
-          <div className="p-3">
+          <div className="p-5">
             {mine.length === 0 ? (
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
                 No qualifying pickups.
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {mine.map((a, i) => (
-                  <div
+                  <PickupRow
                     key={`${owner}-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                    className="flex"
-                  >
-                    <div className="w-6 text-zinc-400">{i + 1}.</div>
-                    <div className="flex-1">
-                      <PickupRow a={a} showOwner={false} />
-                    </div>
-                  </div>
+                    a={a}
+                    showOwner={false}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
@@ -6399,37 +6513,36 @@ export function TradesTab({
       {moreGlobal ? (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-slate-950/75 backdrop-blur"
             onClick={() => setMoreGlobal(false)}
             aria-hidden="true"
           />
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(720px,92vw)] max-h-[80vh] overflow-auto rounded-xl bg-white dark:bg-zinc-900 shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-              <div className="font-semibold">Best Pickups — Top 20</div>
+          <div className="absolute left-1/2 top-1/2 w-[min(720px,92vw)] max-h-[82vh] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl border border-white/20 dark:border-white/10 bg-white/85 dark:bg-zinc-950/80 shadow-[0_35px_85px_-45px_rgba(59,130,246,0.8)] backdrop-blur-xl">
+            <div className="relative flex items-center justify-between gap-3 border-b border-white/40 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 px-6 py-4">
+              <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600 dark:text-slate-200">
+                Best Pickups — Top 20
+              </div>
               <button
-                className="px-2 py-1 rounded border hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-br from-rose-500/25 via-amber-400/20 to-emerald-400/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-30px_rgba(244,114,182,0.6)] transition-transform hover:scale-105"
                 onClick={() => setMoreGlobal(false)}
               >
                 Close
               </button>
             </div>
-            <div className="p-3">
+            <div className="p-5">
               {top20Global.length === 0 ? (
-                <div className="text-sm text-zinc-500">
+                <div className="text-sm text-slate-500 dark:text-slate-400">
                   No qualifying pickups.
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-3">
                   {top20Global.map((a, i) => (
-                    <div
+                    <PickupRow
                       key={`global-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                      className="flex"
-                    >
-                      <div className="w-6 text-zinc-400">{i + 1}.</div>
-                      <div className="flex-1">
-                        <PickupRow a={a} showOwner={true} />
-                      </div>
-                    </div>
+                      a={a}
+                      showOwner={true}
+                      rank={i + 1}
+                    />
                   ))}
                 </div>
               )}
@@ -7194,6 +7307,27 @@ export function RosterTab({
   const [summaryView, setSummaryView] = React.useState("chart"); // "table" | "chart"
   const [showProj, setShowProj] = React.useState(false); // show projections in roster tables
 
+  const summaryToggleWrapperCls =
+    "inline-flex items-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 backdrop-blur px-1 py-1 shadow-[0_18px_45px_-30px_rgba(59,130,246,0.65)]";
+  const summaryToggleBtnCls = (active, variant = "blue") => {
+    const base =
+      "px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] transition-all rounded-full";
+    const inactive =
+      "text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white";
+    if (!active) return `${base} ${inactive}`;
+    if (variant === "violet")
+      return `${base} bg-gradient-to-r from-violet-500/90 via-fuchsia-500/85 to-rose-500/85 text-white shadow-[0_12px_30px_-10px_rgba(217,70,239,0.8)]`;
+    return `${base} bg-gradient-to-r from-sky-500/90 via-blue-500/85 to-indigo-500/85 text-white shadow-[0_12px_30px_-10px_rgba(59,130,246,0.8)]`;
+  };
+  const pillSelectCls =
+    "appearance-none px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-900/70 text-slate-700 dark:text-slate-200 shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)] focus:outline-none focus:ring-2 focus:ring-sky-400/60 dark:focus:ring-sky-500/40";
+  const chartFrameCls =
+    "h-full rounded-3xl border border-white/55 dark:border-white/10 bg-[radial-gradient(120%_160%_at_0%_0%,rgba(56,189,248,0.25),transparent_62%),radial-gradient(120%_160%_at_100%_100%,rgba(129,140,248,0.25),transparent_62%)] p-6 shadow-[0_45px_110px_-60px_rgba(59,130,246,0.7)] backdrop-blur-xl";
+  const entryCardCls =
+    "space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-900/70 px-3 py-2 shadow-[0_18px_50px_-30px_rgba(59,130,246,0.85)]";
+  const noEntryCls =
+    "inline-flex h-16 w-full items-center justify-center rounded-xl border border-white/45 dark:border-white/10 bg-white/50 dark:bg-zinc-900/50 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500";
+
   // --- helper: bench left (potential - actual) for one team/week ---
   const __benchLeftFor = React.useCallback(
     (seasonId, teamId, week) => {
@@ -7476,68 +7610,80 @@ export function RosterTab({
     ]);
 
     const NameCell = ({ entry }) => {
-      const pid =
-        entry?.pid ??
-        entry?.playerId ??
-        entry?.player?.id ??
-        entry?.playerPoolEntry?.player?.id ??
-        null;
-
       // use the entry's defaultPositionId (already present on weekly rosters)
       const posId = __entryPosId(entry);
       const label = posId != null ? __POS_LABEL[posId] || "" : "";
 
       const name = entry?.name || "";
+      const actualText = Number.isFinite(entry?.pts)
+        ? `${__fmtPts(entry.pts)} pts`
+        : "";
+
+      let projText = null;
+      if (showProj) {
+        const p = __entryProj(entry);
+        if (Number.isFinite(p)) {
+          const d = __entryPts(entry) - p;
+          const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
+          const mag = __fmtPts(Math.abs(d));
+          projText = `proj ${__fmtPts(p)} (${sign}${mag})`;
+        }
+      }
 
       return (
-        <div>
-          <div className="truncate" title={name}>
-            {name}
+        <div className={entryCardCls}>
+          <div className="flex items-center gap-2">
+            <div
+              className="flex-1 truncate text-[13px] font-semibold tracking-tight text-slate-700 dark:text-slate-100"
+              title={name}
+            >
+              {name}
+            </div>
             {label ? (
-              <span className="ml-1 inline-block align-middle text-[10px] px-1 py-[1px] rounded bg-zinc-200/70 dark:bg-zinc-800/70">
+              <span className="inline-flex items-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-r from-sky-200/85 via-indigo-200/75 to-sky-100/80 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-700 dark:text-slate-100 shadow-[0_10px_24px_-16px_rgba(59,130,246,0.8)]">
                 {label}
               </span>
             ) : null}
           </div>
 
-          {/* actual points */}
-          <div className="opacity-60">
-            {Number.isFinite(entry?.pts) ? `${__fmtPts(entry.pts)} pts` : ""}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium">
+            {actualText ? (
+              <span className="tabular-nums text-slate-700 dark:text-slate-100">{actualText}</span>
+            ) : null}
+            {projText ? (
+              <span className="tabular-nums text-sky-600 dark:text-sky-300">{projText}</span>
+            ) : null}
           </div>
-
-          {/* projected points (toggle) */}
-          {showProj ? (
-            <div className="opacity-70 text-[11px]">
-              {(() => {
-                const p = __entryProj(entry);
-                if (!Number.isFinite(p)) return "";
-                const d = __entryPts(entry) - p;
-                const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
-                const mag = __fmtPts(Math.abs(d));
-                return `proj ${__fmtPts(p)} (${sign}${mag})`;
-              })()}
-            </div>
-          ) : null}
         </div>
       );
     };
     return (
-      <Card className="mb-6" title={manager} subtitle="Weekly lineups by slot">
-        <TableBox>
+      <Card
+        className="mb-6 border-white/55 dark:border-white/10 bg-gradient-to-br from-sky-100/70 via-white/80 to-indigo-100/60 dark:from-sky-500/15 dark:via-zinc-950/80 dark:to-indigo-500/15"
+        title={manager}
+        subtitle="Weekly lineups by slot"
+      >
+        <TableBox className="bg-white/85 dark:bg-zinc-900/70 border border-white/55 dark:border-white/10 backdrop-blur-xl shadow-[0_32px_90px_-60px_rgba(59,130,246,0.75)]">
           <thead>
-            <tr>
-              <th className="w-16 text-center">#</th>
-              <th className="w-28">Slot</th>
+            <tr className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+              <th className="w-16 text-center font-semibold">Row</th>
+              <th className="w-32 font-semibold text-slate-600 dark:text-slate-100">Slot</th>
               {weeks.map((w) => (
-                <th key={w} className="text-center">{`W${w}`}</th>
+                <th key={w} className="text-center font-semibold">
+                  <span className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-600 dark:text-slate-200 shadow-[0_14px_35px_-26px_rgba(59,130,246,0.65)]">
+                    {`W${w}`}
+                  </span>
+                </th>
               ))}
             </tr>
-            <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
+            <tr className="text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-400">
               <th />
-              <th className="text-right pr-1">
-                {showProj
-                  ? "Scored / Projected / Potential / Left"
-                  : "Scored / Potential / Left"}
+              <th className="pr-3 text-right align-top">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/50 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.42em] text-slate-500 dark:text-slate-300 shadow-[0_16px_40px_-30px_rgba(148,163,184,0.6)]">
+                  {showProj
+                    ? "Actual · Projected · Potential · Left"
+                    : "Actual · Potential · Left"}
+                </span>
               </th>
               {weeks.map((w) => {
                 const t = perWeekTotals[w] || {
@@ -7547,20 +7693,31 @@ export function RosterTab({
                   left: 0,
                 };
                 return (
-                  <th key={`band-${w}`} className="text-center font-normal">
-                    <div className="tabular-nums">{__fmtPts(t.actual)}</div>
-
-                    {showProj ? (
-                      <div className="tabular-nums opacity-90">
-                        {__fmtPts(t.projected)}
+                  <th
+                    key={`band-${w}`}
+                    className="align-top text-center font-normal"
+                  >
+                    <div className="mx-auto w-full max-w-[140px] space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/75 dark:bg-zinc-900/65 px-3 py-2 text-[9px] uppercase tracking-[0.34em] text-slate-500 dark:text-slate-300 shadow-[0_20px_48px_-34px_rgba(59,130,246,0.75)]">
+                      <div className="text-slate-500 dark:text-slate-300">Actual</div>
+                      <div className="tabular-nums text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {__fmtPts(t.actual)}
                       </div>
-                    ) : null}
-
-                    <div className="tabular-nums opacity-80">
-                      {__fmtPts(t.potential)}
-                    </div>
-                    <div className="tabular-nums opacity-60">
-                      {__fmtPts(t.left)}
+                      {showProj ? (
+                        <>
+                          <div className="text-slate-500 dark:text-slate-300">Projected</div>
+                          <div className="tabular-nums text-xs font-semibold text-sky-600 dark:text-sky-300">
+                            {__fmtPts(t.projected)}
+                          </div>
+                        </>
+                      ) : null}
+                      <div className="text-slate-500 dark:text-slate-300">Potential</div>
+                      <div className="tabular-nums text-xs font-semibold text-indigo-600 dark:text-indigo-300">
+                        {__fmtPts(t.potential)}
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-300">Left</div>
+                      <div className="tabular-nums text-xs font-semibold text-rose-500 dark:text-rose-300">
+                        {__fmtPts(t.left)}
+                      </div>
                     </div>
                   </th>
                 );
@@ -7570,18 +7727,20 @@ export function RosterTab({
           <tbody>
             {rowSpecs.map((rs, i) => (
               <tr key={`${rs.slotId}-${rs.index}`}>
-                <td className="text-center opacity-70">{i + 1}</td>
-                <td className="font-medium">{rs.label}</td>
+                <td className="text-center align-middle">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/55 dark:border-white/10 bg-white/70 dark:bg-zinc-900/55 text-[11px] font-semibold text-slate-500 dark:text-slate-300 shadow-[0_14px_32px_-28px_rgba(148,163,184,0.6)]">
+                    {i + 1}
+                  </span>
+                </td>
+                <td className="font-semibold text-slate-700 dark:text-slate-100">
+                  {rs.label}
+                </td>
                 {weeks.map((w) => {
                   const entries = wkMap?.[w] || [];
                   const e = __pickEntryForRow(entries, rs, teamId);
                   return (
-                    <td key={w} className="text-xs align-top">
-                      {e ? (
-                        <NameCell entry={e} />
-                      ) : (
-                        <span className="opacity-40">—</span>
-                      )}
+                    <td key={w} className="align-top p-2">
+                      {e ? <NameCell entry={e} /> : <span className={noEntryCls}>—</span>}
                     </td>
                   );
                 })}
@@ -7597,10 +7756,10 @@ export function RosterTab({
     <>
       <Card
         title={
-          <div className="flex items-center gap-2">
-            <span>Bench Points Summary</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="tracking-[0.42em]">Bench Points Summary</span>
             <span
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-zinc-500/60 text-[10px] leading-none cursor-help hover:bg-zinc-700/40"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/60 dark:border-white/20 bg-gradient-to-br from-white/80 via-sky-100/70 to-indigo-100/70 text-[11px] font-bold text-slate-700 dark:text-slate-100 shadow-[0_12px_30px_-14px_rgba(59,130,246,0.75)] cursor-help"
               title="Bench Points Summary shows how many points a manager left on the bench. It compares the lineup that was actually played vs. the optimal lineup for that week’s roster. Higher bars/values mean more points left on the bench (worse lineup decisions)."
               aria-label="Help: Bench Points Summary explanation"
             >
@@ -7614,33 +7773,38 @@ export function RosterTab({
             : `Managers × Years — season totals of points left on bench`
         }
         right={
-          <div className="flex items-center gap-2">
-            {/* view toggle */}
-            <select
-              className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
-              value={summaryView}
-              onChange={(e) => setSummaryView(e.target.value)}
-              title="View"
-            >
-              <option value="table">Data</option>
-              <option value="chart">Graph</option>
-            </select>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)]`}>
+              {["table", "chart"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSummaryView(value)}
+                  className={summaryToggleBtnCls(summaryView === value)}
+                  aria-pressed={summaryView === value}
+                >
+                  {value === "table" ? "DATA" : "GRAPH"}
+                </button>
+              ))}
+            </div>
 
-            {/* mode toggle */}
-            <select
-              className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
-              value={summaryMode}
-              onChange={(e) => setSummaryMode(e.target.value)}
-              title="Mode"
-            >
-              <option value="weekly">Weekly</option>
-              <option value="yearly">Yearly</option>
-            </select>
+            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(217,70,239,0.55)]`}>
+              {["weekly", "yearly"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSummaryMode(value)}
+                  className={summaryToggleBtnCls(summaryMode === value, "violet")}
+                  aria-pressed={summaryMode === value}
+                >
+                  {value.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-            {/* year picker only for weekly */}
             {summaryMode === "weekly" && seasons.length > 0 ? (
               <select
-                className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+                className={`${pillSelectCls} pr-9`}
                 value={season}
                 onChange={(e) => setSeason(Number(e.target.value))}
                 title="Season"
@@ -7657,7 +7821,7 @@ export function RosterTab({
       >
         {summaryView === "table" ? (
           summaryMode === "weekly" ? (
-            <TableBox>
+            <TableBox className="bg-white/80 dark:bg-zinc-900/60 border border-white/50 dark:border-white/10 backdrop-blur-xl shadow-[0_30px_90px_-60px_rgba(59,130,246,0.75)]">
               <thead>
                 <tr>
                   <SortHeader
@@ -7707,7 +7871,7 @@ export function RosterTab({
               </tbody>
             </TableBox>
           ) : (
-            <TableBox>
+            <TableBox className="bg-white/80 dark:bg-zinc-900/60 border border-white/50 dark:border-white/10 backdrop-blur-xl shadow-[0_30px_90px_-60px_rgba(168,85,247,0.6)]">
               <thead>
                 <tr>
                   <SortHeader
@@ -7771,7 +7935,8 @@ export function RosterTab({
           )
         ) : (
           <div className="h-[520px] w-full">
-            <ResponsiveContainer width="100%" height={480}>
+            <div className={chartFrameCls}>
+              <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={
                   summaryMode === "weekly" ? weeklyChartData : yearlyChartData
@@ -7818,7 +7983,8 @@ export function RosterTab({
                   )
                 )}
               </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
       </Card>
@@ -7829,20 +7995,30 @@ export function RosterTab({
           weekCap ? ` (through W${weekCap})` : ""
         }.`}
         right={
-          <div className="flex items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm"
-                checked={showProj}
-                onChange={(e) => setShowProj(e.target.checked)}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowProj((v) => !v)}
+              aria-pressed={showProj}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] transition-all backdrop-blur ${
+                showProj
+                  ? "border-emerald-300/60 bg-gradient-to-r from-emerald-200/80 via-emerald-100/80 to-white/85 text-emerald-700 shadow-[0_18px_45px_-28px_rgba(16,185,129,0.75)] dark:border-emerald-400/50 dark:text-emerald-100"
+                  : "border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white shadow-[0_12px_35px_-28px_rgba(148,163,184,0.55)]"
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full transition-all ${
+                  showProj
+                    ? "bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.25)]"
+                    : "bg-slate-400/70"
+                }`}
               />
-              <span>Show projections</span>
-            </label>
+              Show projections
+            </button>
 
             {seasons.length > 0 ? (
               <select
-                className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+                className={`${pillSelectCls} pr-9`}
                 value={season}
                 onChange={(e) => setSeason(Number(e.target.value))}
               >
