@@ -7141,6 +7141,27 @@ export function RosterTab({
   const [summaryView, setSummaryView] = React.useState("chart"); // "table" | "chart"
   const [showProj, setShowProj] = React.useState(false); // show projections in roster tables
 
+  const summaryToggleWrapperCls =
+    "inline-flex items-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 backdrop-blur px-1 py-1 shadow-[0_18px_45px_-30px_rgba(59,130,246,0.65)]";
+  const summaryToggleBtnCls = (active, variant = "blue") => {
+    const base =
+      "px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] transition-all rounded-full";
+    const inactive =
+      "text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white";
+    if (!active) return `${base} ${inactive}`;
+    if (variant === "violet")
+      return `${base} bg-gradient-to-r from-violet-500/90 via-fuchsia-500/85 to-rose-500/85 text-white shadow-[0_12px_30px_-10px_rgba(217,70,239,0.8)]`;
+    return `${base} bg-gradient-to-r from-sky-500/90 via-blue-500/85 to-indigo-500/85 text-white shadow-[0_12px_30px_-10px_rgba(59,130,246,0.8)]`;
+  };
+  const pillSelectCls =
+    "appearance-none px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-900/70 text-slate-700 dark:text-slate-200 shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)] focus:outline-none focus:ring-2 focus:ring-sky-400/60 dark:focus:ring-sky-500/40";
+  const chartFrameCls =
+    "h-full rounded-3xl border border-white/55 dark:border-white/10 bg-[radial-gradient(120%_160%_at_0%_0%,rgba(56,189,248,0.25),transparent_62%),radial-gradient(120%_160%_at_100%_100%,rgba(129,140,248,0.25),transparent_62%)] p-6 shadow-[0_45px_110px_-60px_rgba(59,130,246,0.7)] backdrop-blur-xl";
+  const entryCardCls =
+    "space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-900/70 px-3 py-2 shadow-[0_18px_50px_-30px_rgba(59,130,246,0.85)]";
+  const noEntryCls =
+    "inline-flex h-16 w-full items-center justify-center rounded-xl border border-white/45 dark:border-white/10 bg-white/50 dark:bg-zinc-900/50 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500";
+
   // --- helper: bench left (potential - actual) for one team/week ---
   const __benchLeftFor = React.useCallback(
     (seasonId, teamId, week) => {
@@ -7423,68 +7444,80 @@ export function RosterTab({
     ]);
 
     const NameCell = ({ entry }) => {
-      const pid =
-        entry?.pid ??
-        entry?.playerId ??
-        entry?.player?.id ??
-        entry?.playerPoolEntry?.player?.id ??
-        null;
-
       // use the entry's defaultPositionId (already present on weekly rosters)
       const posId = __entryPosId(entry);
       const label = posId != null ? __POS_LABEL[posId] || "" : "";
 
       const name = entry?.name || "";
+      const actualText = Number.isFinite(entry?.pts)
+        ? `${__fmtPts(entry.pts)} pts`
+        : "";
+
+      let projText = null;
+      if (showProj) {
+        const p = __entryProj(entry);
+        if (Number.isFinite(p)) {
+          const d = __entryPts(entry) - p;
+          const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
+          const mag = __fmtPts(Math.abs(d));
+          projText = `proj ${__fmtPts(p)} (${sign}${mag})`;
+        }
+      }
 
       return (
-        <div>
-          <div className="truncate" title={name}>
-            {name}
+        <div className={entryCardCls}>
+          <div className="flex items-center gap-2">
+            <div
+              className="flex-1 truncate text-[13px] font-semibold tracking-tight text-slate-700 dark:text-slate-100"
+              title={name}
+            >
+              {name}
+            </div>
             {label ? (
-              <span className="ml-1 inline-block align-middle text-[10px] px-1 py-[1px] rounded bg-zinc-200/70 dark:bg-zinc-800/70">
+              <span className="inline-flex items-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-r from-sky-200/85 via-indigo-200/75 to-sky-100/80 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-700 dark:text-slate-100 shadow-[0_10px_24px_-16px_rgba(59,130,246,0.8)]">
                 {label}
               </span>
             ) : null}
           </div>
 
-          {/* actual points */}
-          <div className="opacity-60">
-            {Number.isFinite(entry?.pts) ? `${__fmtPts(entry.pts)} pts` : ""}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium">
+            {actualText ? (
+              <span className="tabular-nums text-slate-700 dark:text-slate-100">{actualText}</span>
+            ) : null}
+            {projText ? (
+              <span className="tabular-nums text-sky-600 dark:text-sky-300">{projText}</span>
+            ) : null}
           </div>
-
-          {/* projected points (toggle) */}
-          {showProj ? (
-            <div className="opacity-70 text-[11px]">
-              {(() => {
-                const p = __entryProj(entry);
-                if (!Number.isFinite(p)) return "";
-                const d = __entryPts(entry) - p;
-                const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
-                const mag = __fmtPts(Math.abs(d));
-                return `proj ${__fmtPts(p)} (${sign}${mag})`;
-              })()}
-            </div>
-          ) : null}
         </div>
       );
     };
     return (
-      <Card className="mb-6" title={manager} subtitle="Weekly lineups by slot">
-        <TableBox>
+      <Card
+        className="mb-6 border-white/55 dark:border-white/10 bg-gradient-to-br from-sky-100/70 via-white/80 to-indigo-100/60 dark:from-sky-500/15 dark:via-zinc-950/80 dark:to-indigo-500/15"
+        title={manager}
+        subtitle="Weekly lineups by slot"
+      >
+        <TableBox className="bg-white/85 dark:bg-zinc-900/70 border border-white/55 dark:border-white/10 backdrop-blur-xl shadow-[0_32px_90px_-60px_rgba(59,130,246,0.75)]">
           <thead>
-            <tr>
-              <th className="w-16 text-center">#</th>
-              <th className="w-28">Slot</th>
+            <tr className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+              <th className="w-16 text-center font-semibold">Row</th>
+              <th className="w-32 font-semibold text-slate-600 dark:text-slate-100">Slot</th>
               {weeks.map((w) => (
-                <th key={w} className="text-center">{`W${w}`}</th>
+                <th key={w} className="text-center font-semibold">
+                  <span className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-600 dark:text-slate-200 shadow-[0_14px_35px_-26px_rgba(59,130,246,0.65)]">
+                    {`W${w}`}
+                  </span>
+                </th>
               ))}
             </tr>
-            <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
+            <tr className="text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-400">
               <th />
-              <th className="text-right pr-1">
-                {showProj
-                  ? "Scored / Projected / Potential / Left"
-                  : "Scored / Potential / Left"}
+              <th className="pr-3 text-right align-top">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/50 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.42em] text-slate-500 dark:text-slate-300 shadow-[0_16px_40px_-30px_rgba(148,163,184,0.6)]">
+                  {showProj
+                    ? "Actual · Projected · Potential · Left"
+                    : "Actual · Potential · Left"}
+                </span>
               </th>
               {weeks.map((w) => {
                 const t = perWeekTotals[w] || {
@@ -7494,20 +7527,31 @@ export function RosterTab({
                   left: 0,
                 };
                 return (
-                  <th key={`band-${w}`} className="text-center font-normal">
-                    <div className="tabular-nums">{__fmtPts(t.actual)}</div>
-
-                    {showProj ? (
-                      <div className="tabular-nums opacity-90">
-                        {__fmtPts(t.projected)}
+                  <th
+                    key={`band-${w}`}
+                    className="align-top text-center font-normal"
+                  >
+                    <div className="mx-auto w-full max-w-[140px] space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/75 dark:bg-zinc-900/65 px-3 py-2 text-[9px] uppercase tracking-[0.34em] text-slate-500 dark:text-slate-300 shadow-[0_20px_48px_-34px_rgba(59,130,246,0.75)]">
+                      <div className="text-slate-500 dark:text-slate-300">Actual</div>
+                      <div className="tabular-nums text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {__fmtPts(t.actual)}
                       </div>
-                    ) : null}
-
-                    <div className="tabular-nums opacity-80">
-                      {__fmtPts(t.potential)}
-                    </div>
-                    <div className="tabular-nums opacity-60">
-                      {__fmtPts(t.left)}
+                      {showProj ? (
+                        <>
+                          <div className="text-slate-500 dark:text-slate-300">Projected</div>
+                          <div className="tabular-nums text-xs font-semibold text-sky-600 dark:text-sky-300">
+                            {__fmtPts(t.projected)}
+                          </div>
+                        </>
+                      ) : null}
+                      <div className="text-slate-500 dark:text-slate-300">Potential</div>
+                      <div className="tabular-nums text-xs font-semibold text-indigo-600 dark:text-indigo-300">
+                        {__fmtPts(t.potential)}
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-300">Left</div>
+                      <div className="tabular-nums text-xs font-semibold text-rose-500 dark:text-rose-300">
+                        {__fmtPts(t.left)}
+                      </div>
                     </div>
                   </th>
                 );
@@ -7517,18 +7561,20 @@ export function RosterTab({
           <tbody>
             {rowSpecs.map((rs, i) => (
               <tr key={`${rs.slotId}-${rs.index}`}>
-                <td className="text-center opacity-70">{i + 1}</td>
-                <td className="font-medium">{rs.label}</td>
+                <td className="text-center align-middle">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/55 dark:border-white/10 bg-white/70 dark:bg-zinc-900/55 text-[11px] font-semibold text-slate-500 dark:text-slate-300 shadow-[0_14px_32px_-28px_rgba(148,163,184,0.6)]">
+                    {i + 1}
+                  </span>
+                </td>
+                <td className="font-semibold text-slate-700 dark:text-slate-100">
+                  {rs.label}
+                </td>
                 {weeks.map((w) => {
                   const entries = wkMap?.[w] || [];
                   const e = __pickEntryForRow(entries, rs, teamId);
                   return (
-                    <td key={w} className="text-xs align-top">
-                      {e ? (
-                        <NameCell entry={e} />
-                      ) : (
-                        <span className="opacity-40">—</span>
-                      )}
+                    <td key={w} className="align-top p-2">
+                      {e ? <NameCell entry={e} /> : <span className={noEntryCls}>—</span>}
                     </td>
                   );
                 })}
@@ -7544,10 +7590,10 @@ export function RosterTab({
     <>
       <Card
         title={
-          <div className="flex items-center gap-2">
-            <span>Bench Points Summary</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="tracking-[0.42em]">Bench Points Summary</span>
             <span
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-zinc-500/60 text-[10px] leading-none cursor-help hover:bg-zinc-700/40"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/60 dark:border-white/20 bg-gradient-to-br from-white/80 via-sky-100/70 to-indigo-100/70 text-[11px] font-bold text-slate-700 dark:text-slate-100 shadow-[0_12px_30px_-14px_rgba(59,130,246,0.75)] cursor-help"
               title="Bench Points Summary shows how many points a manager left on the bench. It compares the lineup that was actually played vs. the optimal lineup for that week’s roster. Higher bars/values mean more points left on the bench (worse lineup decisions)."
               aria-label="Help: Bench Points Summary explanation"
             >
@@ -7561,33 +7607,38 @@ export function RosterTab({
             : `Managers × Years — season totals of points left on bench`
         }
         right={
-          <div className="flex items-center gap-2">
-            {/* view toggle */}
-            <select
-              className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
-              value={summaryView}
-              onChange={(e) => setSummaryView(e.target.value)}
-              title="View"
-            >
-              <option value="table">Data</option>
-              <option value="chart">Graph</option>
-            </select>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)]`}>
+              {["table", "chart"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSummaryView(value)}
+                  className={summaryToggleBtnCls(summaryView === value)}
+                  aria-pressed={summaryView === value}
+                >
+                  {value === "table" ? "DATA" : "GRAPH"}
+                </button>
+              ))}
+            </div>
 
-            {/* mode toggle */}
-            <select
-              className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
-              value={summaryMode}
-              onChange={(e) => setSummaryMode(e.target.value)}
-              title="Mode"
-            >
-              <option value="weekly">Weekly</option>
-              <option value="yearly">Yearly</option>
-            </select>
+            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(217,70,239,0.55)]`}>
+              {["weekly", "yearly"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSummaryMode(value)}
+                  className={summaryToggleBtnCls(summaryMode === value, "violet")}
+                  aria-pressed={summaryMode === value}
+                >
+                  {value.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-            {/* year picker only for weekly */}
             {summaryMode === "weekly" && seasons.length > 0 ? (
               <select
-                className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+                className={`${pillSelectCls} pr-9`}
                 value={season}
                 onChange={(e) => setSeason(Number(e.target.value))}
                 title="Season"
@@ -7604,7 +7655,7 @@ export function RosterTab({
       >
         {summaryView === "table" ? (
           summaryMode === "weekly" ? (
-            <TableBox>
+            <TableBox className="bg-white/80 dark:bg-zinc-900/60 border border-white/50 dark:border-white/10 backdrop-blur-xl shadow-[0_30px_90px_-60px_rgba(59,130,246,0.75)]">
               <thead>
                 <tr>
                   <SortHeader
@@ -7654,7 +7705,7 @@ export function RosterTab({
               </tbody>
             </TableBox>
           ) : (
-            <TableBox>
+            <TableBox className="bg-white/80 dark:bg-zinc-900/60 border border-white/50 dark:border-white/10 backdrop-blur-xl shadow-[0_30px_90px_-60px_rgba(168,85,247,0.6)]">
               <thead>
                 <tr>
                   <SortHeader
@@ -7718,7 +7769,8 @@ export function RosterTab({
           )
         ) : (
           <div className="h-[520px] w-full">
-            <ResponsiveContainer width="100%" height={480}>
+            <div className={chartFrameCls}>
+              <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={
                   summaryMode === "weekly" ? weeklyChartData : yearlyChartData
@@ -7765,7 +7817,8 @@ export function RosterTab({
                   )
                 )}
               </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
       </Card>
@@ -7776,20 +7829,30 @@ export function RosterTab({
           weekCap ? ` (through W${weekCap})` : ""
         }.`}
         right={
-          <div className="flex items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm"
-                checked={showProj}
-                onChange={(e) => setShowProj(e.target.checked)}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowProj((v) => !v)}
+              aria-pressed={showProj}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] transition-all backdrop-blur ${
+                showProj
+                  ? "border-emerald-300/60 bg-gradient-to-r from-emerald-200/80 via-emerald-100/80 to-white/85 text-emerald-700 shadow-[0_18px_45px_-28px_rgba(16,185,129,0.75)] dark:border-emerald-400/50 dark:text-emerald-100"
+                  : "border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white shadow-[0_12px_35px_-28px_rgba(148,163,184,0.55)]"
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full transition-all ${
+                  showProj
+                    ? "bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.25)]"
+                    : "bg-slate-400/70"
+                }`}
               />
-              <span>Show projections</span>
-            </label>
+              Show projections
+            </button>
 
             {seasons.length > 0 ? (
               <select
-                className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+                className={`${pillSelectCls} pr-9`}
                 value={season}
                 onChange={(e) => setSeason(Number(e.target.value))}
               >
