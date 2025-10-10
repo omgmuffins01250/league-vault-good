@@ -3283,8 +3283,10 @@ export function PlacementsTab({
 }
 
 /* MoneyTab (updated with dynamic heat, collapse, copy/paste, and earnings chart) */
-export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
+export function MoneyTab({ league, moneyInputs = {}, setMoneyInputs }) {
   if (!league) return null;
+  const updateMoneyInputs =
+    typeof setMoneyInputs === "function" ? setMoneyInputs : () => {};
   const SoftButton = ({
     children,
     className = "",
@@ -3342,7 +3344,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
 
   // Input helper
   const setSeasonVal = (yr, field, val) =>
-    setMoneyInputs((prev) => ({
+    updateMoneyInputs((prev) => ({
       ...prev,
       [yr]: { ...(prev[yr] || {}), [field]: Number(val) || 0 },
     }));
@@ -3631,7 +3633,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
     return payload;
   };
   const pastePayloadToYear = (yr, payload) =>
-    setMoneyInputs((prev) => ({
+    updateMoneyInputs((prev) => ({
       ...prev,
       [yr]: { ...(prev[yr] || {}), ...payload },
     }));
