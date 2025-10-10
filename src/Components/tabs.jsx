@@ -893,7 +893,7 @@ export function CareerTab({ league }) {
   const Section = ({ title, right, children }) => {
     const titleNode =
       typeof title === "string" ? (
-        <span className="bg-gradient-to-r from-sky-500 via-indigo-400 to-emerald-400 bg-clip-text text-transparent drop-shadow">
+        <span className="bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-transparent drop-shadow">
           {title}
         </span>
       ) : (
