@@ -9,10 +9,13 @@ import {
 } from "/project/workspace/src/Utils/buildFromRows.jsx";
 import { Card, TableBox } from "/project/workspace/src/Components/ui.jsx";
 import ManagerMergeControl from "/project/workspace/src/Components/ManagerMergeControl.jsx";
-import { ownerName } from "/project/workspace/src/ownerMaps.jsx";
+import {
+  ownerName,
+  canonicalizeOwner,
+  primeOwnerMaps,
+} from "/project/workspace/src/ownerMaps.jsx";
 // near the top of App.jsx (or tabs.jsx)
 import "/project/workspace/src/Data/finishData.jsx";
-import { primeOwnerMaps } from "/project/workspace/src/ownerMaps.jsx";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -4378,6 +4381,39 @@ export function TradesTab({
 }) {
   const fmt1 = (n) => Number(n || 0).toFixed(1);
   const fmt2 = (n) => Number(n || 0).toFixed(2);
+
+  React.useEffect(() => {
+    if (!league) return;
+    try {
+      const aliases = window.__FL_ALIASES || {};
+      primeOwnerMaps({
+        league,
+        selectedLeague: league,
+        espnOwnerByTeamByYear: espnOwnerByTeamByYear || {},
+        manualAliases: aliases,
+      });
+    } catch (err) {
+      console.warn("primeOwnerMaps failed", err);
+    }
+  }, [league, espnOwnerByTeamByYear]);
+
+  const canonicalizeViaOwnerMaps = React.useCallback((raw) => {
+    const name = String(raw || "").trim();
+    if (!name) return name;
+    try {
+      if (
+        typeof window !== "undefined" &&
+        window.__ownerMaps &&
+        typeof window.__ownerMaps.canon === "function"
+      ) {
+        const mapped = window.__ownerMaps.canon(name);
+        if (mapped) return mapped;
+      }
+    } catch (err) {
+      console.warn("ownerMaps canon failed", err);
+    }
+    return canonicalizeOwner(name);
+  }, []);
   // Build an expanded merge map so aliases like "Jacob966788" also match the pretty member name ("Jacob Teitelbaum")
   const expandedMergeMap = React.useMemo(() => {
     const out = new Map();
@@ -4446,12 +4482,12 @@ export function TradesTab({
 
       // 1) Try expanded map (covers both saved alias AND that alias's pretty name)
       const hit = expandedMergeMap.get(norm);
-      if (hit) return hit;
+      if (hit) return canonicalizeViaOwnerMaps(hit);
 
-      // 2) Fallback: return original
-      return name;
+      // 2) Fallback: use the global owner maps canonicalizer
+      return canonicalizeViaOwnerMaps(name);
     },
-    [expandedMergeMap]
+    [expandedMergeMap, canonicalizeViaOwnerMaps]
   );
 
   // ✅ canonicalized hidden set (league prop wins, else explicit prop)
