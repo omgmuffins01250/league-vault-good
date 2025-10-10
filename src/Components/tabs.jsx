@@ -1,12 +1,6 @@
-// All tab components + UploadBox bundled in one module.
-// Exports: UploadBox, SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, MoneyTab, RecordsTab, TradesTab
+// All tab components bundled in one module.
+// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState } from "react";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-import {
-  buildFromRows,
-  norm,
-} from "/project/workspace/src/Utils/buildFromRows.jsx";
 import { Card, TableBox } from "/project/workspace/src/Components/ui.jsx";
 import ManagerMergeControl from "/project/workspace/src/Components/ManagerMergeControl.jsx";
 import {
@@ -79,119 +73,6 @@ export function extractEspnActivity(seasons = []) {
     });
   }
   return activity;
-}
-export function UploadBox({ onFileParsed, error, setError }) {
-  const [showPaste, setShowPaste] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const ingestRows = (rows) => {
-    try {
-      const built = buildFromRows(rows);
-      onFileParsed(built, rows);
-    } catch (e) {
-      console.error(e);
-      setError?.("Failed to process rows");
-    }
-  };
-  const onFile = async (file) => {
-    setError?.("");
-    const ext = (file.name.split(".").pop() || "").toLowerCase();
-    if (ext === "csv") {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (h) => norm(h),
-        complete: (res) => ingestRows(res.data || []),
-        error: () => setError?.("Failed to read CSV"),
-      });
-      return;
-    }
-    if (ext === "xlsx" || ext === "xls") {
-      try {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const sh = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sh, { header: 1 });
-        const [hdr, ...rows] = json;
-        if (!hdr) throw new Error("No header row");
-        const headers = hdr.map((h) => norm(String(h || "")));
-        const objs = rows
-          .filter(
-            (r) =>
-              r &&
-              r.some(
-                (x) => x !== undefined && x !== null && String(x).trim() !== ""
-              )
-          )
-          .map((r) => {
-            const o = {};
-            headers.forEach((h, i) => (o[h] = r[i]));
-            return o;
-          });
-        ingestRows(objs);
-      } catch (e) {
-        console.error(e);
-        setError?.("Failed to parse Excel");
-      }
-      return;
-    }
-    setError?.("Unsupported file type. Upload .csv or .xlsx");
-  };
-  return (
-    <Card
-      title="Upload league history (.csv or .xlsx)"
-      subtitle="Columns (aliases OK): season, manager, opponent, team_name, points_for, points_against, result?, final_rank?, league_name/league_id?, platform?, scoring?"
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="file"
-          accept=".csv,.xlsx,.xls"
-          onChange={(e) =>
-            e.target.files && e.target.files[0] && onFile(e.target.files[0])
-          }
-          className="text-sm"
-        />
-        <button
-          className="px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800"
-          onClick={() => setShowPaste((v) => !v)}
-        >
-          {showPaste ? "Hide Paste CSV" : "Paste CSV"}
-        </button>
-        <button
-          className="px-3 py-1 rounded-lg bg-indigo-600 text-white"
-          onClick={() => ingestRows(demoRows)}
-        >
-          Load Demo Data
-        </button>
-      </div>
-      {showPaste && (
-        <div className="mt-3 space-y-2">
-          <textarea
-            className="w-full h-32 p-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
-            placeholder="Paste CSV with headers here"
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-          />
-          <div>
-            <button
-              className="px-3 py-1 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-              onClick={() =>
-                Papa.parse(pasteText, {
-                  header: true,
-                  skipEmptyLines: true,
-                  transformHeader: (h) => norm(h),
-                  complete: (res) => ingestRows(res.data || []),
-                })
-              }
-            >
-              Parse Pasted CSV
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error && <div className="mt-2 text-red-600">{error}</div>}
-    </Card>
-  );
 }
 const TROPHIES = {
   1: "/trophies/gold.png",
