@@ -11575,6 +11575,29 @@ export function ScenarioTab({
   const optionLabel =
     (categoryOptions[category].find((o) => o.key === option) || {}).label || "";
 
+  const labelCls =
+    "text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400";
+  const inputCls =
+    "w-full rounded-xl border border-white/50 dark:border-white/10 bg-white/90 dark:bg-zinc-950/70 px-3 py-2 text-[13px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_14px_40px_-28px_rgba(15,23,42,0.85)] transition focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-300";
+  const pillButtonCls =
+    "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-900 dark:text-amber-100 bg-gradient-to-r from-amber-300/90 via-amber-200/80 to-amber-400/90 shadow-[0_22px_45px_-25px_rgba(245,158,11,0.8)] hover:from-amber-200 hover:via-amber-100 hover:to-amber-300 transition disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-400/50";
+  const subtleButtonCls =
+    "inline-flex items-center justify-center rounded-full px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-200 border border-white/60 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.8)] hover:bg-white/95 hover:dark:bg-zinc-900/70 transition focus:outline-none focus:ring-2 focus:ring-amber-400/40";
+  const ControlPanel = ({ label, children, className = "" }) => (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-zinc-950/60 shadow-[0_24px_55px_-35px_rgba(15,23,42,0.9)] backdrop-blur ${className}`}
+    >
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 opacity-80 bg-[radial-gradient(110%_140%_at_0%_0%,rgba(250,204,21,0.18),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(253,224,71,0.14),transparent_60%)]" />
+        <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+      </div>
+      <div className="relative z-10 flex flex-col gap-2 p-4">
+        {label ? <div className={`${labelCls}`}>{label}</div> : null}
+        {children}
+      </div>
+    </div>
+  );
+
   // ---------- UI ----------
   return (
     <div className="space-y-4">
@@ -11583,10 +11606,12 @@ export function ScenarioTab({
         title="Scenarios"
         subtitle="Find the last time each manager hit a condition."
         right={
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">Scope:</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-300">
+              Scope
+            </span>
             <select
-              className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
+              className="rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/75 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-600 dark:text-slate-200 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.85)] focus:outline-none focus:ring-2 focus:ring-amber-400/50"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
             >
@@ -11597,11 +11622,10 @@ export function ScenarioTab({
           </div>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <div className="md:col-span-2">
-            <div className="text-xs mb-1 opacity-70">Category</div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+          <ControlPanel label="Category" className="md:col-span-2">
             <select
-              className="w-full px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
+              className={inputCls}
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
@@ -11611,20 +11635,19 @@ export function ScenarioTab({
               <option value="recordStart">Record start</option>
               <option value="placement">Placement</option>
             </select>
-          </div>
+          </ControlPanel>
 
-          <div className="md:col-span-2">
-            <div className="text-xs mb-1 opacity-70">Option</div>
-            <div className="flex gap-2">
+          <ControlPanel label="Option" className="md:col-span-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 type="text"
                 placeholder="Search options…"
-                className="flex-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
+                className={`${inputCls} flex-1`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <select
-                className="flex-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
+                className={`${inputCls} flex-1`}
                 value={option}
                 onChange={(e) => setOption(e.target.value)}
               >
@@ -11635,12 +11658,11 @@ export function ScenarioTab({
                 ))}
               </select>
             </div>
-          </div>
+          </ControlPanel>
 
-          <div className="md:col-span-1">
-            <div className="text-xs mb-1 opacity-70">Manager</div>
+          <ControlPanel label="Manager" className="md:col-span-1">
             <select
-              className="w-full px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
+              className={inputCls}
               value={ownerFilter}
               onChange={(e) => {
                 setOwnerFilter(e.target.value);
@@ -11656,12 +11678,15 @@ export function ScenarioTab({
             </select>
 
             {/* AND selectors */}
-            <div className="mt-2 space-y-2">
+            <div className="mt-3 space-y-2">
               {andOwners.map((name, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-xs opacity-70">+ And</span>
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 rounded-xl border border-white/50 dark:border-white/10 bg-white/70 dark:bg-zinc-950/60 px-2 py-2 shadow-[0_12px_35px_-24px_rgba(15,23,42,0.85)]"
+                >
+                  <span className={`${labelCls} !m-0 text-[10px]`}>+ And</span>
                   <select
-                    className="flex-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
+                    className={`${inputCls} flex-1 text-[12px]`}
                     value={name}
                     onChange={(e) => {
                       const next = andOwners.slice();
@@ -11683,7 +11708,7 @@ export function ScenarioTab({
                       ))}
                   </select>
                   <button
-                    className="px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 text-xs"
+                    className={subtleButtonCls}
                     onClick={() =>
                       setAndOwners(andOwners.filter((_, i) => i !== idx))
                     }
@@ -11695,7 +11720,7 @@ export function ScenarioTab({
               ))}
 
               <button
-                className="px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 text-xs"
+                className={pillButtonCls}
                 onClick={() => setAndOwners([...andOwners, ""])}
                 disabled={ownerFilter === "_ALL_"}
                 title={
@@ -11704,20 +11729,20 @@ export function ScenarioTab({
                     : "Add another manager to AND together"
                 }
               >
-                + Add manager
+                + Add Manager
               </button>
             </div>
 
-            <label className="mt-3 flex items-center gap-2 text-xs">
+            <label className="mt-4 flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-200">
               <input
                 type="checkbox"
-                className="checkbox checkbox-xs"
+                className="h-4 w-4 rounded border border-white/60 dark:border-white/20 bg-white/80 dark:bg-zinc-950/70 text-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                 checked={includeHidden}
                 onChange={(e) => setIncludeHidden(e.target.checked)}
               />
               Include hidden managers
             </label>
-          </div>
+          </ControlPanel>
         </div>
       </Card>
 
@@ -11730,10 +11755,13 @@ export function ScenarioTab({
             const group = [ownerFilter, ...andOwners.filter(Boolean)];
             const joint = lastTimeAll(group, category, option);
             return (
-              <div className="mb-3 text-sm">
-                <span className="opacity-70">Last time </span>
-                <span className="font-medium">{group.join(" + ")}</span>
-                <span className="opacity-70"> all matched: </span>
+              <div className="mb-4 rounded-2xl border border-amber-300/40 bg-gradient-to-r from-amber-200/40 via-amber-100/30 to-amber-300/40 px-4 py-3 text-[13px] text-amber-900 shadow-[0_18px_40px_-30px_rgba(245,158,11,0.7)] dark:border-amber-400/40 dark:text-amber-100 dark:from-amber-500/10 dark:via-amber-400/10 dark:to-amber-500/10">
+                <span className="font-semibold uppercase tracking-[0.25em] text-[11px] text-amber-600 dark:text-amber-200">Last combo</span>
+                <div className="mt-1">
+                  <span className="opacity-80">Last time </span>
+                  <span className="font-semibold tracking-wide">{group.join(" + ")}</span>
+                  <span className="opacity-80"> all matched: </span>
+                </div>
                 {joint ? (
                   category === "points" ? (
                     <>
@@ -11750,80 +11778,84 @@ export function ScenarioTab({
           })()}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-zinc-200 dark:border-zinc-800">
-                <th
-                  className="py-2 pr-3 cursor-pointer select-none"
-                  onClick={() => toggleSort("owner")}
-                >
-                  Manager{" "}
-                  {sortKey === "owner" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                </th>
-                <th
-                  className="py-2 pr-3 cursor-pointer select-none"
-                  onClick={() => toggleSort("when")}
-                >
-                  Last time{" "}
-                  {sortKey === "when" ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                // Decide which names to render
-                const names =
-                  ownerFilter !== "_ALL_" &&
-                  andOwners.filter(Boolean).length > 0
-                    ? [ownerFilter, ...andOwners.filter(Boolean)]
-                    : sortedRows.map((r) => r.owner);
+          <div className="min-w-full overflow-hidden rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] shadow-[0_30px_60px_-35px_rgba(15,23,42,0.85)]">
+            <table className="w-full text-[13px] text-slate-700 dark:text-slate-200">
+              <thead className="bg-gradient-to-r from-white/90 via-white/70 to-white/60 dark:from-white/10 dark:via-white/5 dark:to-white/0 border-b border-white/50 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th
+                    className="px-4 py-3 text-left cursor-pointer select-none"
+                    onClick={() => toggleSort("owner")}
+                  >
+                    Manager{" "}
+                    {sortKey === "owner" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left cursor-pointer select-none"
+                    onClick={() => toggleSort("when")}
+                  >
+                    Last time{" "}
+                    {sortKey === "when" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/45 dark:divide-white/10">
+                {(() => {
+                  // Decide which names to render
+                  const names =
+                    ownerFilter !== "_ALL_" &&
+                    andOwners.filter(Boolean).length > 0
+                      ? [ownerFilter, ...andOwners.filter(Boolean)]
+                      : sortedRows.map((r) => r.owner);
 
-                // De-dupe (just in case)
-                const uniqueNames = Array.from(new Set(names));
+                  // De-dupe (just in case)
+                  const uniqueNames = Array.from(new Set(names));
 
-                if (uniqueNames.length === 0) {
-                  return (
-                    <tr>
-                      <td colSpan={2} className="py-6 text-center opacity-70">
-                        No managers to show.
-                      </td>
-                    </tr>
-                  );
-                }
+                  if (uniqueNames.length === 0) {
+                    return (
+                      <tr className="bg-white/60 dark:bg-white/[0.03]">
+                        <td colSpan={2} className="px-4 py-6 text-center text-slate-500 dark:text-slate-300">
+                          No managers to show.
+                        </td>
+                      </tr>
+                    );
+                  }
 
-                return uniqueNames.map((name) => {
-                  // Find the computed row for this manager (or a blank fallback)
-                  const r = sortedRows.find((x) => x.owner === name) || {
-                    has: false,
-                    season: null,
-                    week: null,
-                  };
+                  return uniqueNames.map((name) => {
+                    // Find the computed row for this manager (or a blank fallback)
+                    const r = sortedRows.find((x) => x.owner === name) || {
+                      has: false,
+                      season: null,
+                      week: null,
+                    };
 
-                  return (
-                    <tr
-                      key={name}
-                      className="border-b border-zinc-100/50 dark:border-zinc-800"
-                    >
-                      <td className="py-2 pr-3">{name}</td>
-                      <td className="py-2 pr-3 text-zinc-200">
-                        {r.has ? (
-                          category === "placement" ? (
-                            <>S{r.season}</>
+                    return (
+                      <tr
+                        key={name}
+                        className="transition-colors even:bg-white/55 odd:bg-white/40 hover:bg-amber-100/50 dark:even:bg-white/[0.04] dark:odd:bg-white/[0.02] dark:hover:bg-amber-500/10"
+                      >
+                        <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100">
+                          {name}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200">
+                          {r.has ? (
+                            category === "placement" ? (
+                              <>S{r.season}</>
+                            ) : (
+                              <>
+                                S{r.season} W{fmtWeek(r.week)}
+                              </>
+                            )
                           ) : (
-                            <>
-                              S{r.season} W{fmtWeek(r.week)}
-                            </>
-                          )
-                        ) : (
-                          <span className="opacity-60">— never —</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
-            </tbody>
-          </table>
+                            <span className="opacity-60">— never —</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Card>
 
