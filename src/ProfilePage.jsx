@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { auth } from "./auth";
+import { useAppContext } from "./contexts/AppContext.jsx";
 
 function buildProfile(email) {
   return {
@@ -40,11 +40,12 @@ function buildProfile(email) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const email = auth.currentUser();
+  const { user, signOut } = useAppContext();
+  const email = user;
   const profile = useMemo(() => buildProfile(email), [email]);
 
   const handleSignOut = () => {
-    auth.signOut();
+    signOut();
     navigate("/");
   };
 
