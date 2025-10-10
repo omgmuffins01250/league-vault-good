@@ -869,7 +869,10 @@ export function CareerTab({ league }) {
   /* --- tiny UI helpers (local-only) --- */
   const Chip = ({ children, className = "" }) => (
     <span
-      className={`px-2.5 py-1 rounded-full text-xs border border-white/10 bg-white/[.05] dark:bg-white/[.04] ${className}`}
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide uppercase
+        bg-gradient-to-r from-amber-300/70 via-amber-200/50 to-amber-100/70 text-amber-700
+        dark:from-amber-500/30 dark:via-amber-400/20 dark:to-amber-500/30 dark:text-amber-200
+        border border-amber-400/40 shadow-[0_6px_18px_-12px_rgba(251,191,36,0.8)] backdrop-blur-sm ${className}`}
     >
       {children}
     </span>
@@ -877,27 +880,50 @@ export function CareerTab({ league }) {
   const SoftButton = ({ children, onClick, className = "" }) => (
     <button
       onClick={onClick}
-      className={
-        "px-2.5 py-1 rounded-full text-xs border border-zinc-300/40 dark:border-zinc-700/60 " +
-        "bg-zinc-50/70 dark:bg-zinc-800/70 hover:bg-white/80 dark:hover:bg-zinc-800 " +
-        "transition transform hover:translate-y-[-1px] " +
-        className
-      }
+      className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide uppercase
+        text-slate-700 dark:text-slate-200
+        bg-gradient-to-r from-white/95 via-white/80 to-white/90 dark:from-zinc-900/80 dark:via-zinc-900/50 dark:to-zinc-950/70
+        border border-white/70 dark:border-white/10 shadow-[0_20px_40px_-25px_rgba(15,23,42,0.85)] backdrop-blur
+        transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-25px_rgba(59,130,246,0.55)]
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 ${className}`}
     >
-      {children}
+      <span className="tracking-wider">{children}</span>
     </button>
   );
-  const Section = ({ title, right, children }) => (
-    <div className="rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 bg-white/60 dark:bg-zinc-900/50 shadow-md shadow-black/5 backdrop-blur">
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-zinc-200/60 dark:border-zinc-700/60 bg-gradient-to-b from-white/70 to-white/30 dark:from-zinc-900/70 dark:to-zinc-900/20 backdrop-blur rounded-t-2xl">
-        <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+  const Section = ({ title, right, children }) => {
+    const titleNode =
+      typeof title === "string" ? (
+        <span className="bg-gradient-to-r from-sky-500 via-indigo-400 to-emerald-400 bg-clip-text text-transparent drop-shadow">
           {title}
-        </h3>
-        <div className="flex items-center gap-2">{right}</div>
+        </span>
+      ) : (
+        title
+      );
+
+    return (
+      <div
+        className="relative overflow-hidden rounded-3xl border border-white/30 dark:border-white/10
+        bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl"
+      >
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 opacity-80 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
+          <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+        </div>
+        <div
+          className="sticky top-0 z-20 flex items-center justify-between gap-3 px-5 py-4
+          border-b border-white/60 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-xl"
+        >
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
+            {titleNode}
+          </h3>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            {right}
+          </div>
+        </div>
+        <div className="relative z-10 p-5 md:p-6 text-sm text-slate-700 dark:text-slate-200">{children}</div>
       </div>
-      <div className="p-3 md:p-4">{children}</div>
-    </div>
-  );
+    );
+  };
 
   /* --- logic (unchanged) --- */
 
@@ -1230,7 +1256,9 @@ export function CareerTab({ league }) {
         right={
           <div className="flex items-center gap-2">
             <select
-              className="px-3 py-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 border border-zinc-300/60 dark:border-zinc-700/60 text-xs shadow-sm"
+              className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wider uppercase
+                bg-white/95 dark:bg-zinc-900/80 border border-white/70 dark:border-white/10 text-slate-700 dark:text-slate-100
+                shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] focus:outline-none focus:ring-2 focus:ring-sky-400/60"
               value={metricKey}
               onChange={(e) => setMetricKey(e.target.value)}
             >
@@ -1246,20 +1274,28 @@ export function CareerTab({ league }) {
                 Years <Chip className="ml-1">{selectedYears.size || 0}</Chip>
               </SoftButton>
               {showYearPicker && (
-                <div className="absolute right-0 z-10 mt-2 w-60 max-h-72 overflow-auto rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 bg-white/95 dark:bg-zinc-900/95 shadow-lg p-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <SoftButton onClick={selectAllYears}>Select all</SoftButton>
-                    <SoftButton onClick={clearYears}>Clear</SoftButton>
+                <div className="absolute right-0 z-30 mt-3 w-60 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
+                  bg-gradient-to-br from-white/95 via-white/85 to-white/75 dark:from-zinc-950/95 dark:via-zinc-950/80 dark:to-black/70
+                  shadow-[0_24px_50px_-28px_rgba(59,130,246,0.55)] backdrop-blur-xl p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={selectAllYears}>
+                      Select all
+                    </SoftButton>
+                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={clearYears}>
+                      Clear
+                    </SoftButton>
                   </div>
                   <div className="space-y-1">
                     {allSeasons.map((yr) => (
                       <label
                         key={yr}
-                        className="flex items-center gap-2 text-sm px-2 py-1 rounded-md hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium
+                          bg-white/40 dark:bg-white/5 border border-white/40 dark:border-white/10
+                          hover:border-sky-400/50 hover:bg-sky-100/60 dark:hover:bg-sky-500/10 transition"
                       >
                         <input
                           type="checkbox"
-                          className="checkbox checkbox-xs"
+                          className="checkbox checkbox-xs accent-sky-500"
                           checked={selectedYears.has(yr)}
                           onChange={() => toggleYear(yr)}
                         />
@@ -1276,20 +1312,28 @@ export function CareerTab({ league }) {
                 Members <Chip className="ml-1">{selectedNames.size}</Chip>
               </SoftButton>
               {showMemberPicker && (
-                <div className="absolute right-0 z-10 mt-2 w-72 max-h-72 overflow-auto rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 bg-white/95 dark:bg-zinc-900/95 shadow-lg p-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <SoftButton onClick={selectAllNames}>Select all</SoftButton>
-                    <SoftButton onClick={clearNames}>Clear</SoftButton>
+                <div className="absolute right-0 z-30 mt-3 w-72 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
+                  bg-gradient-to-br from-white/95 via-white/85 to-white/75 dark:from-zinc-950/95 dark:via-zinc-950/80 dark:to-black/70
+                  shadow-[0_24px_50px_-28px_rgba(168,85,247,0.55)] backdrop-blur-xl p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={selectAllNames}>
+                      Select all
+                    </SoftButton>
+                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={clearNames}>
+                      Clear
+                    </SoftButton>
                   </div>
                   <div className="space-y-1">
                     {visibleOwners.map((name) => (
                       <label
                         key={name}
-                        className="flex items-center gap-2 text-sm px-2 py-1 rounded-md hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium
+                          bg-white/40 dark:bg-white/5 border border-white/40 dark:border-white/10
+                          hover:border-fuchsia-400/50 hover:bg-fuchsia-100/60 dark:hover:bg-fuchsia-500/10 transition"
                       >
                         <input
                           type="checkbox"
-                          className="checkbox checkbox-xs"
+                          className="checkbox checkbox-xs accent-fuchsia-500"
                           checked={selectedNames.has(name)}
                           onChange={() => toggleName(name)}
                         />
@@ -1303,7 +1347,7 @@ export function CareerTab({ league }) {
           </div>
         }
       >
-        <div className="text-xs text-zinc-500 mb-3">
+        <div className="mb-4 text-[12px] text-slate-500/90 dark:text-slate-400/90">
           Regular season only. Filtering by{" "}
           {selectedYears.size
             ? Array.from(selectedYears)
@@ -1322,7 +1366,7 @@ export function CareerTab({ league }) {
         <svg
           width={baseW}
           height={H}
-          className="block mx-auto"
+          className="mx-auto block drop-shadow-[0_18px_40px_-30px_rgba(59,130,246,0.6)]"
           style={{ fontFamily: "'Outfit', ui-sans-serif" }}
         >
           <defs>
@@ -1463,80 +1507,108 @@ export function CareerTab({ league }) {
       {/* Raw career table (filtered) */}
       <Section title="Career totals (filtered)">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-white/70 dark:bg-zinc-800/70 sticky top-0 backdrop-blur border-b border-zinc-200/60 dark:border-zinc-700/60">
-              <tr>
-                <th className="px-3 py-2 text-left">Member</th>
-                <th className="px-3 py-2">GP</th>
-                <th className="px-3 py-2">W</th>
-                <th className="px-3 py-2">L</th>
-                <th className="px-3 py-2">Win %</th>
-                <th className="px-3 py-2">PF</th>
-                <th className="px-3 py-2">PA</th>
-                <th className="px-3 py-2">Avg PF</th>
-                <th className="px-3 py-2">Avg PA</th>
-              </tr>
-            </thead>
-            <tbody className="[&>tr:nth-child(odd)]:bg-zinc-50/60 dark:[&>tr:nth-child(odd)]:bg-white/[.03] [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-zinc-800/70 transition">
-              {careerStatsFiltered.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-zinc-200/40 dark:border-zinc-700/40"
-                >
-                  <td className="px-3 py-2 font-medium text-left">{r.name}</td>
-                  <td className="px-3 py-2 text-center">{r.games}</td>
-                  <td className="px-3 py-2 text-center">{r.wins}</td>
-                  <td className="px-3 py-2 text-center">{r.losses}</td>
-                  <td className="px-3 py-2 text-center">
-                    {(r.winPct * 100).toFixed(1)}%
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {Math.round(r.pointsFor).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {Math.round(r.pointsAgainst).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {r.avgPF.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {r.avgPA.toFixed(1)}
-                  </td>
+          <div
+            className="min-w-full overflow-hidden rounded-2xl border border-white/20 dark:border-white/10
+            bg-white/55 dark:bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"
+          >
+            <table className="w-full text-[13px] text-slate-700 dark:text-slate-200">
+              <thead
+                className="bg-gradient-to-r from-white/80 via-white/60 to-white/40 dark:from-white/10 dark:via-white/5 dark:to-white/0
+                border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
+              >
+                <tr>
+                  <th className="px-4 py-3 text-left">Member</th>
+                  <th className="px-4 py-3 text-center">GP</th>
+                  <th className="px-4 py-3 text-center">W</th>
+                  <th className="px-4 py-3 text-center">L</th>
+                  <th className="px-4 py-3 text-center">Win %</th>
+                  <th className="px-4 py-3 text-center">PF</th>
+                  <th className="px-4 py-3 text-center">PA</th>
+                  <th className="px-4 py-3 text-center">Avg PF</th>
+                  <th className="px-4 py-3 text-center">Avg PA</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/40 dark:divide-white/5">
+                {careerStatsFiltered.map((r, idx) => (
+                  <tr
+                    key={r.id}
+                    className={`transition-colors ${
+                      idx % 2 === 0
+                        ? "bg-white/65 dark:bg-white/[0.04]"
+                        : "bg-white/45 dark:bg-white/[0.025]"
+                    } hover:bg-sky-100/60 dark:hover:bg-sky-500/10`}
+                  >
+                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
+                      {r.name}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.games}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.wins}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.losses}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {(r.winPct * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {Math.round(r.pointsFor).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {Math.round(r.pointsAgainst).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.avgPF.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.avgPA.toFixed(1)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Section>
 
       {/* Rank table (filtered) */}
       <Section title="Career ranks (filtered)">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-white/70 dark:bg-zinc-800/70 sticky top-0 backdrop-blur border-b border-zinc-200/60 dark:border-zinc-700/60">
-              <tr>
-                <th className="px-3 py-2 text-left">Member</th>
-                <th className="px-3 py-2">Rank: Avg PF</th>
-                <th className="px-3 py-2">Rank: PA (lower better)</th>
-                <th className="px-3 py-2">Rank: Win %</th>
-                <th className="px-3 py-2">Rank: Placement (avg)</th>
-              </tr>
-            </thead>
-            <tbody className="[&>tr:nth-child(odd)]:bg-zinc-50/60 dark:[&>tr:nth-child(odd)]:bg-white/[.03] [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-zinc-800/70 transition">
-              {rankTable.map((r) => (
-                <tr
-                  key={r.name}
-                  className="border-b border-zinc-200/40 dark:border-zinc-700/40"
-                >
-                  <td className="px-3 py-2 font-medium text-left">{r.name}</td>
-                  <td className="px-3 py-2 text-center">{r.avgPF}</td>
-                  <td className="px-3 py-2 text-center">{r.pa}</td>
-                  <td className="px-3 py-2 text-center">{r.winPct}</td>
-                  <td className="px-3 py-2 text-center">{r.place}</td>
+          <div
+            className="min-w-full overflow-hidden rounded-2xl border border-white/20 dark:border-white/10
+            bg-white/55 dark:bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"
+          >
+            <table className="w-full text-[13px] text-slate-700 dark:text-slate-200">
+              <thead
+                className="bg-gradient-to-r from-white/80 via-white/60 to-white/40 dark:from-white/10 dark:via-white/5 dark:to-white/0
+                border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
+              >
+                <tr>
+                  <th className="px-4 py-3 text-left">Member</th>
+                  <th className="px-4 py-3 text-center">Rank: Avg PF</th>
+                  <th className="px-4 py-3 text-center">Rank: PA (lower better)</th>
+                  <th className="px-4 py-3 text-center">Rank: Win %</th>
+                  <th className="px-4 py-3 text-center">Rank: Placement (avg)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/40 dark:divide-white/5">
+                {rankTable.map((r, idx) => (
+                  <tr
+                    key={r.name}
+                    className={`transition-colors ${
+                      idx % 2 === 0
+                        ? "bg-white/65 dark:bg-white/[0.04]"
+                        : "bg-white/45 dark:bg-white/[0.025]"
+                    } hover:bg-violet-100/50 dark:hover:bg-violet-500/10`}
+                  >
+                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
+                      {r.name}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.avgPF}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.pa}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.winPct}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{r.place}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Section>
 
@@ -1544,15 +1616,17 @@ export function CareerTab({ league }) {
       <Section
         title="Win % by own points scored"
         right={
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-zinc-500">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-right">
+            <div className="max-w-[240px] text-[11px] uppercase tracking-[0.25em] text-slate-500/80 dark:text-slate-400/80">
               Regular season only. Buckets = score floored to nearest 10 (10,
               20, …, 200+).
             </div>
-            <div className="flex items-center gap-1 text-xs">
-              <span className="text-zinc-500">Year:</span>
+            <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider uppercase text-slate-600 dark:text-slate-300">
+              <span>Year:</span>
               <select
-                className="px-2 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700"
+                className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wider uppercase
+                  bg-white/95 dark:bg-zinc-900/80 border border-white/70 dark:border-white/10 text-slate-700 dark:text-slate-100
+                  shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] focus:outline-none focus:ring-2 focus:ring-violet-400/60"
                 value={wpYear}
                 onChange={(e) => setWpYear(e.target.value)}
               >
@@ -1564,7 +1638,10 @@ export function CareerTab({ league }) {
                 ))}
               </select>
             </div>
-            <SoftButton onClick={() => setShowWpGraph((v) => !v)}>
+            <SoftButton
+              className="!px-3 !py-1.5 text-[10px]"
+              onClick={() => setShowWpGraph((v) => !v)}
+            >
               {showWpGraph ? "Show table" : "Show graph"}
             </SoftButton>
           </div>
