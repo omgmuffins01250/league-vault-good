@@ -12722,37 +12722,65 @@ export function LuckIndexTab({
     comp2Detail?.season != null
       ? getBaseRoundForSeason(comp2Detail.season)
       : normalizedWaiverRound;
+
+  const tableShellBase =
+    "relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/55 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl";
+  const tableShellWide = `${tableShellBase} min-w-[640px]`;
+  const tableBodyClass =
+    "relative z-10 text-[13px] text-slate-700 dark:text-slate-100 [&>tr]:border-b [&>tr]:border-white/40 dark:[&>tr]:border-white/5 [&>tr:last-child]:border-0 [&>tr:nth-child(odd)]:bg-white/55 dark:[&>tr:nth-child(odd)]:bg-white/[0.06] [&>tr:nth-child(even)]:bg-white/35 dark:[&>tr:nth-child(even)]:bg-white/[0.03] [&>tr]:transition-colors [&>tr]:duration-200 [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-white/[0.12]";
+  const headRowClass =
+    "bg-white/80 dark:bg-zinc-900/60 backdrop-blur text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300";
+  const managerCellClass =
+    "px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100";
+  const valueCellClass =
+    "px-4 py-3 text-center tabular-nums text-slate-800 dark:text-slate-100";
+  const detailPillClass =
+    "inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-900 dark:text-amber-200 bg-gradient-to-r from-amber-300/90 via-amber-200/75 to-yellow-200/75 border border-amber-400/60 shadow-[0_24px_55px_-30px_rgba(245,158,11,0.6)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_65px_-32px_rgba(245,158,11,0.7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:focus-visible:ring-amber-400/70";
+  const toggleButtonBase =
+    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 border";
+  const toggleButtonActive =
+    "text-sky-900 dark:text-sky-100 bg-gradient-to-r from-sky-200/85 via-indigo-200/70 to-cyan-200/75 border-sky-300/70 shadow-[0_24px_55px_-30px_rgba(59,130,246,0.55)]";
+  const toggleButtonInactive =
+    "text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-white/[0.08] border-white/60 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/[0.12]";
+  const softButtonClass =
+    "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200 bg-gradient-to-r from-white/95 via-white/80 to-white/85 dark:from-zinc-900/80 dark:via-zinc-900/60 dark:to-zinc-950/70 border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-30px_rgba(15,23,42,0.85)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_65px_-32px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70";
   return (
     <div className="space-y-6">
       {/* ===== Master Luck Index Table ===== */}
       <Card title="Luck Index (Experimental)">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm border-collapse">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-              <tr className="border-b border-zinc-300 dark:border-zinc-700">
-                <th className="px-3 py-2 text-left">Manager</th>
-                {seasons.map((y) => (
-                  <th key={y} className="px-3 py-2 text-center">
-                    {y}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-              {owners.map((o) => (
-                <tr key={o}>
-                  <td className="px-3 py-2 font-medium">{o}</td>
+          <div className={tableShellWide}>
+            <div className="pointer-events-none absolute inset-0 opacity-85">
+              <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(16,185,129,0.12),transparent_65%)]" />
+              <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+            </div>
+            <table className="relative z-10 min-w-full border-collapse">
+              <thead className="sticky top-0">
+                <tr className={headRowClass}>
+                  <th className="px-4 py-3 text-left">Manager</th>
                   {seasons.map((y) => (
-                    <td key={y} className="px-3 py-2 text-center tabular-nums">
-                      {fmt(luckByOwnerYear[o]?.[y])}
-                    </td>
+                    <th key={y} className="px-4 py-3 text-center">
+                      {y}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className={tableBodyClass}>
+                {owners.map((o) => (
+                  <tr key={o}>
+                    <td className={managerCellClass}>{o}</td>
+                    {seasons.map((y) => (
+                      <td key={y} className={valueCellClass}>
+                        {fmt(luckByOwnerYear[o]?.[y])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-3 text-[11px] text-slate-500/85 dark:text-slate-400">
           Scores normalized between 0 (least lucky) and 100 (most lucky) by
           averaging opponent luck and injury resilience on their respective
           ranges.
@@ -12777,69 +12805,74 @@ export function LuckIndexTab({
       <Card title="Luck Components (Preview)">
         <Card title="Component 1 — Opponent vs Projection (sum to date)">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm border-collapse">
-              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                <tr className="border-b border-zinc-300 dark:border-zinc-700">
-                  <th className="px-3 py-2 text-left">Manager</th>
-                  {seasons.map((y) => (
-                    <th key={y} className="px-3 py-2 text-center">
-                      {y}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                {owners.map((o) => (
-                  <tr key={o}>
-                    <td className="px-3 py-2 font-medium">{o}</td>
-                    {seasons.map((y) => {
-                      const v = comp1ByOwnerYear?.[o]?.[y];
-                      return (
-                        <td
-                          key={y}
-                          className="px-3 py-2 text-center tabular-nums"
-                        >
-                          {Number.isFinite(v) &&
-                          (comp1DetailByOwnerYear?.[o]?.[y] || []).length ? (
-                            <button
-                              type="button"
-                              className="underline decoration-dotted text-blue-600 hover:text-blue-800 dark:text-blue-300"
-                              onClick={() =>
-                                setComp1Detail({
-                                  owner: o,
-                                  season: y,
-                                  rows: (
-                                    comp1DetailByOwnerYear?.[o]?.[y] || []
-                                  ).slice(),
-                                })
-                              }
-                            >
-                              {v.toFixed(1)}
-                            </button>
-                          ) : Number.isFinite(v) ? (
-                            v.toFixed(1)
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      );
-                    })}
+            <div className={tableShellWide}>
+              <div className="pointer-events-none absolute inset-0 opacity-85">
+                <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(251,191,36,0.16),transparent_60%),radial-gradient(125%_145%_at_100%_100%,rgba(251,191,36,0.12),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <table className="relative z-10 min-w-full border-collapse">
+                <thead className="sticky top-0">
+                  <tr className={headRowClass}>
+                    <th className="px-4 py-3 text-left">Manager</th>
+                    {seasons.map((y) => (
+                      <th key={y} className="px-4 py-3 text-center">
+                        {y}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className={tableBodyClass}>
+                  {owners.map((o) => (
+                    <tr key={o}>
+                      <td className={managerCellClass}>{o}</td>
+                      {seasons.map((y) => {
+                        const v = comp1ByOwnerYear?.[o]?.[y];
+                        const rows = (comp1DetailByOwnerYear?.[o]?.[y] || []).length;
+                        return (
+                          <td key={y} className={valueCellClass}>
+                            {Number.isFinite(v) && rows ? (
+                              <button
+                                type="button"
+                                className={detailPillClass}
+                                onClick={() =>
+                                  setComp1Detail({
+                                    owner: o,
+                                    season: y,
+                                    rows: (
+                                      comp1DetailByOwnerYear?.[o]?.[y] || []
+                                    ).slice(),
+                                  })
+                                }
+                              >
+                                {v.toFixed(1)}
+                              </button>
+                            ) : Number.isFinite(v) ? (
+                              v.toFixed(1)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </Card>
         <Card title="Component 2 — Injury Index (Player-Weeks Lost)">
-          <div className="px-3 pt-3 pb-2 flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
-              <span className="font-medium">View:</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                View
+              </span>
               <button
                 type="button"
-                className={`px-2.5 py-1 rounded border text-sm font-medium transition-colors ${
+                className={`${toggleButtonBase} ${
                   injuryViewMode === "raw"
-                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-400"
-                    : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700"
+                    ? toggleButtonActive
+                    : toggleButtonInactive
                 }`}
                 onClick={() => setInjuryViewMode("raw")}
               >
@@ -12847,10 +12880,10 @@ export function LuckIndexTab({
               </button>
               <button
                 type="button"
-                className={`px-2.5 py-1 rounded border text-sm font-medium transition-colors ${
+                className={`${toggleButtonBase} ${
                   injuryViewMode === "weighted"
-                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-400"
-                    : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700"
+                    ? toggleButtonActive
+                    : toggleButtonInactive
                 }`}
                 onClick={() => setInjuryViewMode("weighted")}
               >
@@ -12859,8 +12892,10 @@ export function LuckIndexTab({
             </div>
             {isWeightedView && (
               <>
-                <label className="flex items-center gap-2">
-                  <span className="whitespace-nowrap">Waiver round</span>
+                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                    Waiver round
+                  </span>
                   <input
                     type="number"
                     min={1}
@@ -12882,11 +12917,13 @@ export function LuckIndexTab({
                         setInjuryWaiverRound(clamped);
                       }
                     }}
-                    className="w-16 rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    className="w-20 rounded-lg border border-white/50 dark:border-white/10 bg-white/90 dark:bg-white/[0.08] px-2.5 py-1 text-[12px] text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:focus-visible:ring-sky-400/60"
                   />
                 </label>
-                <label className="flex items-center gap-2">
-                  <span>α</span>
+                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                    α
+                  </span>
                   <input
                     type="range"
                     min={0}
@@ -12896,9 +12933,9 @@ export function LuckIndexTab({
                     onChange={(e) =>
                       setInjuryWeightAlpha(Number(e.target.value))
                     }
-                    className="w-32 accent-blue-600"
+                    className="w-36 accent-amber-400"
                   />
-                  <span className="tabular-nums w-10 text-right">
+                  <span className="tabular-nums w-12 text-right text-[12px] text-slate-700 dark:text-slate-200">
                     {injuryWeightAlpha.toFixed(2)}
                   </span>
                 </label>
@@ -12906,7 +12943,7 @@ export function LuckIndexTab({
             )}
           </div>
           {isWeightedView && (
-            <div className="px-3 pb-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="px-5 pb-4 text-[11px] text-slate-500/85 dark:text-slate-400">
               Weight = (baseRound + 1 {"\u2212"} round)^α; baseRound is the
               larger of a season’s max draft round and the waiver round
               (currently treated as R{normalizedWaiverRound}). Players without
@@ -12914,60 +12951,63 @@ export function LuckIndexTab({
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm border-collapse">
-              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                <tr className="border-b border-zinc-300 dark:border-zinc-700">
-                  <th className="px-3 py-2 text-left">Manager</th>
-                  {seasons.map((y) => (
-                    <th key={y} className="px-3 py-2 text-center">
-                      {y}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                {owners.map((o) => (
-                  <tr key={`${o}-injury`}>
-                    <td className="px-3 py-2 font-medium">{o}</td>
-                    {seasons.map((y) => {
-                      const v = injuryTotalsSource?.[o]?.[y];
-                      const detailRows = injuryDetailSource?.[o]?.[y] || [];
-                      const hasDetail =
-                        Number.isFinite(v) && detailRows.length > 0;
-                      return (
-                        <td
-                          key={`${y}-injury`}
-                          className="px-3 py-2 text-center tabular-nums"
-                        >
-                          {hasDetail ? (
-                            <button
-                              type="button"
-                              className="underline decoration-dotted text-blue-600 hover:text-blue-800 dark:text-blue-300"
-                              onClick={() =>
-                                setComp2Detail({
-                                  owner: o,
-                                  season: y,
-                                })
-                              }
-                            >
-                              {fmtInjuryValue(v)}
-                            </button>
-                          ) : Number.isFinite(v) ? (
-                            fmtInjuryValue(v)
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      );
-                    })}
+            <div className={tableShellWide}>
+              <div className="pointer-events-none absolute inset-0 opacity-85">
+                <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(14,165,233,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(236,72,153,0.14),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <table className="relative z-10 min-w-full border-collapse">
+                <thead className="sticky top-0">
+                  <tr className={headRowClass}>
+                    <th className="px-4 py-3 text-left">Manager</th>
+                    {seasons.map((y) => (
+                      <th key={y} className="px-4 py-3 text-center">
+                        {y}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className={tableBodyClass}>
+                  {owners.map((o) => (
+                    <tr key={`${o}-injury`}>
+                      <td className={managerCellClass}>{o}</td>
+                      {seasons.map((y) => {
+                        const v = injuryTotalsSource?.[o]?.[y];
+                        const detailRows = injuryDetailSource?.[o]?.[y] || [];
+                        const hasDetail =
+                          Number.isFinite(v) && detailRows.length > 0;
+                        return (
+                          <td key={`${y}-injury`} className={valueCellClass}>
+                            {hasDetail ? (
+                              <button
+                                type="button"
+                                className={detailPillClass}
+                                onClick={() =>
+                                  setComp2Detail({
+                                    owner: o,
+                                    season: y,
+                                  })
+                                }
+                              >
+                                {fmtInjuryValue(v)}
+                              </button>
+                            ) : Number.isFinite(v) ? (
+                              fmtInjuryValue(v)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </Card>
 
-        <div className="text-sm text-zinc-500 space-y-2">
+        <div className="text-[12px] leading-relaxed text-slate-500/90 dark:text-slate-400 space-y-2">
           <p>
             Component 1: Opponent Overperformance — how much opponents exceeded
             projections.
@@ -12983,116 +13023,139 @@ export function LuckIndexTab({
       </Card>
 
       {comp1Detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/55 backdrop-blur"
             onClick={() => setComp1Detail(null)}
           />
-          <div className="relative w-full max-w-3xl rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
-              <div className="text-base font-semibold">
-                {comp1Detail.owner} — {comp1Detail.season} Opponent Luck
-                Breakdown
+          <div className="relative w-[min(900px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Opponent Luck Breakdown
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp1Detail.owner} — {comp1Detail.season}
+                </div>
               </div>
               <button
-                className="btn btn-xs"
+                className={softButtonClass}
                 onClick={() => setComp1Detail(null)}
               >
                 Close
               </button>
             </div>
 
-            <div className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
-              Total:{" "}
-              {fmt(
-                comp1Detail.rows.reduce(
-                  (sum, r) => sum + (Number.isFinite(r?.diff) ? r.diff : 0),
-                  0
-                )
-              )}
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              Total impact:{" "}
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {fmt(
+                  comp1Detail.rows.reduce(
+                    (sum, r) => sum + (Number.isFinite(r?.diff) ? r.diff : 0),
+                    0
+                  )
+                )}
+              </span>
             </div>
 
-            <div className="px-4 py-3 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="px-3 py-2 text-left">Week</th>
-                    <th className="px-3 py-2 text-left">Opponent</th>
-                    <th className="px-3 py-2 text-right">Proj</th>
-                    <th className="px-3 py-2 text-right">Actual</th>
-                    <th className="px-3 py-2 text-right">Diff</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {comp1Detail.rows
-                    .slice()
-                    .sort((a, b) => Number(a?.week || 0) - Number(b?.week || 0))
-                    .map((row, idx) => (
-                      <tr key={`${row.week}-${row.opponentTeamId}-${idx}`}>
-                        <td className="px-3 py-2 tabular-nums">W{row.week}</td>
-                        <td className="px-3 py-2">{row.opponentOwner}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {Number.isFinite(row?.opponentProjected)
-                            ? row.opponentProjected.toFixed(1)
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {Number.isFinite(row?.opponentActual)
-                            ? row.opponentActual.toFixed(1)
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {Number.isFinite(row?.diff)
-                            ? row.diff.toFixed(1)
-                            : "—"}
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(251,191,36,0.14),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Opponent</th>
+                      <th className="px-4 py-3 text-right">Proj</th>
+                      <th className="px-4 py-3 text-right">Actual</th>
+                      <th className="px-4 py-3 text-right">Diff</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp1Detail.rows
+                      .slice()
+                      .sort(
+                        (a, b) => Number(a?.week || 0) - Number(b?.week || 0)
+                      )
+                      .map((row, idx) => (
+                        <tr key={`${row.week}-${row.opponentTeamId}-${idx}`}>
+                          <td className="px-4 py-3 tabular-nums text-left text-slate-800 dark:text-slate-100">
+                            W{row.week}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {row.opponentOwner}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">
+                            {Number.isFinite(row?.opponentProjected)
+                              ? row.opponentProjected.toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">
+                            {Number.isFinite(row?.opponentActual)
+                              ? row.opponentActual.toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                            {Number.isFinite(row?.diff)
+                              ? row.diff.toFixed(1)
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    {comp1Detail.rows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No weekly results available.
                         </td>
                       </tr>
-                    ))}
-                  {comp1Detail.rows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-3 py-4 text-center opacity-60"
-                      >
-                        No weekly results available.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
       )}
       {comp2Detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/55 backdrop-blur"
             onClick={() => setComp2Detail(null)}
           />
-          <div className="relative w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
-              <div className="text-base font-semibold">
-                {comp2Detail.owner} — {comp2Detail.season}{" "}
-                {isWeightedView
-                  ? "Weighted Injury Impact"
-                  : "Injury Weeks Lost"}
+          <div className="relative w-[min(760px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  {isWeightedView ? "Weighted Injury Impact" : "Injury Weeks Lost"}
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp2Detail.owner} — {comp2Detail.season}
+                </div>
               </div>
               <button
-                className="btn btn-xs"
+                className={softButtonClass}
                 onClick={() => setComp2Detail(null)}
               >
                 Close
               </button>
             </div>
 
-            <div className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
               {isWeightedView ? (
                 <div className="space-y-1">
                   <div>Raw player-weeks flagged: {comp2RawCount}</div>
                   <div>
-                    Weighted total: {fmtInjuryValue(comp2WeightedTotal)} (α ={" "}
-                    {injuryWeightAlpha.toFixed(2)}, waiver R
+                    Weighted total:{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      {fmtInjuryValue(comp2WeightedTotal)}
+                    </span>{" "}
+                    (α = {injuryWeightAlpha.toFixed(2)}, waiver R
                     {normalizedWaiverRound}, base R{comp2BaseRoundForDetail})
                   </div>
                 </div>
@@ -13101,74 +13164,86 @@ export function LuckIndexTab({
               )}
             </div>
 
-            <div className="px-4 py-3 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="px-3 py-2 text-left">Week</th>
-                    <th className="px-3 py-2 text-left">Player</th>
-                    <th className="px-3 py-2 text-left">Slot</th>
-                    {isWeightedView && (
-                      <th className="px-3 py-2 text-left">Draft</th>
-                    )}
-                    {isWeightedView && (
-                      <th className="px-3 py-2 text-right">Weight</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {comp2DetailRows
-                    .slice()
-                    .sort((a, b) => {
-                      const wDiff = Number(a?.week || 0) - Number(b?.week || 0);
-                      if (wDiff !== 0) return wDiff;
-                      return (a?.player || "").localeCompare(b?.player || "");
-                    })
-                    .map((row, idx) => {
-                      const draftLabel =
-                        isWeightedView && row
-                          ? row.draftRound != null
-                            ? `R${row.draftRound}${
-                                row.draftOverall != null
-                                  ? ` (#${row.draftOverall})`
-                                  : ""
-                              }`
-                            : row.weightRound != null
-                            ? `Waiver (R${row.weightRound})`
-                            : "—"
-                          : null;
-                      return (
-                        <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
-                          <td className="px-3 py-2 tabular-nums">
-                            W{row.week}
-                          </td>
-                          <td className="px-3 py-2">{row.player}</td>
-                          <td className="px-3 py-2">{row.slot || "—"}</td>
-                          {isWeightedView && (
-                            <td className="px-3 py-2">{draftLabel}</td>
-                          )}
-                          {isWeightedView && (
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {Number.isFinite(row?.weight)
-                                ? row.weight.toFixed(2)
-                                : "—"}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  {comp2DetailRows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={isWeightedView ? 5 : 3}
-                        className="px-3 py-4 text-center opacity-60"
-                      >
-                        No injury weeks recorded.
-                      </td>
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(14,165,233,0.16),transparent_60%),radial-gradient(125%_145%_at_100%_100%,rgba(236,72,153,0.14),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Player</th>
+                      <th className="px-4 py-3 text-left">Slot</th>
+                      {isWeightedView && (
+                        <th className="px-4 py-3 text-left">Draft</th>
+                      )}
+                      {isWeightedView && (
+                        <th className="px-4 py-3 text-right">Weight</th>
+                      )}
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp2DetailRows
+                      .slice()
+                      .sort((a, b) => {
+                        const wDiff = Number(a?.week || 0) - Number(b?.week || 0);
+                        if (wDiff !== 0) return wDiff;
+                        return (a?.player || "").localeCompare(b?.player || "");
+                      })
+                      .map((row, idx) => {
+                        const draftLabel =
+                          isWeightedView && row
+                            ? row.draftRound != null
+                              ? `R${row.draftRound}${
+                                  row.draftOverall != null
+                                    ? ` (#${row.draftOverall})`
+                                    : ""
+                                }`
+                              : row.weightRound != null
+                              ? `Waiver (R${row.weightRound})`
+                              : "—"
+                            : null;
+                        return (
+                          <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
+                            <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                              W{row.week}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.player}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.slot || "—"}
+                            </td>
+                            {isWeightedView && (
+                              <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                                {draftLabel}
+                              </td>
+                            )}
+                            {isWeightedView && (
+                              <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                                {Number.isFinite(row?.weight)
+                                  ? row.weight.toFixed(2)
+                                  : "—"}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    {comp2DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={isWeightedView ? 5 : 3}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No injury rows recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
