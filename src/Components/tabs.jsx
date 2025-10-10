@@ -12603,6 +12603,26 @@ export function LuckIndexTab({
     );
     return Array.from(set).sort((a, b) => a - b);
   }, [league, rawRows]);
+  const [selectedLuckSeason, setSelectedLuckSeason] = React.useState(() =>
+    seasons.length ? seasons[seasons.length - 1] : null
+  );
+  React.useEffect(() => {
+    if (!seasons.length) {
+      if (selectedLuckSeason != null) setSelectedLuckSeason(null);
+      return;
+    }
+    const fallback = seasons[seasons.length - 1];
+    if (
+      selectedLuckSeason == null ||
+      !seasons.includes(selectedLuckSeason)
+    ) {
+      setSelectedLuckSeason(fallback);
+    }
+  }, [seasons, selectedLuckSeason]);
+  const seasonsDescForLuck = React.useMemo(
+    () => [...seasons].sort((a, b) => b - a),
+    [seasons]
+  );
 
   const ownersBase = React.useMemo(() => {
     const set = new Set();
@@ -13132,6 +13152,113 @@ export function LuckIndexTab({
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
+  const ordinal = React.useCallback((value) => {
+    if (!Number.isFinite(value)) return "—";
+    const n = Math.round(value);
+    const mod100 = n % 100;
+    const mod10 = n % 10;
+    let suffix = "th";
+    if (mod100 < 11 || mod100 > 13) {
+      if (mod10 === 1) suffix = "st";
+      else if (mod10 === 2) suffix = "nd";
+      else if (mod10 === 3) suffix = "rd";
+    }
+    return `${n}${suffix}`;
+  }, []);
+  const luckRows = React.useMemo(() => {
+    if (!Number.isFinite(selectedLuckSeason)) return [];
+    const rows = owners.map((owner) => {
+      const raw = luckByOwnerYear?.[owner]?.[selectedLuckSeason];
+      const value = Number.isFinite(raw) ? Number(raw) : null;
+      return { owner, value };
+    });
+    return rows
+      .sort((a, b) => {
+        const aVal = a.value;
+        const bVal = b.value;
+        const aHas = Number.isFinite(aVal);
+        const bHas = Number.isFinite(bVal);
+        if (aHas && bHas) {
+          if (bVal !== aVal) return bVal - aVal;
+          return a.owner.localeCompare(b.owner);
+        }
+        if (aHas) return -1;
+        if (bHas) return 1;
+        return a.owner.localeCompare(b.owner);
+      })
+      .map((row, index) => ({ ...row, rank: index + 1 }));
+  }, [owners, luckByOwnerYear, selectedLuckSeason]);
+  const totalLuckRows = luckRows.length;
+  const renderLuckPlace = React.useCallback(
+    (rank) => {
+      if (!Number.isFinite(rank) || rank <= 0 || !totalLuckRows) return null;
+      const label = ordinal(rank);
+      const makeIcon = ({ emoji, overlay, aria }) => (
+        <div className="relative flex h-12 w-12 items-center justify-center">
+          <span
+            role="img"
+            aria-label={aria}
+            className="text-[32px] leading-none drop-shadow-[0_4px_10px_rgba(15,23,42,0.35)]"
+          >
+            {emoji}
+          </span>
+          {overlay ? (
+            <span className="absolute text-xl leading-none" aria-hidden="true">
+              {overlay}
+            </span>
+          ) : null}
+          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black uppercase tracking-[0.18em] text-white drop-shadow-[0_1px_2px_rgba(15,23,42,0.85)]">
+            {label}
+          </span>
+        </div>
+      );
+
+      if (rank === 1) {
+        return makeIcon({
+          emoji: "🍀",
+          aria: "Luckiest four leaf clover",
+        });
+      }
+      if (rank === 2) {
+        return makeIcon({
+          emoji: "🧲",
+          aria: "Second place horseshoe",
+        });
+      }
+      if (rank === 3) {
+        return makeIcon({
+          emoji: "🐇",
+          aria: "Third place rabbit foot",
+        });
+      }
+      if (rank === totalLuckRows) {
+        return makeIcon({
+          emoji: "🪞",
+          overlay: "💥",
+          aria: "Unluckiest broken mirror",
+        });
+      }
+      if (rank === totalLuckRows - 1 && totalLuckRows > 1) {
+        return makeIcon({
+          emoji: "🐈‍⬛",
+          aria: "Second to last black cat",
+        });
+      }
+      if (rank === totalLuckRows - 2 && totalLuckRows > 2) {
+        return makeIcon({
+          emoji: "🪜",
+          aria: "Third to last ladder",
+        });
+      }
+
+      return (
+        <span className="inline-flex min-w-[3rem] items-center justify-center rounded-full border border-white/60 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-100">
+          {label}
+        </span>
+      );
+    },
+    [ordinal, totalLuckRows]
+  );
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -13176,10 +13303,13 @@ export function LuckIndexTab({
   const tableShellBase =
     "relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/55 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl";
   const tableShellWide = `${tableShellBase} min-w-[640px]`;
+  const tableShellLuck = `${tableShellBase} min-w-[420px]`;
   const tableBodyClass =
     "relative z-10 text-[13px] text-slate-700 dark:text-slate-100 [&>tr]:border-b [&>tr]:border-white/40 dark:[&>tr]:border-white/5 [&>tr:last-child]:border-0 [&>tr:nth-child(odd)]:bg-white/55 dark:[&>tr:nth-child(odd)]:bg-white/[0.06] [&>tr:nth-child(even)]:bg-white/35 dark:[&>tr:nth-child(even)]:bg-white/[0.03] [&>tr]:transition-colors [&>tr]:duration-200 [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-white/[0.12]";
   const headRowClass =
     "bg-white/80 dark:bg-zinc-900/60 backdrop-blur text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300";
+  const placeCellClass =
+    "px-4 py-3 text-left align-middle text-slate-800 dark:text-slate-100";
   const managerCellClass =
     "px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100";
   const valueCellClass =
@@ -13197,9 +13327,36 @@ export function LuckIndexTab({
   return (
     <div className="space-y-6">
       {/* ===== Master Luck Index Table ===== */}
-      <Card title="Luck Index (Experimental)">
+      <Card
+        title="Luck Index (Experimental)"
+        right={
+          seasonsDescForLuck.length ? (
+            <label className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Year
+              </span>
+              <select
+                className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.55)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:border-white/15 dark:bg-zinc-900/70 dark:text-slate-100"
+                value={
+                  selectedLuckSeason != null ? String(selectedLuckSeason) : ""
+                }
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setSelectedLuckSeason(Number.isFinite(value) ? value : null);
+                }}
+              >
+                {seasonsDescForLuck.map((season) => (
+                  <option key={season} value={String(season)}>
+                    {season}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      >
         <div className="overflow-x-auto">
-          <div className={tableShellWide}>
+          <div className={tableShellLuck}>
             <div className="pointer-events-none absolute inset-0 opacity-85">
               <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(16,185,129,0.12),transparent_65%)]" />
               <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
@@ -13207,33 +13364,38 @@ export function LuckIndexTab({
             <table className="relative z-10 min-w-full border-collapse">
               <thead className="sticky top-0">
                 <tr className={headRowClass}>
+                  <th className="px-4 py-3 text-left">Luck Place</th>
                   <th className="px-4 py-3 text-left">Manager</th>
-                  {seasons.map((y) => (
-                    <th key={y} className="px-4 py-3 text-center">
-                      {y}
-                    </th>
-                  ))}
+                  <th className="px-4 py-3 text-center">Luck Metric</th>
                 </tr>
               </thead>
               <tbody className={tableBodyClass}>
-                {owners.map((o) => (
-                  <tr key={o}>
-                    <td className={managerCellClass}>{o}</td>
-                    {seasons.map((y) => (
-                      <td key={y} className={valueCellClass}>
-                        {fmt(luckByOwnerYear[o]?.[y])}
-                      </td>
-                    ))}
+                {luckRows.length ? (
+                  luckRows.map(({ owner, value, rank }) => (
+                    <tr key={owner}>
+                      <td className={placeCellClass}>{renderLuckPlace(rank)}</td>
+                      <td className={managerCellClass}>{owner}</td>
+                      <td className={valueCellClass}>{fmt(value)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="px-6 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400"
+                    >
+                      No luck data available for the selected year yet.
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
         <p className="mt-3 text-[11px] text-slate-500/85 dark:text-slate-400">
-          Scores normalized between 0 (least lucky) and 100 (most lucky) by
-          averaging opponent luck and injury resilience on their respective
-          ranges.
+          Scores are normalized between 0 (least lucky) and 100 (most lucky) for
+          the selected year by averaging opponent luck and injury resilience on
+          their respective ranges.
           {Number.isFinite(comp1Min) && Number.isFinite(comp1Max) && (
             <>
               {" "}
@@ -13244,8 +13406,7 @@ export function LuckIndexTab({
           {Number.isFinite(injuryMin) && Number.isFinite(injuryMax) && (
             <>
               {" "}
-              Injury weeks span: {injuryMin.toFixed(0)} to{" "}
-              {injuryMax.toFixed(0)}.
+              Injury weeks span: {injuryMin.toFixed(0)} to {injuryMax.toFixed(0)}.
             </>
           )}
         </p>
