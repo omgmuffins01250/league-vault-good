@@ -3234,6 +3234,8 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
       setSortDir(-1); // default to desc on first click for numeric fields
     }
   };
+  const sortIndicator = (key) =>
+    sortBy !== key ? "↕" : sortDir === -1 ? "▼" : "▲";
 
   // Input helper
   const setSeasonVal = (yr, field, val) =>
@@ -3911,156 +3913,199 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
         </div>
       </Card>
       {/* Bottom table */}
-      <TableBox>
-        <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-          <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-            <th
-              className="px-3 py-2 text-left cursor-pointer"
-              onClick={() => toggleSort("owner")}
-              title="Sort by Member"
-            >
-              Member {sortBy === "owner" ? (sortDir === -1 ? "↓" : "↑") : ""}
-            </th>
-
-            {/* Invested (first) */}
-            <th
-              className="px-3 py-2 cursor-pointer"
-              onClick={() => toggleSort("invested")}
-              title="Sort by Invested"
-            >
-              Invested{" "}
-              {sortBy === "invested" ? (sortDir === -1 ? "↓" : "↑") : ""}
-            </th>
-
-            {/* Earned (second) */}
-            <th
-              className="px-3 py-2 cursor-pointer"
-              onClick={() => toggleSort("earned")}
-              title="Sort by Earned"
-            >
-              Earned {sortBy === "earned" ? (sortDir === -1 ? "↓" : "↑") : ""}
-            </th>
-
-            {/* ROI (third) */}
-            <th
-              className="px-3 py-2 cursor-pointer"
-              onClick={() => toggleSort("roi")}
-              title="Sort by ROI"
-            >
-              ROI {sortBy === "roi" ? (sortDir === -1 ? "↓" : "↑") : ""}
-            </th>
-
-            {[1, 2, 3].map((place) => (
-              <th
-                key={`place-h-${place}`}
-                className="px-3 py-2 cursor-pointer"
-                onClick={() => toggleSort(`place${place}`)}
-                title={`Sort by ${
-                  place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"
-                }`}
-              >
-                {place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}{" "}
-                {sortBy === `place${place}` ? (sortDir === -1 ? "↓" : "↑") : ""}
-              </th>
-            ))}
-
-            {weeklyEnabled && (
-              <th
-                className="px-3 py-2 cursor-pointer"
-                onClick={() => toggleSort("weekly")}
-                title="Sort by Weekly payouts"
-              >
-                Weekly {sortBy === "weekly" ? (sortDir === -1 ? "↓" : "↑") : ""}
-              </th>
-            )}
-
-            {payoutTiers > 3 &&
-              [...Array(payoutTiers - 3)].map((_, idx) => {
-                const place = idx + 4;
-                return (
-                  <th
-                    key={`place-h-${place}`}
-                    className="px-3 py-2 cursor-pointer"
-                    onClick={() => toggleSort(`place${place}`)}
-                    title={`Sort by ${place}th`}
-                  >
-                    {place}
-                    {place === 1
-                      ? "st"
-                      : place === 2
-                      ? "nd"
-                      : place === 3
-                      ? "rd"
-                      : "th"}{" "}
-                    {sortBy === `place${place}`
-                      ? sortDir === -1
-                        ? "↓"
-                        : "↑"
-                      : ""}
+      <div className="overflow-x-auto">
+        <div className="relative min-w-full overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-75 bg-[radial-gradient(120%_145%_at_0%_0%,rgba(250,204,21,0.16),transparent_55%),radial-gradient(125%_150%_at_100%_100%,rgba(251,191,36,0.14),transparent_60%)]" />
+            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          </div>
+          <div className="relative">
+            <table className="min-w-[960px] w-full text-[13px] text-slate-700 dark:text-slate-200">
+              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0 z-10">
+                <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
+                  <th className="px-4 py-3 text-left">
+                    <button
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                      onClick={() => toggleSort("owner")}
+                      title="Sort by Member"
+                    >
+                      Member
+                      <span className="opacity-70 text-xs">{sortIndicator("owner")}</span>
+                    </button>
                   </th>
-                );
-              })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 [&>tr:nth-child(odd)]:bg-zinc-50 dark:[&>tr:nth-child(odd)]:bg-zinc-900 [&>tr:hover]:bg-zinc-100 dark:[&>tr:hover]:bg-zinc-800">
-          {rows.map((r) => (
-            <tr key={r.owner} className="text-center">
-              <td className="text-left px-3 py-2 font-medium">{r.owner}</td>
 
-              {/* Invested */}
-              <td className="px-3 py-2">
-                ${Math.round(r.invested).toLocaleString()}
-              </td>
+                  <th className="px-4 py-3 text-center">
+                    <button
+                      className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                      onClick={() => toggleSort("invested")}
+                      title="Sort by Invested"
+                    >
+                      Invested
+                      <span className="opacity-70 text-xs">{sortIndicator("invested")}</span>
+                    </button>
+                  </th>
 
-              {/* Earned with value-based tone */}
-              <td
-                className={`px-3 py-2 ${toneByValue(
-                  r.earned,
-                  earnedMin,
-                  earnedMax,
-                  true
-                )}`}
-              >
-                ${Math.round(r.earned).toLocaleString()}
-              </td>
+                  <th className="px-4 py-3 text-center">
+                    <button
+                      className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                      onClick={() => toggleSort("earned")}
+                      title="Sort by Earned"
+                    >
+                      Earned
+                      <span className="opacity-70 text-xs">{sortIndicator("earned")}</span>
+                    </button>
+                  </th>
 
-              {/* ROI with value-based tone */}
-              <td
-                className={`px-3 py-2 ${toneByValue(
-                  r.roi,
-                  roiMin,
-                  roiMax,
-                  true
-                )}`}
-              >
-                {(r.roi * 100).toFixed(1)}%
-              </td>
+                  <th className="px-4 py-3 text-center">
+                    <button
+                      className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                      onClick={() => toggleSort("roi")}
+                      title="Sort by ROI"
+                    >
+                      ROI
+                      <span className="opacity-70 text-xs">{sortIndicator("roi")}</span>
+                    </button>
+                  </th>
 
-              {[1, 2, 3].map((place) => (
-                <td key={`p-${place}`} className="px-3 py-2">
-                  ${Math.round(r.byPlace[place] || 0).toLocaleString()}
-                </td>
-              ))}
+                  {[1, 2, 3].map((place) => (
+                    <th key={`place-h-${place}`} className="px-4 py-3 text-center">
+                      <button
+                        className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                        onClick={() => toggleSort(`place${place}`)}
+                        title={`Sort by ${place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}`}
+                      >
+                        {place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}
+                        <span className="opacity-70 text-xs">{sortIndicator(`place${place}`)}</span>
+                      </button>
+                    </th>
+                  ))}
 
-              {weeklyEnabled && (
-                <td className="px-3 py-2">
-                  ${Math.round(r.weekly || 0).toLocaleString()}
-                </td>
-              )}
+                  {weeklyEnabled && (
+                    <th className="px-4 py-3 text-center">
+                      <button
+                        className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                        onClick={() => toggleSort("weekly")}
+                        title="Sort by Weekly payouts"
+                      >
+                        Weekly
+                        <span className="opacity-70 text-xs">{sortIndicator("weekly")}</span>
+                      </button>
+                    </th>
+                  )}
 
-              {payoutTiers > 3 &&
-                [...Array(payoutTiers - 3)].map((_, idx2) => {
-                  const place = 4 + idx2;
-                  return (
-                    <td key={`p-${place}`} className="px-3 py-2">
-                      ${Math.round(r.byPlace[place] || 0).toLocaleString()}
+                  {payoutTiers > 3 &&
+                    [...Array(payoutTiers - 3)].map((_, idx) => {
+                      const place = idx + 4;
+                      return (
+                        <th key={`place-h-${place}`} className="px-4 py-3 text-center">
+                          <button
+                            className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                            onClick={() => toggleSort(`place${place}`)}
+                            title={`Sort by ${place}th`}
+                          >
+                            {place}
+                            {place === 1
+                              ? "st"
+                              : place === 2
+                              ? "nd"
+                              : place === 3
+                              ? "rd"
+                              : "th"}
+                            <span className="opacity-70 text-xs">{sortIndicator(`place${place}`)}</span>
+                          </button>
+                        </th>
+                      );
+                    })}
+                </tr>
+              </thead>
+              <tbody className="relative z-10 divide-y divide-white/40 dark:divide-white/10">
+                {rows.map((r, idx) => (
+                  <tr
+                    key={r.owner}
+                    className={`text-center transition-colors ${
+                      idx % 2 === 0
+                        ? "bg-white/70 dark:bg-white/[0.04]"
+                        : "bg-white/45 dark:bg-white/[0.025]"
+                    } hover:bg-amber-100/60 dark:hover:bg-amber-400/10`}
+                  >
+                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                      {r.owner}
                     </td>
-                  );
-                })}
-            </tr>
-          ))}
-        </tbody>
-      </TableBox>
+
+                    <td className="px-4 py-3">
+                      <span className="inline-flex min-w-[96px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-800 dark:text-slate-100 bg-white/70 dark:bg-white/[0.08] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)]">
+                        ${Math.round(r.invested).toLocaleString()}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex min-w-[96px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)] ${toneByValue(
+                          r.earned,
+                          earnedMin,
+                          earnedMax,
+                          true
+                        )}`}
+                      >
+                        ${Math.round(r.earned).toLocaleString()}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex min-w-[96px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)] ${toneByValue(
+                          r.roi,
+                          roiMin,
+                          roiMax,
+                          true
+                        )}`}
+                      >
+                        {(r.roi * 100).toFixed(1)}%
+                      </span>
+                    </td>
+
+                    {[1, 2, 3].map((place) => (
+                      <td key={`p-${place}`} className="px-4 py-3">
+                        <span
+                          className={`inline-flex min-w-[86px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)] ${
+                            place === 1
+                              ? "bg-gradient-to-r from-amber-200/90 via-amber-100/75 to-yellow-200/80 text-amber-900 dark:from-amber-500/25 dark:via-amber-400/20 dark:to-yellow-500/15 dark:text-amber-100"
+                              : place === 2
+                              ? "bg-gradient-to-r from-zinc-200/90 via-zinc-100/75 to-zinc-200/80 text-zinc-900 dark:from-zinc-500/25 dark:via-zinc-400/20 dark:to-zinc-500/15 dark:text-zinc-100"
+                              : "bg-gradient-to-r from-orange-200/85 via-orange-100/70 to-amber-200/70 text-orange-900 dark:from-orange-500/25 dark:via-orange-400/20 dark:to-amber-500/15 dark:text-orange-100"
+                          }`}
+                        >
+                          ${Math.round(r.byPlace[place] || 0).toLocaleString()}
+                        </span>
+                      </td>
+                    ))}
+
+                    {weeklyEnabled && (
+                      <td className="px-4 py-3">
+                        <span className="inline-flex min-w-[86px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-900 dark:text-sky-100 bg-gradient-to-r from-sky-200/80 via-sky-100/70 to-emerald-200/70 dark:from-sky-500/20 dark:via-sky-400/20 dark:to-emerald-500/20 shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)]">
+                          ${Math.round(r.weekly || 0).toLocaleString()}
+                        </span>
+                      </td>
+                    )}
+
+                    {payoutTiers > 3 &&
+                      [...Array(payoutTiers - 3)].map((_, idx2) => {
+                        const place = 4 + idx2;
+                        return (
+                          <td key={`p-${place}`} className="px-4 py-3">
+                            <span className="inline-flex min-w-[86px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-800 dark:text-slate-100 bg-white/70 dark:bg-white/[0.08] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)]">
+                              ${Math.round(r.byPlace[place] || 0).toLocaleString()}
+                            </span>
+                          </td>
+                        );
+                      })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
