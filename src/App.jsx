@@ -11,7 +11,6 @@ import {
 } from "/project/workspace/src/ownerMaps.jsx";
 
 import {
-  UploadBox,
   SetupTab,
   MembersTab,
   CareerTab,
@@ -34,6 +33,46 @@ const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {
   type: "preset",
   value: DEFAULT_LEAGUE_ICON_GLYPH,
+};
+const PROVIDER_OPTIONS = [
+  { id: "espn", label: "ESPN" },
+  { id: "sleeper", label: "Sleeper" },
+  { id: "yahoo", label: "Yahoo" },
+];
+const PROVIDER_INSTRUCTIONS = {
+  espn: {
+    title: "Sync an ESPN league",
+    description:
+      "Use the LeagueVault Companion browser extension to securely pull your ESPN history into LeagueVault.",
+    steps: [
+      "Install the LeagueVault Companion extension from the Chrome Web Store and pin it to your browser toolbar.",
+      "Log into ESPN Fantasy on the web and open the league home page you want to sync.",
+      "Click the LeagueVault Companion icon, choose \"Sync ESPN League\", and follow the prompts in the extension.",
+      "When the extension confirms the sync is complete, return to LeagueVault and refresh to load your data.",
+    ],
+  },
+  sleeper: {
+    title: "Sleeper support (early access)",
+    description:
+      "Sleeper syncing is rolling out next. You can still prepare everything with the extension today.",
+    steps: [
+      "Install the LeagueVault Companion extension from the Chrome Web Store and pin it for quick access.",
+      "Sign in to Sleeper on the web and open the league you'd like to track.",
+      "Open the extension, pick \"Sleeper\", and review the coming-soon prompt so you're ready once syncing is live.",
+      "After the extension announces Sleeper support is available, run the sync and refresh LeagueVault to view the league.",
+    ],
+  },
+  yahoo: {
+    title: "Yahoo support (early access)",
+    description:
+      "Yahoo connectivity is in active development. Set up the extension so you can sync the moment it launches.",
+    steps: [
+      "Install and pin the LeagueVault Companion extension from the Chrome Web Store.",
+      "Open Yahoo Fantasy in your browser and navigate to the league home page you plan to import.",
+      "Launch the extension, select \"Yahoo\", and follow the on-screen guidance (sync actions will unlock as soon as they're ready).",
+      "Once the extension completes a Yahoo sync, refresh LeagueVault to pull in the newly imported league.",
+    ],
+  },
 };
 function makeDefaultLeagueIcon() {
   return { ...DEFAULT_LEAGUE_ICON_OBJECT };
@@ -1320,7 +1359,6 @@ export default function App() {
   const [selectedLeagueKey, setSelectedLeagueKey] = useState("");
   const [selectedLeague, setSelectedLeague] = useState("");
   const [moneyInputs, setMoneyInputs] = useState({});
-  const [error, setError] = useState("");
   const [rawRows, setRawRows] = useState([]);
   const [draftByYear, setDraftByYear] = useState({});
   const [adpSourceByYear, setAdpSourceByYear] = useState({});
@@ -1337,6 +1375,8 @@ export default function App() {
   const [hiddenManagers, setHiddenManagers] = useState(new Set());
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
+  const [isAddLeagueOpen, setIsAddLeagueOpen] = useState(false);
+  const [selectedProviderForModal, setSelectedProviderForModal] = useState("");
   const currentYear = React.useMemo(() => {
     const yrs = Object.keys(currentWeekBySeason || {})
       .map(Number)
@@ -2359,6 +2399,19 @@ export default function App() {
       leagueIcon: normalized,
     });
   }
+  const openAddLeagueModal = () => {
+    setSelectedProviderForModal("");
+    setIsAddLeagueOpen(true);
+  };
+  const closeAddLeagueModal = () => {
+    setIsAddLeagueOpen(false);
+    setSelectedProviderForModal("");
+  };
+  const providerDetails =
+    selectedProviderForModal &&
+    PROVIDER_INSTRUCTIONS[selectedProviderForModal]
+      ? PROVIDER_INSTRUCTIONS[selectedProviderForModal]
+      : null;
   const headerIconIsUpload =
     leagueIcon?.type === "upload" &&
     typeof leagueIcon?.value === "string" &&
@@ -2367,6 +2420,8 @@ export default function App() {
     leagueIcon?.type === "preset" && leagueIcon?.value
       ? leagueIcon.value
       : leagueIcon?.previousPreset || DEFAULT_LEAGUE_ICON_GLYPH;
+  const hasLeagues = leagueOptions.length > 0;
+  const displayedLeagueName = hasLeagues ? leagueName : "LeagueVault";
   return (
     <div
       data-theme="luxury"
@@ -2375,7 +2430,7 @@ export default function App() {
       {/* NAVBAR */}
       <div className="navbar bg-base-200 rounded-xl mb-4 shadow relative">
         <div className="flex-1 items-center gap-3">
-          {leagueOptions.length > 0 && (
+          {hasLeagues ? (
             <div className="dropdown">
               <label
                 tabIndex={0}
@@ -2387,7 +2442,7 @@ export default function App() {
                       o.id ===
                       (selectedLeagueId || storeSnapshot.lastSelectedLeagueId)
                   )?.name ||
-                    leagueName ||
+                    displayedLeagueName ||
                     "Select league"}
                 </span>
                 <svg
@@ -2432,149 +2487,170 @@ export default function App() {
                 ))}
               </ul>
             </div>
+          ) : (
+            <span className="text-sm text-base-content/70">
+              No leagues synced yet
+            </span>
           )}
         </div>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <h1 className="text-2xl md:text-4xl font-semibold tracking-tight">
-            {leagueName}
+            {displayedLeagueName}
           </h1>
         </div>
-        <div className="flex-none">
+        <div className="flex-none flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openAddLeagueModal}
+            className="btn btn-sm btn-primary normal-case"
+          >
+            Add league
+          </button>
           <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
         </div>
       </div>
       {/* PAGE CONTAINER */}
       <div className="max-w-none px-0 md:px-0 py-3 ml-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
-              {headerIconIsUpload ? (
-                <img
-                  src={leagueIcon?.value}
-                  alt={`${leagueName || "League"} icon`}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-lg leading-none">{headerIconGlyph}</span>
-              )}
-            </div>
-            <div className="text-lg font-semibold">{leagueName}</div>
-          </div>
-          <div />
-        </div>
-        <div className="mt-6 grid lg:grid-cols-[168px_1fr] gap-4">
-          {/* SIDEBAR */}
-          <aside className="space-y-2">
-            <SidebarButton
-              active={section === "setup"}
-              onClick={() => setSection("setup")}
-            >
-              League Setup
-            </SidebarButton>
-            <SidebarButton
-              active={section === "members"}
-              onClick={() => setSection("members")}
-              disabled={!league}
-            >
-              League Members
-            </SidebarButton>
-            <SidebarButton
-              active={section === "weekly"}
-              onClick={() => setSection("weekly")}
-              disabled={!league}
-            >
-              Weekly Outlook
-            </SidebarButton>
-            <SidebarButton
-              active={section === "career"}
-              onClick={() => setSection("career")}
-              disabled={!league}
-            >
-              Career Stats
-            </SidebarButton>
-            <SidebarButton
-              active={section === "h2h"}
-              onClick={() => setSection("h2h")}
-              disabled={!league}
-            >
-              H2H Matchups
-            </SidebarButton>
-            <SidebarButton
-              active={section === "placements"}
-              onClick={() => setSection("placements")}
-              disabled={!league}
-            >
-              Placements
-            </SidebarButton>
-            <SidebarButton
-              active={section === "money"}
-              onClick={() => setSection("money")}
-              disabled={!league}
-            >
-              Money
-            </SidebarButton>
-            <SidebarButton
-              active={section === "records"}
-              onClick={() => setSection("records")}
-              disabled={!league}
-            >
-              Records
-            </SidebarButton>
-            {/* ✅ Roster */}
-            <SidebarButton
-              active={section === "roster"}
-              onClick={() => setSection("roster")}
-              disabled={!league}
-            >
-              Roster
-            </SidebarButton>
-            <SidebarButton
-              active={section === "trades"}
-              onClick={() => setSection("trades")}
-              disabled={!league}
-            >
-              Trades / Transactions
-            </SidebarButton>
-            <SidebarButton
-              active={section === "draft"}
-              onClick={() => setSection("draft")}
-              disabled={!league}
-            >
-              Draft
-            </SidebarButton>
-            <SidebarButton
-              active={section === "playoffprob"}
-              onClick={() => setSection("playoffprob")}
-              disabled={!league}
-            >
-              Playoff Probability
-            </SidebarButton>
-            <SidebarButton
-              active={section === "luck"}
-              onClick={() => setSection("luck")}
-              disabled={!league}
-            >
-              Luck Index
-            </SidebarButton>
-            <SidebarButton
-              active={section === "scenario"} // 👈 new
-              onClick={() => setSection("scenario")} // 👈 new
-              disabled={!league}
-            >
-              Scenario
-            </SidebarButton>
-          </aside>
-          {/* MAIN */}
-          <main className="space-y-6">
-            {section === "setup" && (
-              <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow">
-                <UploadBox
-                  onFileParsed={handleFileParsed}
-                  error={error}
-                  setError={setError}
-                />
+        {hasLeagues ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
+                  {headerIconIsUpload ? (
+                    <img
+                      src={leagueIcon?.value}
+                      alt={`${displayedLeagueName || "League"} icon`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-lg leading-none">{headerIconGlyph}</span>
+                  )}
+                </div>
+                <div className="text-lg font-semibold">{displayedLeagueName}</div>
               </div>
-            )}
+              <div />
+            </div>
+            <div className="mt-6 grid lg:grid-cols-[168px_1fr] gap-4">
+              {/* SIDEBAR */}
+              <aside className="space-y-2">
+                <SidebarButton
+                  active={section === "setup"}
+                  onClick={() => setSection("setup")}
+                >
+                  League Setup
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "members"}
+                  onClick={() => setSection("members")}
+                  disabled={!league}
+                >
+                  League Members
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "weekly"}
+                  onClick={() => setSection("weekly")}
+                  disabled={!league}
+                >
+                  Weekly Outlook
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "career"}
+                  onClick={() => setSection("career")}
+                  disabled={!league}
+                >
+                  Career Stats
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "h2h"}
+                  onClick={() => setSection("h2h")}
+                  disabled={!league}
+                >
+                  H2H Matchups
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "placements"}
+                  onClick={() => setSection("placements")}
+                  disabled={!league}
+                >
+                  Placements
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "money"}
+                  onClick={() => setSection("money")}
+                  disabled={!league}
+                >
+                  Money
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "records"}
+                  onClick={() => setSection("records")}
+                  disabled={!league}
+                >
+                  Records
+                </SidebarButton>
+                {/* ✅ Roster */}
+                <SidebarButton
+                  active={section === "roster"}
+                  onClick={() => setSection("roster")}
+                  disabled={!league}
+                >
+                  Roster
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "trades"}
+                  onClick={() => setSection("trades")}
+                  disabled={!league}
+                >
+                  Trades / Transactions
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "draft"}
+                  onClick={() => setSection("draft")}
+                  disabled={!league}
+                >
+                  Draft
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "playoffprob"}
+                  onClick={() => setSection("playoffprob")}
+                  disabled={!league}
+                >
+                  Playoff Probability
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "luck"}
+                  onClick={() => setSection("luck")}
+                  disabled={!league}
+                >
+                  Luck Index
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "scenario"} // 👈 new
+                  onClick={() => setSection("scenario")} // 👈 new
+                  disabled={!league}
+                >
+                  Scenario
+                </SidebarButton>
+              </aside>
+              {/* MAIN */}
+              <main className="space-y-6">
+                {section === "setup" && (
+                  <div className="rounded-xl bg-white dark:bg-zinc-900 p-4 shadow space-y-4">
+                    <h2 className="text-xl font-semibold">
+                      Manage your league with the companion extension
+                    </h2>
+                    <p className="text-sm text-base-content/70">
+                      Use the LeagueVault Companion browser extension to refresh stats, pull new seasons, and keep this league in sync. When you need to add another league, open the extension or use the button above to get started.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={openAddLeagueModal}
+                      className="btn btn-sm btn-outline normal-case self-start"
+                    >
+                      Add or sync another league
+                    </button>
+                  </div>
+                )}
             {derivedAll && (
               <>
                 {section === "setup" && (
@@ -2748,8 +2824,115 @@ export default function App() {
             )}
           </main>
         </div>
+          </>
+        ) : (
+          <div className="px-4 md:px-8 py-12 text-center space-y-4">
+            <h2 className="text-3xl font-semibold">
+              Bring your first league into LeagueVault
+            </h2>
+            <p className="max-w-2xl mx-auto text-base-content/70">
+              Install the LeagueVault Companion extension, choose your provider, and run a sync to unlock the full dashboard. You can start the process anytime with the Add league button above.
+            </p>
+            <div>
+              <button
+                type="button"
+                onClick={openAddLeagueModal}
+                className="btn btn-primary normal-case"
+              >
+                Add a league
+              </button>
+            </div>
+          </div>
+        )}
         <Footer />
       </div>
+      {isAddLeagueOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeAddLeagueModal}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-2xl bg-base-100 text-base-content shadow-2xl p-6 space-y-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeAddLeagueModal}
+              className="absolute top-3 right-3 btn btn-sm btn-ghost"
+              aria-label="Close add league dialog"
+            >
+              ✕
+            </button>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold">Add a league</h2>
+              <p className="text-sm text-base-content/70">
+                Choose where your league lives so we can show the right browser-extension instructions.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {PROVIDER_OPTIONS.map((option) => {
+                const isSelected = selectedProviderForModal === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setSelectedProviderForModal(option.id)}
+                    className={`btn btn-sm normal-case ${
+                      isSelected ? "btn-primary" : "btn-outline"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-y-3 text-left">
+              {providerDetails ? (
+                <>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold">
+                      {providerDetails.title}
+                    </h3>
+                    <p className="text-sm text-base-content/70">
+                      {providerDetails.description}
+                    </p>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-2 text-sm">
+                    {providerDetails.steps.map((step, index) => (
+                      <li key={index} className="leading-snug">
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : (
+                <p className="text-sm text-base-content/70">
+                  Select a provider above to see the step-by-step instructions for syncing with the LeagueVault Companion extension.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <a
+                className="link link-primary"
+                href="https://chrome.google.com/webstore/detail/leaguevault-companion"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open the Chrome Web Store listing
+              </a>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={closeAddLeagueModal}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
