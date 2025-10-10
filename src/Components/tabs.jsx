@@ -2863,102 +2863,107 @@ export function PlacementsTab({
       </Card>
 
       {/* Placements grid */}
-      <TableBox>
-        <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-          <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-            <th className="px-3 py-2 text-left">
-              {/* NEW: clickable header */}
-              <button
-                className="inline-flex items-center gap-1"
-                onClick={() => toggleGrid("member")}
-                title="Sort by member"
-              >
-                Member{" "}
-                <span className="opacity-60 text-xs">
-                  {sortArrow(gridSort, "member")}
-                </span>
-              </button>
-            </th>
-            {seasons.map((yr) => (
-              <th key={yr} className="px-3 py-2 text-center">
-                {/* NEW: clickable year header */}
-                <button
-                  className="inline-flex items-center gap-1"
-                  onClick={() => toggleGrid(yr)}
-                  title={`Sort by ${yr}`}
-                >
-                  {yr}{" "}
-                  <span className="opacity-60 text-xs">
-                    {sortArrow(gridSort, yr)}
-                  </span>
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 [&>tr:nth-child(odd)]:bg-zinc-50 dark:[&>tr:nth-child(odd)]:bg-zinc-900 [&>tr:hover]:bg-zinc-100 dark:[&>tr:hover]:bg-zinc-800">
-          {/* NEW: ownersSorted */}
-          {ownersSorted.map((member) => (
-            <tr key={member}>
-              <td className="px-3 py-2 font-medium whitespace-nowrap">
-                {member}
-              </td>
-              {seasons.map((yr) => {
-                const place = league.placementMap?.[member]?.[yr];
-                const poCnt = Number(mergedPlayoffTeams?.[yr] || 0);
-                const hasPOInfo = poCnt > 0;
-                const madePO = !!(place && hasPOInfo && place <= poCnt);
-                const missedPO = !!(place && hasPOInfo && place > poCnt);
-
-                // Shading: green if made playoffs, gray if missed (when we know playoff count)
-                const baseClass = madePO
-                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100"
-                  : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-200";
-
-                // Use trophy images for 1st/2nd/3rd; otherwise show the ordinal/plain number
-                const isTop3 = Number(place) >= 1 && Number(place) <= 3;
-                const label = Number.isFinite(Number(place))
-                  ? ordinal(Number(place))
-                  : "";
-
-                return (
-                  <td key={`${member}-${yr}`} className="px-3 py-2 text-center">
-                    {place ? (
-                      <span
-                        className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg ${
-                          madePO
-                            ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100"
-                            : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-200"
-                        }`}
-                        title={
-                          hasPOInfo
-                            ? madePO
-                              ? "Playoffs: Yes"
-                              : "Playoffs: No"
-                            : "Playoffs: (unknown for this season)"
-                        }
-                      >
-                        {(() => {
-                          const m = medalFor(Number(place));
-                          if (m) return <span className="text-lg">{m}</span>;
-                          return (
-                            <span className="tabular-nums">
-                              {ordinalSafe(Number(place))}
-                            </span>
-                          );
-                        })()}
+      <div className="overflow-x-auto">
+        <div className="relative min-w-full overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-70 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(110%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
+            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          </div>
+          <div className="relative">
+            <table className="min-w-[720px] w-full text-[13px] text-slate-700 dark:text-slate-200">
+              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0 z-10">
+                <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
+                  <th className="px-4 py-3 text-left">
+                    {/* NEW: clickable header */}
+                    <button
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                      onClick={() => toggleGrid("member")}
+                      title="Sort by member"
+                    >
+                      Member{" "}
+                      <span className="opacity-60 text-xs">
+                        {sortArrow(gridSort, "member")}
                       </span>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </TableBox>
+                    </button>
+                  </th>
+                  {seasons.map((yr) => (
+                    <th key={yr} className="px-4 py-3 text-center">
+                      {/* NEW: clickable year header */}
+                      <button
+                        className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
+                        onClick={() => toggleGrid(yr)}
+                        title={`Sort by ${yr}`}
+                      >
+                        {yr}{" "}
+                        <span className="opacity-60 text-xs">
+                          {sortArrow(gridSort, yr)}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody className="relative z-10 divide-y divide-white/40 dark:divide-white/10">
+                {/* NEW: ownersSorted */}
+                {ownersSorted.map((member, idx) => (
+                  <tr
+                    key={member}
+                    className={`transition-colors ${
+                      idx % 2 === 0
+                        ? "bg-white/70 dark:bg-white/[0.04]"
+                        : "bg-white/45 dark:bg-white/[0.025]"
+                    } hover:bg-sky-100/60 dark:hover:bg-sky-500/10`}
+                  >
+                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                      {member}
+                    </td>
+                    {seasons.map((yr) => {
+                      const place = league.placementMap?.[member]?.[yr];
+                      const poCnt = Number(mergedPlayoffTeams?.[yr] || 0);
+                      const hasPOInfo = poCnt > 0;
+                      const madePO = !!(place && hasPOInfo && place <= poCnt);
+
+                      return (
+                        <td key={`${member}-${yr}`} className="px-4 py-3 text-center">
+                          {place ? (
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.55)] ${
+                                madePO
+                                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100"
+                                  : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-200"
+                              }`}
+                              title={
+                                hasPOInfo
+                                  ? madePO
+                                    ? "Playoffs: Yes"
+                                    : "Playoffs: No"
+                                  : "Playoffs: (unknown for this season)"
+                              }
+                            >
+                              {(() => {
+                                const m = medalFor(Number(place));
+                                if (m) return <span className="text-lg drop-shadow-sm">{m}</span>;
+                                return (
+                                  <span className="tabular-nums font-semibold">
+                                    {ordinalSafe(Number(place))}
+                                  </span>
+                                );
+                              })()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 dark:text-slate-500">—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       {/* ============================================================
           Placements over time (toggle owners, shaded playoff area)
           ============================================================ */}
