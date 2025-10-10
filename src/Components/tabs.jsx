@@ -2374,6 +2374,23 @@ export function PlacementsTab({
 }) {
   if (!league) return null;
 
+  const SoftButton = ({ children, className = "", disabled = false, ...props }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      {...props}
+      className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em]
+        text-slate-700 dark:text-slate-200
+        bg-gradient-to-r from-white/95 via-white/80 to-white/90 dark:from-zinc-900/80 dark:via-zinc-900/55 dark:to-zinc-950/70
+        border border-white/70 dark:border-white/10 shadow-[0_18px_40px_-28px_rgba(30,41,59,0.85)] backdrop-blur transition-all duration-200
+        ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_52px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70
+        ${disabled ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none" : ""}
+        ${className}`}
+    >
+      <span className="tracking-[0.32em]">{children}</span>
+    </button>
+  );
+
   const hiddenManagersSet = React.useMemo(() => {
     const list = Array.isArray(league?.hiddenManagers)
       ? league.hiddenManagers
@@ -2508,7 +2525,7 @@ export function PlacementsTab({
     });
 
     const avg = count ? total / count : 0;
-    return { member: m, avg, firsts, top3, playoffs, lasts };
+    return { member: m, avg, firsts, top3, playoffs, lasts, count };
   });
   // sorting for the summary table
   const [sumSort, setSumSort] = React.useState({ key: "avg", dir: "asc" });
@@ -2542,6 +2559,69 @@ export function PlacementsTab({
 
     return arr;
   }, [summary, sumSort]);
+
+  const heroTiles = React.useMemo(() => {
+    if (!summary.length) return [];
+
+    const playable = summary.filter((s) => (s?.count || 0) > 0);
+    const bestAvg = playable
+      .filter((s) => Number.isFinite(s.avg) && s.avg > 0)
+      .sort((a, b) => a.avg - b.avg)[0];
+    const mostTitles = [...summary]
+      .sort((a, b) => b.firsts - a.firsts || a.avg - b.avg)[0];
+    const bestPlayoff = playable
+      .map((s) => ({
+        ...s,
+        rate: s.count > 0 ? s.playoffs / s.count : 0,
+      }))
+      .sort((a, b) => b.rate - a.rate || a.avg - b.avg)[0];
+
+    const tiles = [];
+    if (bestAvg) {
+      tiles.push({
+        id: "avg",
+        label: "Best Average Finish",
+        owner: bestAvg.member,
+        value: bestAvg.avg.toFixed(2),
+        detail: `${bestAvg.count} season${bestAvg.count === 1 ? "" : "s"}`,
+        accent:
+          "from-amber-200/80 via-orange-200/70 to-rose-200/60 border-amber-300/70 shadow-[0_25px_60px_-35px_rgba(245,158,11,0.75)] text-amber-900 dark:text-amber-100",
+        textGradient:
+          "from-amber-500 via-orange-500 to-rose-500",
+      });
+    }
+    if (mostTitles) {
+      tiles.push({
+        id: "titles",
+        label: "Most Championships",
+        owner: mostTitles.member,
+        value: `${mostTitles.firsts}x`,
+        detail:
+          mostTitles.firsts === 1
+            ? "Title secured"
+            : `${mostTitles.firsts} trophies earned`,
+        accent:
+          "from-sky-200/80 via-indigo-200/70 to-purple-200/60 border-sky-300/60 shadow-[0_25px_60px_-35px_rgba(96,165,250,0.7)] text-slate-800 dark:text-slate-100",
+        textGradient:
+          "from-sky-500 via-blue-500 to-indigo-500",
+      });
+    }
+    if (bestPlayoff) {
+      const pct = Math.round((bestPlayoff.rate || 0) * 100);
+      tiles.push({
+        id: "playoffs",
+        label: "Playoff Rate Leader",
+        owner: bestPlayoff.member,
+        value: `${pct}%`,
+        detail: `${bestPlayoff.playoffs} of ${bestPlayoff.count} seasons`,
+        accent:
+          "from-emerald-200/80 via-teal-200/70 to-cyan-200/60 border-emerald-300/60 shadow-[0_25px_60px_-35px_rgba(16,185,129,0.7)] text-emerald-900 dark:text-emerald-100",
+        textGradient:
+          "from-emerald-500 via-teal-500 to-cyan-500",
+      });
+    }
+    return tiles;
+  }, [summary]);
   const ordinalSafe = (n) => {
     const x = Number(n);
     if (!Number.isFinite(x)) return "";
@@ -2705,17 +2785,50 @@ export function PlacementsTab({
 
   return (
     <div className="space-y-6">
+      {heroTiles.length ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {heroTiles.map((tile) => (
+            <div
+              key={tile.id}
+              className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br ${tile.accent}
+                px-5 py-6 md:px-6 md:py-7 shadow-[0_32px_70px_-40px_rgba(15,23,42,0.8)] backdrop-blur-xl`}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-80">
+                <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_0%_0%,rgba(255,255,255,0.55),transparent_55%),radial-gradient(130%_130%_at_100%_100%,rgba(255,255,255,0.35),transparent_60%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]" />
+              </div>
+              <div className="relative z-10 space-y-3 text-slate-800 dark:text-slate-100">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-600/80 dark:text-slate-200/70">
+                  {tile.label}
+                </div>
+                <div
+                  className={`text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r ${tile.textGradient} bg-clip-text text-transparent drop-shadow-[0_2px_6px_rgba(255,255,255,0.28)]`}
+                >
+                  {tile.value}
+                </div>
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700/90 dark:text-slate-100/90">
+                  {tile.owner}
+                </div>
+                <div className="text-xs text-slate-600/80 dark:text-slate-200/70">
+                  {tile.detail}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {/* Overrides row */}
       <Card
         title="Playoff teams per season"
         right={
-          <button
-            className="btn btn-xs"
+          <SoftButton
             onClick={commit}
+            className="text-amber-800 dark:text-amber-200 bg-gradient-to-r from-amber-200/90 via-amber-100/70 to-yellow-200/80 border-amber-400/70 hover:shadow-[0_26px_60px_-32px_rgba(245,158,11,0.6)]"
             title="Save overrides"
           >
             Save
-          </button>
+          </SoftButton>
         }
       >
         <div className="flex flex-wrap gap-3 items-center">
@@ -2851,17 +2964,16 @@ export function PlacementsTab({
           ============================================================ */}
       <Card title="Placements over time">
         {/* Quick toggles */}
-        <div className="mb-2 flex gap-2">
-          <button
-            type="button"
-            className="btn btn-xs"
-            onClick={selectAllOwners}
-          >
+        <div className="mb-3 flex flex-wrap gap-2">
+          <SoftButton className="px-2 py-1 text-[10px]" onClick={selectAllOwners}>
             Select all
-          </button>
-          <button type="button" className="btn btn-xs" onClick={clearAllOwners}>
+          </SoftButton>
+          <SoftButton
+            className="px-2 py-1 text-[10px] text-rose-700 dark:text-rose-200 bg-gradient-to-r from-rose-100/80 via-pink-100/70 to-orange-100/60 border-rose-300/60 hover:shadow-[0_22px_52px_-32px_rgba(244,114,182,0.55)]"
+            onClick={clearAllOwners}
+          >
             Deselect all
-          </button>
+          </SoftButton>
         </div>
 
         {/* Owner toggles */}
@@ -3074,6 +3186,22 @@ export function PlacementsTab({
 /* MoneyTab (updated with dynamic heat, collapse, copy/paste, and earnings chart) */
 export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
   if (!league) return null;
+  const SoftButton = ({ children, className = "", disabled = false, ...props }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      {...props}
+      className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em]
+        text-slate-700 dark:text-slate-200
+        bg-gradient-to-r from-white/95 via-white/80 to-white/90 dark:from-zinc-900/80 dark:via-zinc-900/55 dark:to-zinc-950/70
+        border border-white/70 dark:border-white/10 shadow-[0_18px_40px_-28px_rgba(30,41,59,0.85)] backdrop-blur transition-all duration-200
+        ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_52px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70
+        ${disabled ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none" : ""}
+        ${className}`}
+    >
+      <span className="tracking-[0.32em]">{children}</span>
+    </button>
+  );
   const seasons = league.seasonsAll || [];
   const rawOwners = Array.isArray(league?.owners) ? league.owners : [];
   const hidden = new Set(
@@ -3249,6 +3377,94 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
     return 0;
   });
 
+  const fmtCurrency = (n) =>
+    `$${Math.round(Number(n || 0)).toLocaleString()}`;
+  const totalEarnedAll = rows.reduce(
+    (sum, r) => sum + (Number(r.earned) || 0),
+    0
+  );
+  const totalInvestedAll = rows.reduce(
+    (sum, r) => sum + (Number(r.invested) || 0),
+    0
+  );
+  const topEarnerRow = rows.reduce((best, cur) =>
+    best == null || Number(cur.earned || 0) > Number(best.earned || 0)
+      ? cur
+      : best,
+    null
+  );
+  const bestRoiRow = rows
+    .filter((r) => Number(r.invested || 0) > 0)
+    .reduce(
+      (best, cur) =>
+        best == null || Number(cur.roi || 0) > Number(best.roi || 0)
+          ? cur
+          : best,
+      null
+    );
+  const weeklyBossRow = rows.reduce((best, cur) =>
+    best == null || Number(cur.weekly || 0) > Number(best.weekly || 0)
+      ? cur
+      : best,
+    null
+  );
+  const moneyHeroTiles = [
+    rows.length
+      ? {
+          id: "pool",
+          label: "Total Prize Pool",
+          owner: "League",
+          value: fmtCurrency(totalEarnedAll),
+          detail: `${fmtCurrency(totalInvestedAll)} collected across ${seasons.length} season${
+            seasons.length === 1 ? "" : "s"
+          }`,
+          accent:
+            "from-amber-200/85 via-yellow-200/70 to-orange-200/60 border-amber-300/70 shadow-[0_28px_60px_-35px_rgba(251,191,36,0.75)] text-amber-900 dark:text-amber-100",
+          textGradient: "from-amber-500 via-orange-500 to-yellow-500",
+        }
+      : null,
+    topEarnerRow
+      ? {
+          id: "earner",
+          label: "Top Earner",
+          owner: topEarnerRow.owner,
+          value: fmtCurrency(topEarnerRow.earned),
+          detail: `Net ${fmtCurrency(
+            (Number(topEarnerRow.earned) || 0) -
+              (Number(topEarnerRow.invested) || 0)
+          )}`,
+          accent:
+            "from-violet-200/80 via-purple-200/70 to-pink-200/60 border-violet-300/70 shadow-[0_28px_60px_-35px_rgba(167,139,250,0.7)] text-violet-900 dark:text-violet-100",
+          textGradient: "from-violet-500 via-purple-500 to-pink-500",
+        }
+      : null,
+    bestRoiRow
+      ? {
+          id: "roi",
+          label: "Best ROI",
+          owner: bestRoiRow.owner,
+          value: `${Math.round(Number(bestRoiRow.roi || 0) * 100)}%`,
+          detail: `${fmtCurrency(Number(bestRoiRow.earned || 0))} on ${fmtCurrency(
+            Number(bestRoiRow.invested || 0)
+          )}`,
+          accent:
+            "from-emerald-200/80 via-teal-200/70 to-cyan-200/60 border-emerald-300/70 shadow-[0_28px_60px_-35px_rgba(52,211,153,0.65)] text-emerald-900 dark:text-emerald-100",
+          textGradient: "from-emerald-500 via-teal-500 to-cyan-500",
+        }
+      : weeklyBossRow
+      ? {
+          id: "weekly",
+          label: "Weekly Bonus Boss",
+          owner: weeklyBossRow.owner,
+          value: fmtCurrency(weeklyBossRow.weekly),
+          detail: "Weekly payouts collected",
+          accent:
+            "from-sky-200/80 via-blue-200/70 to-cyan-200/60 border-sky-300/70 shadow-[0_28px_60px_-35px_rgba(96,165,250,0.65)] text-sky-900 dark:text-sky-100",
+          textGradient: "from-sky-500 via-blue-500 to-cyan-500",
+        }
+      : null,
+  ].filter(Boolean);
+
   // Value-based tones for Earned/ROI (always reflects values, not order)
   const extent = (arr) => {
     let min = Infinity,
@@ -3381,40 +3597,73 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
 
   return (
     <div className="space-y-6">
+      {moneyHeroTiles.length ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {moneyHeroTiles.map((tile) => (
+            <div
+              key={tile.id}
+              className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br ${tile.accent}
+                px-5 py-6 md:px-6 md:py-7 shadow-[0_32px_70px_-40px_rgba(15,23,42,0.8)] backdrop-blur-xl`}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-80">
+                <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_0%_0%,rgba(255,255,255,0.55),transparent_55%),radial-gradient(130%_130%_at_100%_100%,rgba(255,255,255,0.35),transparent_60%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]" />
+              </div>
+              <div className="relative z-10 space-y-3 text-slate-800 dark:text-slate-100">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-600/80 dark:text-slate-200/70">
+                  {tile.label}
+                </div>
+                <div
+                  className={`text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r ${tile.textGradient} bg-clip-text text-transparent drop-shadow-[0_2px_6px_rgba(255,255,255,0.28)]`}
+                >
+                  {tile.value}
+                </div>
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700/90 dark:text-slate-100/90">
+                  {tile.owner}
+                </div>
+                <div className="text-xs text-slate-600/80 dark:text-slate-200/70">
+                  {tile.detail}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <Card
         title="Season Buy-ins & Payouts"
         right={
           <div className="flex items-center gap-2">
             {/* collapse/expand */}
-            <button
-              className="px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs"
+            <SoftButton
+              className="px-2 py-1 text-[10px]"
               onClick={() => setInputsOpen((o) => !o)}
               title={inputsOpen ? "Collapse inputs" : "Expand inputs"}
             >
               {inputsOpen ? "Collapse" : "Expand"}
-            </button>
+            </SoftButton>
 
             {/* copy mode indicator/cancel */}
             {copiedFrom != null ? (
-              <button
-                className="px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-xs"
+              <SoftButton
+                className="px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200 bg-gradient-to-r from-amber-200/90 via-amber-100/70 to-yellow-200/80 border-amber-400/70 hover:shadow-[0_26px_60px_-32px_rgba(245,158,11,0.6)]"
                 onClick={() => setCopiedFrom(null)}
                 title="Exit copy mode"
               >
                 Cancel copy
-              </button>
+              </SoftButton>
             ) : null}
 
-            <button
-              className="px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs"
+            <SoftButton
+              className="px-2 py-1 text-[10px]"
               onClick={() => setPayoutTiers((p) => Math.min(10, p + 1))}
               disabled={!inputsOpen}
               title={!inputsOpen ? "Expand to edit tiers" : "Add payout tier"}
             >
               + Add payout tier
-            </button>
-            <button
-              className="px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs"
+            </SoftButton>
+            <SoftButton
+              className="px-2 py-1 text-[10px] text-cyan-800 dark:text-cyan-100 bg-gradient-to-r from-cyan-200/80 via-sky-200/70 to-emerald-200/60 border-cyan-300/70 hover:shadow-[0_26px_60px_-32px_rgba(14,165,233,0.55)]"
               onClick={() => setShowWeekly(true)}
               disabled={!inputsOpen}
               title={
@@ -3422,7 +3671,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
               }
             >
               + Add weekly payout
-            </button>
+            </SoftButton>
           </div>
         }
       >
@@ -3500,27 +3749,29 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                   )}
                   <td className="px-2 py-1 text-right">
                     {copiedFrom == null ? (
-                      <button
-                        className="px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-700 text-xs"
+                      <SoftButton
+                        className="px-2 py-1 text-[10px]"
                         onClick={() => setCopiedFrom(yr)}
                         title="Copy this year's payouts"
                       >
                         Copy
-                      </button>
+                      </SoftButton>
                     ) : copiedFrom === yr ? (
-                      <span className="px-2 py-1 rounded bg-emerald-200 dark:bg-emerald-900/40 text-xs">
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-900 dark:text-emerald-100 bg-gradient-to-r from-emerald-200/80 via-emerald-100/70 to-teal-200/60 border border-emerald-300/70 shadow-[0_18px_40px_-30px_rgba(16,185,129,0.6)]"
+                      >
                         Copied ✓
                       </span>
                     ) : (
-                      <button
-                        className="px-2 py-1 rounded bg-blue-200 dark:bg-blue-900/40 text-xs"
+                      <SoftButton
+                        className="px-2 py-1 text-[10px] text-sky-900 dark:text-sky-100 bg-gradient-to-r from-sky-200/80 via-indigo-200/70 to-blue-200/60 border-sky-300/70 hover:shadow-[0_24px_55px_-30px_rgba(59,130,246,0.55)]"
                         onClick={() =>
                           pastePayloadToYear(yr, buildRowPayload(copiedFrom))
                         }
                         title={`Paste values from ${copiedFrom}`}
                       >
                         Paste
-                      </button>
+                      </SoftButton>
                     )}
                   </td>
                 </tr>
