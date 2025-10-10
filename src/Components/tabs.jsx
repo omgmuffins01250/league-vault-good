@@ -8816,107 +8816,106 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         {showBreakdown && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
-              className="absolute inset-0 bg-black/50"
+              className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
               onClick={() => setShowBreakdown(false)}
             />
-            <div className="relative w-full max-w-3xl rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
-                <div className="text-base font-semibold">{breakdownTitle}</div>
-                <button
-                  className="btn btn-xs"
-                  onClick={() => setShowBreakdown(false)}
-                >
-                  Close
-                </button>
-              </div>
+            <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+              <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(253,230,138,0.22),transparent_55%),radial-gradient(130%_160%_at_100%_100%,rgba(251,191,36,0.18),transparent_60%)]" />
+              <div className="relative flex max-h-[85vh] flex-col">
+                <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/60 dark:border-white/10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur">
+                  <div className="text-[12px] font-semibold uppercase tracking-[0.32em] text-amber-800/85 dark:text-amber-100/85">
+                    {breakdownTitle}
+                  </div>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-amber-700 shadow-[0_18px_45px_-32px_rgba(251,191,36,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_26px_60px_-38px_rgba(251,191,36,0.8)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:bg-zinc-950/70 dark:text-amber-100"
+                    onClick={() => setShowBreakdown(false)}
+                  >
+                    Close
+                  </button>
+                </div>
 
-              <div className="p-3 text-xs text-zinc-500">
-                Contribution = (Pick POS rank − Finish POS rank)
-                {weighted ? (
-                  <>
-                    {" "}
-                    ÷ (Pick POS rank<sup>{alpha}</sup>)
-                  </>
-                ) : null}
-                {includeKDst ? null : "  • K/DST excluded"}
-                {!includeKeepers ? "  • Keepers excluded" : null}
-              </div>
+                <div className="px-5 pt-4 pb-2 text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-100/75">
+                  Contribution = (Pick POS rank − Finish POS rank)
+                  {weighted ? (
+                    <>
+                      {" "}
+                      ÷ (Pick POS rank<sup>{alpha}</sup>)
+                    </>
+                  ) : null}
+                  {includeKDst ? null : "  • K/DST excluded"}
+                  {!includeKeepers ? "  • Keepers excluded" : null}
+                </div>
 
-              <div className="px-3 pb-3">
-                <div className="overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800 max-h-[60vh]">
-                  <table className="w-full text-sm">
-                    <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                      <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-                        {breakdownRows.some((r) => r.year) && (
-                          <th className="px-3 py-2 text-left w-[68px]">Year</th>
-                        )}
-                        <th className="px-3 py-2 text-left w-[56px]">Rd</th>
-                        <th className="px-3 py-2 text-left">Player</th>
-                        <th className="px-3 py-2 text-center w-[70px]">ADP</th>
-                        <th className="px-3 py-2 text-center w-[90px]">
-                          Pick POS
-                        </th>
-                        <th className="px-3 py-2 text-center w-[110px]">
-                          Finish POS
-                        </th>
-                        <th className="px-3 py-2 text-right w-[110px]">
-                          Contribution
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                      {breakdownRows.map((r) => {
-                        const color =
-                          r.contrib > 0
-                            ? "text-emerald-600"
-                            : r.contrib < 0
-                            ? "text-rose-600"
-                            : "text-zinc-500";
-                        return (
-                          <tr
-                            key={r.key}
-                            className="[&:hover]:bg-zinc-100 dark:[&:hover]:bg-zinc-800"
-                          >
-                            {r.year && <td className="px-3 py-2">{r.year}</td>}
-                            <td className="px-3 py-2">{r.round}</td>
-                            <td className="px-3 py-2">{r.player}</td>
-                            <td className="px-3 py-2 text-center tabular-nums">
-                              {r.adp}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              {r.pickPos}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              {r.finishPos}
-                            </td>
-                            <td
-                              className={`px-3 py-2 text-right tabular-nums font-medium ${
-                                r.contrib > 0
-                                  ? "text-emerald-600"
-                                  : r.contrib < 0
-                                  ? "text-rose-600"
-                                  : "text-zinc-500"
-                              }`}
-                            >
-                              {weighted
-                                ? r.contrib.toFixed(3)
-                                : r.contrib.toFixed(1)}
-                            </td>
+                <div className="px-5 pb-5">
+                  <div className="relative overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-br from-amber-200/55 via-amber-100/35 to-white/85 shadow-[0_30px_75px_-48px_rgba(251,191,36,0.6)] backdrop-blur dark:from-amber-500/18 dark:via-amber-400/10 dark:to-zinc-950/80">
+                    <div className="pointer-events-none absolute inset-0">
+                      <div className="absolute inset-0 opacity-70 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(253,230,138,0.2),transparent_55%),radial-gradient(120%_160%_at_100%_100%,rgba(251,191,36,0.16),transparent_60%)]" />
+                      <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                    </div>
+                    <div className="relative overflow-auto rounded-[1.1rem] border border-white/50 bg-white/80 dark:border-white/5 dark:bg-amber-950/20 max-h-[60vh]">
+                      <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+                        <thead className="sticky top-0 bg-white/85 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-800/85 dark:bg-amber-950/40 dark:text-amber-100/80">
+                          <tr className="border-b border-amber-300/50 dark:border-amber-500/30">
+                            {breakdownRows.some((r) => r.year) && (
+                              <th className="px-3 py-2 text-left w-[68px]">Year</th>
+                            )}
+                            <th className="px-3 py-2 text-left w-[56px]">Rd</th>
+                            <th className="px-3 py-2 text-left">Player</th>
+                            <th className="px-3 py-2 text-center w-[70px]">ADP</th>
+                            <th className="px-3 py-2 text-center w-[90px]">Pick POS</th>
+                            <th className="px-3 py-2 text-center w-[110px]">Finish POS</th>
+                            <th className="px-3 py-2 text-right w-[110px]">Contribution</th>
                           </tr>
-                        );
-                      })}
-                      {breakdownRows.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-3 py-8 text-center text-zinc-500"
-                          >
-                            No scorable picks with current filters.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-amber-200/60 dark:divide-amber-500/30">
+                          {breakdownRows.map((r) => {
+                            const color =
+                              r.contrib > 0
+                                ? "text-emerald-500 dark:text-emerald-300"
+                                : r.contrib < 0
+                                ? "text-rose-500 dark:text-rose-300"
+                                : "text-amber-700/70 dark:text-amber-200/70";
+                            return (
+                              <tr
+                                key={r.key}
+                                className="transition-colors duration-150 ease-out hover:bg-white/70 dark:hover:bg-amber-500/20"
+                              >
+                                {r.year && <td className="px-3 py-2">{r.year}</td>}
+                                <td className="px-3 py-2">{r.round}</td>
+                                <td className="px-3 py-2">{r.player}</td>
+                                <td className="px-3 py-2 text-center tabular-nums">
+                                  {r.adp}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {r.pickPos}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {r.finishPos}
+                                </td>
+                                <td
+                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${color}`}
+                                >
+                                  {weighted
+                                    ? r.contrib.toFixed(3)
+                                    : r.contrib.toFixed(1)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {breakdownRows.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan={7}
+                                className="px-3 py-8 text-center text-amber-800/75 dark:text-amber-200/70"
+                              >
+                                No scorable picks with current filters.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8924,72 +8923,79 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         )}
 
         {groupByOwner(rows).map(({ owner, picks }) => (
-          <div key={owner} className="mb-6">
+          <div key={owner} className="mb-8">
             <button
               type="button"
-              className="text-base font-medium mb-2 hover:underline hover:opacity-90"
+              className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-white/85 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-amber-800 shadow-[0_22px_55px_-36px_rgba(251,191,36,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_30px_70px_-40px_rgba(251,191,36,0.85)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:bg-zinc-950/80 dark:text-amber-100"
               title="Show pick-by-pick breakdown"
               onClick={() => openOwnerBreakdownForYear(owner)}
             >
-              {ownerDisplay(owner)}
+              <span>{ownerDisplay(owner)}</span>
+              <span className="text-[9px] font-medium uppercase tracking-[0.4em] text-amber-500/80 dark:text-amber-200/70">
+                Picks
+              </span>
             </button>
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 dark:bg-zinc-800">
-                  <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-                    <th className="px-3 py-2 text-left w-[56px]">Rd</th>
-                    <th className="px-3 py-2 text-left w-[88px]">Overall</th>
-                    <th className="px-3 py-2 text-left w-[90px]">
-                      Pick&nbsp;POS
-                    </th>
-                    <th className="px-3 py-2 text-left">Player</th>
-                    <th className="px-3 py-2 text-center w-[90px]">ADP</th>
-                    <th className="px-3 py-2 text-center w-[90px]">POS</th>
-                    <th className="px-3 py-2 text-center w-[120px]">
-                      Finish (Pos)
-                    </th>
-                    <th className="px-3 py-2 text-center w-[90px]">Keeper</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 [&>tr:nth-child(odd)]:bg-zinc-50 dark:[&>tr:nth-child(odd)]:bg-zinc-900">
-                  {picks.map((r, i) => (
-                    <tr
-                      key={i}
-                      className="[&:hover]:bg-zinc-100 dark:[&:hover]:bg-zinc-800"
-                    >
-                      <td className="px-3 py-2">{r.round ?? "—"}</td>
-                      <td className="px-3 py-2">{r.overall ?? "—"}</td>
-                      <td className="px-3 py-2">{getPickPos(r)}</td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium">
-                          {r.player || "Unknown Player"}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          {getUnderName(r)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-center">{fmtADP(r.adp)}</td>
-                      <td className="px-3 py-2 text-center">{getPos(r)}</td>
-                      <td className="px-3 py-2 text-center">
-                        {getFinishPos(r)}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {r.keeper ? "Yes" : "No"}
-                      </td>
+            <div className="relative overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-br from-amber-200/55 via-amber-100/35 to-white/85 p-3 shadow-[0_35px_85px_-52px_rgba(251,191,36,0.7)] backdrop-blur dark:from-amber-500/18 dark:via-amber-400/10 dark:to-zinc-950/80">
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-0 opacity-75 bg-[radial-gradient(130%_160%_at_0%_0%,rgba(253,230,138,0.22),transparent_60%),radial-gradient(130%_170%_at_100%_100%,rgba(251,191,36,0.18),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <div className="relative overflow-x-auto rounded-[1.05rem] border border-white/50 bg-white/80 dark:border-white/5 dark:bg-amber-950/20">
+                <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+                  <thead className="sticky top-0 bg-white/80 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-800/85 dark:bg-amber-950/40 dark:text-amber-100/80">
+                    <tr className="border-b border-amber-300/50 dark:border-amber-500/30">
+                      <th className="px-3 py-2 text-left w-[56px]">Rd</th>
+                      <th className="px-3 py-2 text-left w-[88px]">Overall</th>
+                      <th className="px-3 py-2 text-left w-[90px]">Pick&nbsp;POS</th>
+                      <th className="px-3 py-2 text-left">Player</th>
+                      <th className="px-3 py-2 text-center w-[90px]">ADP</th>
+                      <th className="px-3 py-2 text-center w-[90px]">POS</th>
+                      <th className="px-3 py-2 text-center w-[120px]">Finish (Pos)</th>
+                      <th className="px-3 py-2 text-center w-[90px]">Keeper</th>
                     </tr>
-                  ))}
-                  {picks.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-3 py-8 text-center text-zinc-500"
+                  </thead>
+                  <tbody className="divide-y divide-amber-200/60 dark:divide-amber-500/30 [&>tr:nth-child(odd)]:bg-white/40 dark:[&>tr:nth-child(odd)]:bg-amber-950/25">
+                    {picks.map((r, i) => (
+                      <tr
+                        key={i}
+                        className="transition-colors duration-150 ease-out hover:bg-white/70 dark:hover:bg-amber-500/20"
                       >
-                        No draft picks found for {owner}.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        <td className="px-3 py-2">{r.round ?? "—"}</td>
+                        <td className="px-3 py-2">{r.overall ?? "—"}</td>
+                        <td className="px-3 py-2">{getPickPos(r)}</td>
+                        <td className="px-3 py-2">
+                          <div className="font-semibold tracking-wide">
+                            {r.player || "Unknown Player"}
+                          </div>
+                          <div className="text-[11px] uppercase tracking-[0.24em] text-amber-800/70 dark:text-amber-100/70">
+                            {getUnderName(r)}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center tabular-nums">
+                          {fmtADP(r.adp)}
+                        </td>
+                        <td className="px-3 py-2 text-center">{getPos(r)}</td>
+                        <td className="px-3 py-2 text-center">
+                          {getFinishPos(r)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.keeper ? "Yes" : "No"}
+                        </td>
+                      </tr>
+                    ))}
+                    {picks.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-3 py-8 text-center text-amber-800/75 dark:text-amber-200/70"
+                        >
+                          No draft picks found for {owner}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         ))}
