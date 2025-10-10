@@ -10781,11 +10781,85 @@ export function LuckIndexTab({
     );
     return out;
   }
-  const get = (obj, ...keys) =>
-    keys.reduce((o, k) => (o == null ? o : o[k]), obj);
+  const get = React.useCallback(
+    (obj, ...keys) => keys.reduce((o, k) => (o == null ? o : o[k]), obj),
+    []
+  );
   const yn = (y) => [y, String(y)];
   const tn = (t) => [t, String(t)];
   const wn = (w) => [w, String(w)];
+  const resolveCurrentWeekExclusive = React.useCallback(
+    (seasonKey) => {
+      const candidates = new Set();
+      const pushCandidate = (value) => {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) {
+          candidates.add(Math.floor(n));
+        }
+      };
+
+      const possibleKeys = (() => {
+        const num = Number(seasonKey);
+        const list = [seasonKey];
+        if (Number.isFinite(num)) list.push(num);
+        const str = String(seasonKey);
+        if (str !== seasonKey) list.push(str);
+        if (Number.isFinite(num)) {
+          const numStr = String(num);
+          if (!list.includes(numStr)) list.push(numStr);
+        }
+        return Array.from(new Set(list.filter((k) => k != null)));
+      })();
+
+      const pushFromSource = (source, key) => {
+        if (source == null) return;
+        if (typeof source === "number" || typeof source === "string") {
+          pushCandidate(source);
+          return;
+        }
+        if (typeof source.get === "function") {
+          const direct = source.get(key);
+          if (direct != null) pushCandidate(direct);
+          const alt = source.get(String(key));
+          if (alt != null) pushCandidate(alt);
+        }
+        if (typeof source === "object") {
+          if (Object.prototype.hasOwnProperty.call(source, key)) {
+            pushCandidate(source[key]);
+          }
+          const keyStr = String(key);
+          if (Object.prototype.hasOwnProperty.call(source, keyStr)) {
+            pushCandidate(source[keyStr]);
+          }
+        }
+      };
+
+      for (const key of possibleKeys) {
+        pushFromSource(league?.currentWeekByYear, key);
+        pushFromSource(league?.espnCurrentWeekBySeason, key);
+        pushFromSource(league?.currentWeekBySeason, key);
+        pushFromSource(league?.currentWeek, key);
+      }
+
+      for (const key of possibleKeys) {
+        const seasonInfo =
+          get(league, "seasonsByYear", key) ??
+          get(league, "seasonsByYear", Number(key));
+        if (!seasonInfo) continue;
+        pushCandidate(seasonInfo?.currentWeek);
+        pushCandidate(seasonInfo?.currentMatchupPeriod);
+        pushCandidate(seasonInfo?.currentMatchupPeriodId);
+        pushCandidate(seasonInfo?.status?.currentMatchupPeriod);
+        pushCandidate(seasonInfo?.status?.currentScoringPeriod);
+        pushCandidate(seasonInfo?.status?.latestScoringPeriod);
+        pushCandidate(seasonInfo?.status?.matchupPeriodId);
+      }
+
+      if (!candidates.size) return 0;
+      return Math.max(...candidates);
+    },
+    [league, get]
+  );
 
   // --- Build name index (playerId → name) from existing rosters ---
   const nameIndex = React.useMemo(() => {
@@ -10841,14 +10915,14 @@ export function LuckIndexTab({
     const totals = {};
     for (const [yStr, byTeam] of Object.entries(rostersByYear || {})) {
       const y = Number(yStr);
-      const cap = Number(league?.currentWeekByYear?.[y] || 0) || 99;
+      const capExclusive = resolveCurrentWeekExclusive(yStr);
       totals[y] = totals[y] || {};
       for (const [tidStr, byWeek] of Object.entries(byTeam || {})) {
         const tid = Number(tidStr);
         totals[y][tid] = totals[y][tid] || {};
         for (const [wStr, entries] of Object.entries(byWeek || {})) {
           const w = Number(wStr);
-          if (w > cap) continue;
+          if (capExclusive > 0 && w >= capExclusive) continue;
           let proj = 0,
             actual = 0;
           for (const e of entries || []) {
@@ -10862,7 +10936,7 @@ export function LuckIndexTab({
       }
     }
     return totals;
-  }, [rostersByYear, league?.currentWeekByYear]);
+  }, [rostersByYear, resolveCurrentWeekExclusive]);
 
   const games = React.useMemo(() => getGamesFlexible(league), [league]);
 
@@ -10891,12 +10965,8 @@ export function LuckIndexTab({
       if (!y || !w || !t1 || !t2) continue;
 
       // respect currentWeek cap
-      const cap = Math.max(
-        0,
-        ...yn(y).map((ky) => Number(get(league, "currentWeekByYear", ky)) || 0)
-      );
-      if (cap && w > cap) continue;
-
+      const capExclusive = resolveCurrentWeekExclusive(y);
+      if (capExclusive > 0 && w >= capExclusive) continue;
       // resolve owners
       const o1 = ownerNameOf(y, t1);
       const o2 = ownerNameOf(y, t2);
@@ -10947,7 +11017,7 @@ export function LuckIndexTab({
 
     console.log("[Luck] comp1 (opp proj - opp actual) by owner/year:", totals);
     return { totals, details };
-  }, [games, teamWeekTotals, league?.currentWeekByYear, ownerNameOf]);
+  }, [games, teamWeekTotals, resolveCurrentWeekExclusive, ownerNameOf]);
   const comp2Data = React.useMemo(() => {
     const totals = {};
     const details = {};
@@ -11007,13 +11077,7 @@ export function LuckIndexTab({
 
     for (const [seasonKey, byTeam] of Object.entries(rostersByYear || {})) {
       const seasonNum = Number(seasonKey);
-      const cap =
-        Number(
-          get(league, "currentWeekByYear", seasonNum) ??
-            get(league, "currentWeekByYear", seasonKey)
-        ) || 0;
-      const weekCap = cap > 0 ? cap : 99;
-
+      const currentWeekExclusive = resolveCurrentWeekExclusive(seasonKey);
       for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
         const teamId = Number(teamKey);
         const owner = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
@@ -11021,14 +11085,16 @@ export function LuckIndexTab({
 
         for (const [weekKey, entries] of Object.entries(byWeek || {})) {
           const weekNum = Number(weekKey);
-          if (weekNum > weekCap) continue;
+          if (currentWeekExclusive > 0 && weekNum >= currentWeekExclusive)
+            continue; // only completed weeks (match comp1 logic)
           const seen = new Set();
 
           for (const entry of entries || []) {
             const slotId = Number(__entrySlotId(entry));
-            if (!START_SLOTS.has(slotId)) continue;
+            if (__entryIsOnByeForWeek(entry, weekNum)) continue;
             const proj = __entryProj(entry);
             if (proj > 0) continue;
+            if (__entryIsOnByeForWeek(entry, weekNum)) continue;
 
             const pid = resolvePlayerId(entry);
             const seenKey =
@@ -11059,6 +11125,7 @@ export function LuckIndexTab({
   }, [
     rostersByYear,
     league?.currentWeekByYear,
+    resolveCurrentWeekExclusive,
     ownerNameOf,
     nameIndex,
     START_SLOTS,
