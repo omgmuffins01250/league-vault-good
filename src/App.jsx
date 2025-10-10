@@ -30,8 +30,7 @@ import {
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
 const LS_KEY = "FL_STORE_v1";
-const DEFAULT_LEAGUE_ICON_GLYPH =
-  DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
+const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {
   type: "preset",
   value: DEFAULT_LEAGUE_ICON_GLYPH,
@@ -157,7 +156,10 @@ function upsertLeague({
     leagueIcon:
       leagueIcon && typeof leagueIcon === "object"
         ? leagueIcon
-        : prev.leagueIcon || { type: "preset", value: DEFAULT_LEAGUE_ICON_GLYPH },
+        : prev.leagueIcon || {
+            type: "preset",
+            value: DEFAULT_LEAGUE_ICON_GLYPH,
+          },
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -2442,7 +2444,7 @@ export default function App() {
         </div>
       </div>
       {/* PAGE CONTAINER */}
-      <div className="max-w-7xl mx-auto px-3 md:px-5 py-6">
+      <div className="max-w-none px-0 md:px-0 py-3 ml-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
@@ -2460,7 +2462,7 @@ export default function App() {
           </div>
           <div />
         </div>
-        <div className="mt-6 grid lg:grid-cols-[200px_1fr] gap-6">
+        <div className="mt-6 grid lg:grid-cols-[168px_1fr] gap-4">
           {/* SIDEBAR */}
           <aside className="space-y-2">
             <SidebarButton

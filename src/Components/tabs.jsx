@@ -2679,6 +2679,7 @@ export function PlacementsTab({
     });
     return out;
   }, [seasons, playoffTeamsBase, playoffTeamsOverrides]);
+  const [showPlayoffInputs, setShowPlayoffInputs] = React.useState(false);
 
   // Local editor state for the override inputs
   const [edit, setEdit] = React.useState(playoffTeamsOverrides || {});
@@ -3017,43 +3018,53 @@ export function PlacementsTab({
         title="Playoff teams per season"
         right={
           <SoftButton
-            onClick={commit}
+            onClick={() => setShowPlayoffInputs((v) => !v)}
             className="text-amber-800 dark:text-amber-200 bg-gradient-to-r from-amber-200/90 via-amber-100/70 to-yellow-200/80 border-amber-400/70 hover:shadow-[0_26px_60px_-32px_rgba(245,158,11,0.6)]"
-            title="Save overrides"
+            title={showPlayoffInputs ? "Collapse inputs" : "Expand inputs"}
           >
-            Save
+            {showPlayoffInputs ? "Collapse" : "Expand"}
           </SoftButton>
         }
       >
-        <div className="flex flex-wrap gap-3 items-center">
-          {seasons.map((yr) => {
-            const espnVal = Number(playoffTeamsBase?.[yr] || 0) || 0;
-            const show = edit[yr] ?? mergedPlayoffTeams[yr] ?? 0;
-            return (
-              <label key={yr} className="flex items-center gap-2 text-sm">
-                <span className="w-12 text-right opacity-70">{yr}</span>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-16 px-2 py-1 rounded bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
-                  value={show || ""}
-                  placeholder={espnVal ? String(espnVal) : "0"}
-                  onChange={(e) => setYr(yr, e.target.value)}
-                  onBlur={commit}
-                />
-                {espnVal ? (
-                  <span className="text-xs text-zinc-500">
-                    (ESPN: {espnVal})
-                  </span>
-                ) : null}
-              </label>
-            );
-          })}
-        </div>
-        <div className="mt-2 text-xs text-zinc-500">
-          ESPN usually provides values from ~2018+. Enter or override earlier
-          years here. Your changes are saved locally and used across tabs.
-        </div>
+        {showPlayoffInputs ? (
+          <>
+            <div className="flex flex-wrap gap-3 items-center">
+              {seasons.map((yr) => {
+                const espnVal = Number(playoffTeamsBase?.[yr] || 0) || 0;
+                const show = edit[yr] ?? mergedPlayoffTeams[yr] ?? 0;
+                return (
+                  <label key={yr} className="flex items-center gap-2 text-sm">
+                    <span className="w-12 text-right opacity-70">{yr}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-16 px-2 py-1 rounded bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
+                      value={show || ""}
+                      placeholder={espnVal ? String(espnVal) : "0"}
+                      onChange={(e) => setYr(yr, e.target.value)}
+                      onBlur={commit}
+                    />
+                    {espnVal ? (
+                      <span className="text-xs text-zinc-500">
+                        (ESPN: {espnVal})
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-2 text-xs text-zinc-500">
+              ESPN usually provides values from ~2018+. Enter or override
+              earlier years here. Your changes are saved locally and used across
+              tabs.
+            </div>
+          </>
+        ) : (
+          <div className="text-xs text-zinc-500">
+            Inputs hidden. Click <span className="font-semibold">Expand</span>{" "}
+            to edit per-season playoff team counts.
+          </div>
+        )}
       </Card>
 
       {/* Placements grid */}
