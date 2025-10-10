@@ -2553,6 +2553,7 @@ export default function App() {
                     rawRows={rawRows}
                     rostersByYear={rostersByYear}
                     currentWeekByYear={currentWeekBySeason}
+                    draftByYear={draftByYear}
                   />
                 )}
 

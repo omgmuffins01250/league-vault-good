@@ -10817,6 +10817,7 @@ export function LuckIndexTab({
   rostersByYear = {},
   playerProjByYear = {},
   currentWeekByYear: currentWeekByYearOverride = {},
+  draftByYear = {},
 }) {
   if (!league) return null;
   const hiddenManagersSet = React.useMemo(
@@ -11173,6 +11174,86 @@ export function LuckIndexTab({
   }, [rostersByYear, resolveCurrentWeekExclusive]);
 
   const games = React.useMemo(() => getGamesFlexible(league), [league]);
+  const draftIndexByYear = React.useMemo(() => {
+    const map = new Map();
+    const toNumber = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    for (const [seasonKey, picks] of Object.entries(draftByYear || {})) {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) continue;
+
+      const pidMap = new Map();
+      let maxRound = 0;
+
+      for (const pick of picks || []) {
+        const pid = toNumber(
+          pick?.playerId ??
+            pick?.pid ??
+            pick?.player?.id ??
+            pick?.player?.playerId
+        );
+        if (!Number.isFinite(pid)) continue;
+
+        let round = toNumber(
+          pick?.round ??
+            pick?.roundNumber ??
+            pick?.round_num ??
+            pick?.roundId ??
+            pick?.roundIndex
+        );
+        if (round != null && round <= 0) round = null;
+
+        const overall = toNumber(
+          pick?.overall ??
+            pick?.overallPick ??
+            pick?.pick ??
+            pick?.pickNumber ??
+            pick?.overallSelection ??
+            pick?.overall_index
+        );
+
+        if (round != null && round > maxRound) {
+          maxRound = round;
+        }
+
+        const existing = pidMap.get(pid);
+        const record = {
+          round: round != null ? round : null,
+          overall: overall != null && overall > 0 ? overall : null,
+        };
+
+        if (!existing) {
+          pidMap.set(pid, record);
+        } else {
+          const prevRound = existing.round;
+          if (
+            record.round != null &&
+            (prevRound == null || record.round < prevRound)
+          ) {
+            pidMap.set(pid, record);
+          } else if (prevRound == null && record.round == null) {
+            const prevOverall = existing.overall;
+            if (
+              record.overall != null &&
+              (prevOverall == null || record.overall < prevOverall)
+            ) {
+              pidMap.set(pid, record);
+            }
+          }
+        }
+      }
+
+      map.set(seasonNum, {
+        pidMap,
+        maxRound: maxRound > 0 ? maxRound : null,
+      });
+    }
+
+    return map;
+  }, [draftByYear]);
 
   const comp1Data = React.useMemo(() => {
     const totals = {};
@@ -11380,13 +11461,174 @@ export function LuckIndexTab({
     league?.seasonsByYear,
     league?.proTeams,
   ]);
-
   // This IS the Luck Index for now
   const comp1ByOwnerYear = comp1Data.totals;
   const comp1DetailByOwnerYear = comp1Data.details;
   const injuryByOwnerYear = comp2Data.totals;
   const injuryDetailByOwnerYear = comp2Data.details;
-  const luckByOwnerYear = comp1ByOwnerYear;
+  const [injuryViewMode, setInjuryViewMode] = React.useState("raw");
+  const [injuryWeightAlpha, setInjuryWeightAlpha] = React.useState(1);
+  const [injuryWaiverRound, setInjuryWaiverRound] = React.useState(12);
+  const normalizedWaiverRound = React.useMemo(
+    () =>
+      Math.max(
+        1,
+        Math.round(Number.isFinite(injuryWaiverRound) ? injuryWaiverRound : 12)
+      ),
+    [injuryWaiverRound]
+  );
+  const getBaseRoundForSeason = React.useCallback(
+    (season) => {
+      const seasonNum = Number(season);
+      const meta = draftIndexByYear.get(seasonNum);
+      const maxRound =
+        meta && Number.isFinite(meta.maxRound) && meta.maxRound > 0
+          ? Math.round(meta.maxRound)
+          : null;
+      return Math.max(1, normalizedWaiverRound, maxRound ?? 0);
+    },
+    [draftIndexByYear, normalizedWaiverRound]
+  );
+  const injuryWeightedByOwnerYear = React.useMemo(() => {
+    const totals = {};
+    const details = {};
+
+    for (const [owner, seasons] of Object.entries(
+      injuryDetailByOwnerYear || {}
+    )) {
+      for (const [seasonKey, rows] of Object.entries(seasons || {})) {
+        const seasonNum = Number(seasonKey);
+        const meta = draftIndexByYear.get(seasonNum);
+        const baseRound = getBaseRoundForSeason(seasonNum);
+        let sum = 0;
+        const detailRows = (rows || []).map((row) => {
+          const pid = Number(row?.pid);
+          const info =
+            Number.isFinite(pid) && meta?.pidMap ? meta.pidMap.get(pid) : null;
+          const draftedRound =
+            info && Number.isFinite(info.round) && info.round > 0
+              ? Number(info.round)
+              : null;
+          const draftedOverall =
+            info && Number.isFinite(info.overall) && info.overall > 0
+              ? Number(info.overall)
+              : null;
+          const fallbackRound =
+            draftedRound != null ? draftedRound : normalizedWaiverRound;
+          const roundClamped = Math.min(
+            Math.max(1, Math.round(fallbackRound)),
+            baseRound
+          );
+          const base = baseRound + 1 - roundClamped;
+          const weight = Math.pow(base, injuryWeightAlpha);
+          sum += weight;
+          return {
+            ...row,
+            draftRound: draftedRound,
+            draftOverall: draftedOverall,
+            weight,
+            weightRound: roundClamped,
+            weightBaseRound: baseRound,
+            weightSource: draftedRound != null ? "draft" : "waiver",
+          };
+        });
+
+        if (!totals[owner]) totals[owner] = {};
+        if (!details[owner]) details[owner] = {};
+        totals[owner][seasonNum] = sum;
+        details[owner][seasonNum] = detailRows;
+      }
+    }
+
+    return { totals, details };
+  }, [
+    injuryDetailByOwnerYear,
+    draftIndexByYear,
+    getBaseRoundForSeason,
+    injuryWeightAlpha,
+    normalizedWaiverRound,
+  ]);
+  const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
+    const { invert = false } = options;
+    const entries = [];
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const [owner, bySeason] of Object.entries(data || {})) {
+      for (const [seasonKey, value] of Object.entries(bySeason || {})) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) continue;
+        entries.push({ owner, seasonKey, value: numeric });
+        if (numeric < min) min = numeric;
+        if (numeric > max) max = numeric;
+      }
+    }
+
+    if (!entries.length || !Number.isFinite(min) || !Number.isFinite(max)) {
+      return { scaled: {}, min: null, max: null };
+    }
+
+    const range = max - min;
+    const scaled = {};
+
+    for (const { owner, seasonKey, value } of entries) {
+      let normalized;
+      if (range === 0) {
+        normalized = 100;
+      } else if (invert) {
+        normalized = ((max - value) / range) * 100;
+      } else {
+        normalized = ((value - min) / range) * 100;
+      }
+      const clamped = Math.max(0, Math.min(100, normalized));
+      scaled[owner] ??= {};
+      scaled[owner][seasonKey] = clamped;
+    }
+
+    return { scaled, min, max };
+  }, []);
+
+  const comp1ScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(comp1ByOwnerYear),
+    [comp1ByOwnerYear, normalizeOwnerYearTotals]
+  );
+  const comp1ScaledByOwnerYear = comp1ScaledData.scaled;
+  const comp1Min = comp1ScaledData.min;
+  const comp1Max = comp1ScaledData.max;
+
+  const injuryScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(injuryByOwnerYear, { invert: true }),
+    [injuryByOwnerYear, normalizeOwnerYearTotals]
+  );
+  const injuryScaledByOwnerYear = injuryScaledData.scaled;
+  const injuryMin = injuryScaledData.min;
+  const injuryMax = injuryScaledData.max;
+
+  const luckByOwnerYear = React.useMemo(() => {
+    const out = {};
+    const ownersSet = new Set([
+      ...Object.keys(comp1ScaledByOwnerYear || {}),
+      ...Object.keys(injuryScaledByOwnerYear || {}),
+    ]);
+
+    for (const owner of ownersSet) {
+      const seasonsSet = new Set([
+        ...Object.keys(comp1ScaledByOwnerYear?.[owner] || {}),
+        ...Object.keys(injuryScaledByOwnerYear?.[owner] || {}),
+      ]);
+
+      for (const seasonKey of seasonsSet) {
+        const c1 = comp1ScaledByOwnerYear?.[owner]?.[seasonKey];
+        const c2 = injuryScaledByOwnerYear?.[owner]?.[seasonKey];
+        if (Number.isFinite(c1) && Number.isFinite(c2)) {
+          out[owner] ??= {};
+          out[owner][seasonKey] = (c1 + c2) / 2;
+        }
+      }
+    }
+
+    return out;
+  }, [comp1ScaledByOwnerYear, injuryScaledByOwnerYear]);
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
   const owners = React.useMemo(() => {
@@ -11411,8 +11653,47 @@ export function LuckIndexTab({
   }, [comp2Detail, hiddenManagersSet]);
 
   // --- Table helper ---
-  const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : "—");
-
+  const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
+  const fmtInjuryValue = React.useCallback(
+    (v) => {
+      if (!Number.isFinite(v)) return "—";
+      return injuryViewMode === "weighted"
+        ? Number(v).toFixed(2)
+        : Math.round(Number(v)).toString();
+    },
+    [injuryViewMode]
+  );
+  const isWeightedView = injuryViewMode === "weighted";
+  const injuryTotalsSource = isWeightedView
+    ? injuryWeightedByOwnerYear.totals
+    : injuryByOwnerYear;
+  const injuryDetailSource = isWeightedView
+    ? injuryWeightedByOwnerYear.details
+    : injuryDetailByOwnerYear;
+  const comp2RawRowsForDetail =
+    comp2Detail?.owner != null && comp2Detail?.season != null
+      ? injuryDetailByOwnerYear?.[comp2Detail.owner]?.[comp2Detail.season] || []
+      : [];
+  const comp2WeightedRowsForDetail =
+    comp2Detail?.owner != null && comp2Detail?.season != null
+      ? injuryWeightedByOwnerYear.details?.[comp2Detail.owner]?.[
+          comp2Detail.season
+        ] || []
+      : [];
+  const comp2DetailRows = isWeightedView
+    ? comp2WeightedRowsForDetail
+    : comp2RawRowsForDetail;
+  const comp2RawCount = comp2RawRowsForDetail.length;
+  const comp2WeightedTotal =
+    comp2Detail?.owner != null && comp2Detail?.season != null
+      ? injuryWeightedByOwnerYear.totals?.[comp2Detail.owner]?.[
+          comp2Detail.season
+        ] ?? 0
+      : 0;
+  const comp2BaseRoundForDetail =
+    comp2Detail?.season != null
+      ? getBaseRoundForSeason(comp2Detail.season)
+      : normalizedWaiverRound;
   return (
     <div className="space-y-6">
       {/* ===== Master Luck Index Table ===== */}
@@ -11443,6 +11724,25 @@ export function LuckIndexTab({
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Scores normalized between 0 (least lucky) and 100 (most lucky) by
+          averaging opponent luck and injury resilience on their respective
+          ranges.
+          {Number.isFinite(comp1Min) && Number.isFinite(comp1Max) && (
+            <>
+              {" "}
+              Opponent luck span: {comp1Min.toFixed(1)} to {comp1Max.toFixed(1)}{" "}
+              pts.
+            </>
+          )}
+          {Number.isFinite(injuryMin) && Number.isFinite(injuryMax) && (
+            <>
+              {" "}
+              Injury weeks span: {injuryMin.toFixed(0)} to{" "}
+              {injuryMax.toFixed(0)}.
+            </>
+          )}
+        </p>
       </Card>
 
       {/* ===== Component Breakdown ===== */}
@@ -11503,6 +11803,88 @@ export function LuckIndexTab({
           </div>
         </Card>
         <Card title="Component 2 — Injury Index (Player-Weeks Lost)">
+          <div className="px-3 pt-3 pb-2 flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">View:</span>
+              <button
+                type="button"
+                className={`px-2.5 py-1 rounded border text-sm font-medium transition-colors ${
+                  injuryViewMode === "raw"
+                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-400"
+                    : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700"
+                }`}
+                onClick={() => setInjuryViewMode("raw")}
+              >
+                Raw count
+              </button>
+              <button
+                type="button"
+                className={`px-2.5 py-1 rounded border text-sm font-medium transition-colors ${
+                  injuryViewMode === "weighted"
+                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-400"
+                    : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700"
+                }`}
+                onClick={() => setInjuryViewMode("weighted")}
+              >
+                Weighted
+              </button>
+            </div>
+            {isWeightedView && (
+              <>
+                <label className="flex items-center gap-2">
+                  <span className="whitespace-nowrap">Waiver round</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    step={1}
+                    value={injuryWaiverRound}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        setInjuryWaiverRound(1);
+                        return;
+                      }
+                      const next = Number(raw);
+                      if (Number.isFinite(next)) {
+                        const clamped = Math.min(
+                          30,
+                          Math.max(1, Math.round(next))
+                        );
+                        setInjuryWaiverRound(clamped);
+                      }
+                    }}
+                    className="w-16 rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span>α</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={3}
+                    step={0.1}
+                    value={injuryWeightAlpha}
+                    onChange={(e) =>
+                      setInjuryWeightAlpha(Number(e.target.value))
+                    }
+                    className="w-32 accent-blue-600"
+                  />
+                  <span className="tabular-nums w-10 text-right">
+                    {injuryWeightAlpha.toFixed(2)}
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+          {isWeightedView && (
+            <div className="px-3 pb-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Weight = (baseRound + 1 {"\u2212"} round)^α; baseRound is the
+              larger of a season’s max draft round and the waiver round
+              (currently treated as R{normalizedWaiverRound}). Players without
+              draft data use the waiver round.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm border-collapse">
               <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
@@ -11520,9 +11902,10 @@ export function LuckIndexTab({
                   <tr key={`${o}-injury`}>
                     <td className="px-3 py-2 font-medium">{o}</td>
                     {seasons.map((y) => {
-                      const v = injuryByOwnerYear?.[o]?.[y];
-                      const rows = injuryDetailByOwnerYear?.[o]?.[y] || [];
-                      const hasDetail = Number.isFinite(v) && rows.length > 0;
+                      const v = injuryTotalsSource?.[o]?.[y];
+                      const detailRows = injuryDetailSource?.[o]?.[y] || [];
+                      const hasDetail =
+                        Number.isFinite(v) && detailRows.length > 0;
                       return (
                         <td
                           key={`${y}-injury`}
@@ -11536,14 +11919,13 @@ export function LuckIndexTab({
                                 setComp2Detail({
                                   owner: o,
                                   season: y,
-                                  rows: rows.slice(),
                                 })
                               }
                             >
-                              {Math.round(v)}
+                              {fmtInjuryValue(v)}
                             </button>
                           ) : Number.isFinite(v) ? (
-                            Math.round(v)
+                            fmtInjuryValue(v)
                           ) : (
                             "—"
                           )}
@@ -11564,7 +11946,8 @@ export function LuckIndexTab({
           </p>
           <p>
             Component 2: Injury Index — total starter player-weeks with a zero
-            projection (proxy for weeks lost to injury).
+            projection (proxy for weeks lost to injury). Weighted view applies a
+            draft-round multiplier to emphasize early picks.
           </p>
           <p>Component 3: TBD (future feature).</p>
           <p>Additional ideas below.</p>
@@ -11662,7 +12045,10 @@ export function LuckIndexTab({
           <div className="relative w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
               <div className="text-base font-semibold">
-                {comp2Detail.owner} — {comp2Detail.season} Injury Weeks Lost
+                {comp2Detail.owner} — {comp2Detail.season}{" "}
+                {isWeightedView
+                  ? "Weighted Injury Impact"
+                  : "Injury Weeks Lost"}
               </div>
               <button
                 className="btn btn-xs"
@@ -11673,7 +12059,18 @@ export function LuckIndexTab({
             </div>
 
             <div className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
-              Total player-weeks flagged as injured: {comp2Detail.rows.length}
+              {isWeightedView ? (
+                <div className="space-y-1">
+                  <div>Raw player-weeks flagged: {comp2RawCount}</div>
+                  <div>
+                    Weighted total: {fmtInjuryValue(comp2WeightedTotal)} (α ={" "}
+                    {injuryWeightAlpha.toFixed(2)}, waiver R
+                    {normalizedWaiverRound}, base R{comp2BaseRoundForDetail})
+                  </div>
+                </div>
+              ) : (
+                <>Total player-weeks flagged as injured: {comp2RawCount}</>
+              )}
             </div>
 
             <div className="px-4 py-3 overflow-auto">
@@ -11683,27 +12080,59 @@ export function LuckIndexTab({
                     <th className="px-3 py-2 text-left">Week</th>
                     <th className="px-3 py-2 text-left">Player</th>
                     <th className="px-3 py-2 text-left">Slot</th>
+                    {isWeightedView && (
+                      <th className="px-3 py-2 text-left">Draft</th>
+                    )}
+                    {isWeightedView && (
+                      <th className="px-3 py-2 text-right">Weight</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {comp2Detail.rows
+                  {comp2DetailRows
                     .slice()
                     .sort((a, b) => {
                       const wDiff = Number(a?.week || 0) - Number(b?.week || 0);
                       if (wDiff !== 0) return wDiff;
                       return (a?.player || "").localeCompare(b?.player || "");
                     })
-                    .map((row, idx) => (
-                      <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
-                        <td className="px-3 py-2 tabular-nums">W{row.week}</td>
-                        <td className="px-3 py-2">{row.player}</td>
-                        <td className="px-3 py-2">{row.slot || "—"}</td>
-                      </tr>
-                    ))}
-                  {comp2Detail.rows.length === 0 && (
+                    .map((row, idx) => {
+                      const draftLabel =
+                        isWeightedView && row
+                          ? row.draftRound != null
+                            ? `R${row.draftRound}${
+                                row.draftOverall != null
+                                  ? ` (#${row.draftOverall})`
+                                  : ""
+                              }`
+                            : row.weightRound != null
+                            ? `Waiver (R${row.weightRound})`
+                            : "—"
+                          : null;
+                      return (
+                        <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
+                          <td className="px-3 py-2 tabular-nums">
+                            W{row.week}
+                          </td>
+                          <td className="px-3 py-2">{row.player}</td>
+                          <td className="px-3 py-2">{row.slot || "—"}</td>
+                          {isWeightedView && (
+                            <td className="px-3 py-2">{draftLabel}</td>
+                          )}
+                          {isWeightedView && (
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {Number.isFinite(row?.weight)
+                                ? row.weight.toFixed(2)
+                                : "—"}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  {comp2DetailRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={3}
+                        colSpan={isWeightedView ? 5 : 3}
                         className="px-3 py-4 text-center opacity-60"
                       >
                         No injury weeks recorded.
