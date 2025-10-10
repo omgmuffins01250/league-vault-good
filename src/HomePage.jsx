@@ -1,17 +1,19 @@
 // src/HomePage.jsx
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { auth } from "./auth";
+import { useAppContext } from "./contexts/AppContext.jsx";
 import QASection from "./landing/components/QASection.jsx";
 import Contact from "./landing/components/Contact.jsx"; // ✅ import Contact
 
 export default function HomePage() {
   const nav = useNavigate();
   const loc = useLocation();
+  const { isSignedIn, user, signOut } = useAppContext();
 
   const handleSignIn = () => {
-    auth.signIn("mike@example.com"); // fake sign-in for now
     const dest = loc.state?.from || "/app";
-    nav(dest);
+    nav("/signin", {
+      state: { from: dest },
+    });
   };
 
   return (
@@ -22,16 +24,16 @@ export default function HomePage() {
           <span className="btn btn-ghost normal-case text-xl">LeagueVault</span>
         </div>
         <div className="flex-none gap-2">
-          {auth.isSignedIn() ? (
+          {isSignedIn ? (
             <>
               <span className="hidden text-gray-600 sm:inline">
-                {auth.currentUser()}
+                {user}
               </span>
               <button
                 className="btn btn-ghost"
                 onClick={() => {
-                  auth.signOut();
-                  nav(0); // refresh to update buttons
+                  signOut();
+                  nav("/", { replace: true });
                 }}
               >
                 Sign out
@@ -58,7 +60,7 @@ export default function HomePage() {
           head-to-head in seconds.
         </p>
         <div className="mt-8 flex gap-3">
-          {auth.isSignedIn() ? (
+          {isSignedIn ? (
             <Link className="btn btn-primary" to="/app">
               Enter App
             </Link>

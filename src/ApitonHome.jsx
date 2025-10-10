@@ -1,6 +1,6 @@
 // src/ApitonHome.jsx
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { auth } from "./auth";
+import { useAppContext } from "./contexts/AppContext.jsx";
 
 // template CSS (scoped to the landing page)
 import "./landing/assets/css/style.css";
@@ -15,22 +15,26 @@ import Pricing from "./landing/components/Pricing.jsx";
 import QASection from "./landing/components/QASection.jsx";
 import Contact from "./landing/components/Contact.jsx"; // ← optional
 import Footer from "./landing/components/Footer.jsx";
+import CartDropdown from "./Components/CartDropdown.jsx";
 
 export default function ApitonHome() {
   const nav = useNavigate();
   const loc = useLocation();
-  const isSignedIn = auth.isSignedIn();
-  const currentUser = auth.currentUser();
+  const { isSignedIn, user, signOut } = useAppContext();
+  const currentUser = user;
   const userInitial = currentUser ? currentUser.charAt(0).toUpperCase() : "?";
 
-  const handleSignIn = () => {
-    auth.signIn("mike@example.com");
-    nav(loc.state?.from || "/app");
+  const handleSignOut = () => {
+    signOut();
+    nav("/", { replace: true });
   };
 
-  const handleSignOut = () => {
-    auth.signOut();
-    nav(0);
+  const handleSignInNavigate = () => {
+    nav("/signin", { state: { from: loc.pathname + loc.search + loc.hash } });
+  };
+
+  const handleProfileNavigate = () => {
+    nav("/profile");
   };
 
   return (
@@ -45,6 +49,7 @@ export default function ApitonHome() {
           <a className="btn btn-ghost" href="#pricing">Pricing</a>
           <a className="btn btn-ghost" href="#faq">FAQ</a>
           <a className="btn btn-ghost" href="#contact">Contact</a>
+          {isSignedIn && <CartDropdown />}
           {isSignedIn && (
             <Link className="btn btn-primary" to="/app">
               Enter App
@@ -75,7 +80,7 @@ export default function ApitonHome() {
                     </span>
                   </li>
                   <li>
-                    <Link to="/profile">View profile</Link>
+                    <button onClick={handleProfileNavigate}>View profile</button>
                   </li>
                   <li>
                     <button onClick={handleSignOut}>Sign out</button>
@@ -84,7 +89,7 @@ export default function ApitonHome() {
               ) : (
                 <>
                   <li>
-                    <button onClick={handleSignIn}>Sign in</button>
+                    <button onClick={handleSignInNavigate}>Sign in</button>
                   </li>
                   <li className="opacity-70 text-sm">
                     Sign in to manage your account and access the app.
