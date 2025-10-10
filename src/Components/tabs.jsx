@@ -7884,6 +7884,42 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   const [breakdownTitle, setBreakdownTitle] = React.useState("");
   const [breakdownRows, setBreakdownRows] = React.useState([]);
 
+  const goldToggleCls = (active) =>
+    `relative inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.26em] uppercase transition-all duration-200 ease-out shadow-[0_18px_45px_-30px_rgba(251,191,36,0.85)] backdrop-blur ${
+      active
+        ? "text-amber-900 dark:text-amber-100 border border-amber-300/70 bg-gradient-to-r from-white/95 via-amber-100/85 to-white/95"
+        : "text-slate-600 dark:text-slate-300 border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 hover:border-amber-300/60 hover:text-amber-400"
+    }`;
+
+  const Panel = ({ title, subtitle, children, right }) => (
+    <div className="relative overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-br from-amber-200/55 via-amber-100/35 to-white/85 dark:from-amber-500/18 dark:via-amber-400/10 dark:to-zinc-950/80 p-4 md:p-5 text-sm text-amber-900 dark:text-amber-100 shadow-[0_35px_85px_-50px_rgba(251,191,36,0.65)]">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 opacity-80 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(253,230,138,0.22),transparent_60%),radial-gradient(130%_160%_at_100%_100%,rgba(251,191,36,0.18),transparent_65%)]" />
+        <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+      </div>
+      <div className="relative z-10 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.32em] text-amber-800/90 dark:text-amber-100/90 drop-shadow">
+              {title}
+            </div>
+            {subtitle ? (
+              <div className="text-[11px] leading-relaxed text-amber-900/80 dark:text-amber-100/75">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+          {right ? <div className="flex items-center gap-2 text-[11px] text-amber-900/75 dark:text-amber-100/80">{right}</div> : null}
+        </div>
+        <div className="rounded-2xl border border-white/50 dark:border-white/5 bg-white/70 dark:bg-amber-900/10 backdrop-blur-sm">
+          <div className="overflow-hidden rounded-[1.1rem]">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const [year, setYear] = React.useState(() => {
     const years = Object.keys(draftByYear || {})
       .map((y) => Number(y))
@@ -8404,14 +8440,14 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Card
         title="Draft"
         right={
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-zinc-500">Year:</div>
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-amber-800/80 dark:text-amber-100/80">
+            <span>Year</span>
             <select
-              className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
+              className="rounded-full border border-amber-300/60 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-amber-700 shadow-[0_18px_45px_-32px_rgba(251,191,36,0.85)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:bg-zinc-950/80 dark:text-amber-100"
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
             >
@@ -8424,173 +8460,176 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
           </div>
         }
       >
-        <div className="text-xs text-zinc-500 mb-2">
+        <div className="mb-4 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 p-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_30px_65px_-48px_rgba(15,23,42,0.55)] backdrop-blur">
           Showing each manager’s drafted players for {year}. Columns include
           Round, Overall pick,{" "}
-          <span className="font-medium">Pick&nbsp;POS</span> (your league’s
-          RB/WR/… order), Player, <span className="font-medium">ADP</span>,{" "}
-          <span className="font-medium">POS</span> (FantasyPros position rank
-          like <em>WR5</em>), Finish (Pos), and Keeper.
+          <span className="font-semibold text-amber-700 dark:text-amber-200">Pick&nbsp;POS</span>{" "}
+          (your league’s RB/WR/… order), Player,{" "}
+          <span className="font-semibold text-amber-700 dark:text-amber-200">ADP</span>,{" "}
+          <span className="font-semibold text-amber-700 dark:text-amber-200">POS</span>{" "}
+          (FantasyPros position rank like <em>WR5</em>), Finish (Pos), and Keeper.
         </div>
 
         {/* controls */}
-        <div className="mb-3 flex flex-wrap items-center gap-4">
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-sm"
-              checked={weighted}
-              onChange={(e) => setWeighted(e.target.checked)}
-            />
-            Weighted
-            <span className="opacity-70">(α)</span>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="1"
-              value={alpha}
-              onChange={(e) =>
-                setAlpha(
-                  Math.min(1, Math.max(0.1, Number(e.target.value) || 0.5))
-                )
-              }
-              className="w-14 px-1 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-transparent text-xs"
-              title="Weight exponent (lower = softer, higher = steeper)"
-            />
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-sm"
-              checked={includeKeepers}
-              onChange={(e) => setIncludeKeepers(e.target.checked)}
-            />
-            Include keepers
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-sm"
-              checked={includeKDst}
-              onChange={(e) => setIncludeKDst(e.target.checked)}
-            />
-            Include K/DST
-          </label>
-          <button
-            type="button"
-            className="btn btn-xs ml-auto"
-            title="How the Best Drafter score is calculated"
-            onClick={() => setShowExplain(true)}
-          >
-            ℹ️
-          </button>
+        <div className="mb-6 relative overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-r from-white/85 via-amber-50/60 to-white/85 p-4 shadow-[0_28px_70px_-45px_rgba(251,191,36,0.55)] backdrop-blur dark:from-zinc-950/80 dark:via-amber-500/15 dark:to-zinc-950/80">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-70 bg-[radial-gradient(130%_140%_at_0%_0%,rgba(253,230,138,0.2),transparent_55%),radial-gradient(130%_150%_at_100%_100%,rgba(251,191,36,0.16),transparent_65%)]" />
+            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          </div>
+          <div className="relative z-10 flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-800/90 dark:text-amber-100/85">
+            <label className={`${goldToggleCls(weighted)} cursor-pointer`}>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={weighted}
+                onChange={(e) => setWeighted(e.target.checked)}
+              />
+              <span className="tracking-[0.32em]">Weighted</span>
+              <span className="text-[10px] font-medium uppercase text-amber-600/80 dark:text-amber-200/80">
+                (α)
+              </span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="1"
+                value={alpha}
+                onChange={(e) =>
+                  setAlpha(
+                    Math.min(1, Math.max(0.1, Number(e.target.value) || 0.5))
+                  )
+                }
+                className="w-16 rounded-full border border-amber-300/70 bg-white/95 px-2 py-1 text-[11px] font-semibold tracking-[0.12em] text-amber-700 shadow-[inset_0_1px_2px_rgba(15,23,42,0.25)] focus:outline-none focus:ring-2 focus:ring-amber-300/70 dark:bg-zinc-950/80 dark:text-amber-200"
+                title="Weight exponent (lower = softer, higher = steeper)"
+              />
+            </label>
+
+            <label className={`${goldToggleCls(includeKeepers)} cursor-pointer`}>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={includeKeepers}
+                onChange={(e) => setIncludeKeepers(e.target.checked)}
+              />
+              <span className="tracking-[0.32em]">Include keepers</span>
+            </label>
+
+            <label className={`${goldToggleCls(includeKDst)} cursor-pointer`}>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={includeKDst}
+                onChange={(e) => setIncludeKDst(e.target.checked)}
+              />
+              <span className="tracking-[0.32em]">Include K/DST</span>
+            </label>
+
+            <button
+              type="button"
+              className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-300/60 bg-white/95 text-amber-600 shadow-[0_18px_40px_-28px_rgba(251,191,36,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-32px_rgba(251,191,36,0.8)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 dark:bg-zinc-950/80 dark:text-amber-200"
+              title="How the Best Drafter score is calculated"
+              onClick={() => setShowExplain(true)}
+            >
+              ℹ️
+            </button>
+          </div>
         </div>
 
         {/* leaderboards */}
-        <div className="grid md:grid-cols-2 gap-3 mb-4">
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <div className="text-sm font-semibold mb-2">
-              Best Drafter — {year}
-            </div>
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase opacity-60">
+        <div className="grid gap-5 md:grid-cols-2 mb-6">
+          <Panel title={`Best Drafter — ${year}`}>
+            <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-800/75 dark:text-amber-200/70">
                 <tr>
-                  <th className="text-left">Owner</th>
-                  <th className="text-right">Score</th>
-                  <th className="text-right">Picks</th>
+                  <th className="py-2 pl-3 text-left">Owner</th>
+                  <th className="py-2 text-right pr-3">Score</th>
+                  <th className="py-2 text-right pr-3">Picks</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200/50 dark:divide-zinc-800/60">
+              <tbody className="divide-y divide-amber-300/40 dark:divide-amber-500/20 text-[13px]">
                 {bestYearScores.map((r) => (
                   <tr
                     key={r.owner}
-                    className="cursor-pointer hover:bg-zinc-100/60 dark:hover:bg-zinc-800/60"
+                    className="cursor-pointer transition hover:bg-white/60 dark:hover:bg-amber-500/15"
                     onClick={() => openOwnerBreakdownForYear(r.owner)}
                     title="Click for pick-by-pick breakdown"
                   >
-                    <td className="py-1.5" title={r.owner}>
+                    <td className="py-2 pl-3" title={r.owner}>
                       {ownerDisplay(r.owner)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {weighted ? r.mean.toFixed(3) : r.mean.toFixed(1)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {r.count}
                     </td>
                   </tr>
                 ))}
                 {bestYearScores.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-2 text-center opacity-60">
+                    <td colSpan={3} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
                       No scorable picks this year.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </Panel>
 
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <div className="text-sm font-semibold mb-2">
-              Best Drafter — Overall
-            </div>
-            <div className="text-[11px] text-zinc-500 mb-1">
-              Years = total seasons with any draft picks (score averages only
-              across seasons that have Finish POS data).
-            </div>
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase opacity-60">
+          <Panel
+            title="Best Drafter — Overall"
+            subtitle="Years = total seasons with any draft picks (score averages only across seasons that have Finish POS data)."
+          >
+            <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-800/75 dark:text-amber-200/70">
                 <tr>
-                  <th className="text-left">Owner</th>
-                  <th className="text-right">Score</th>
-                  <th className="text-right">Years</th>
+                  <th className="py-2 pl-3 text-left">Owner</th>
+                  <th className="py-2 text-right pr-3">Score</th>
+                  <th className="py-2 text-right pr-3">Years</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200/50 dark:divide-zinc-800/60">
+              <tbody className="divide-y divide-amber-300/40 dark:divide-amber-500/20 text-[13px]">
                 {bestOverallScores.map((r) => (
                   <tr
                     key={r.owner}
-                    className="cursor-pointer hover:bg-zinc-100/60 dark:hover:bg-zinc-800/60"
+                    className="cursor-pointer transition hover:bg-white/60 dark:hover:bg-amber-500/15"
                     onClick={() => openOwnerBreakdownAllYears(r.owner)}
                     title="Click for pick-by-pick breakdown"
                   >
-                    <td className="py-1.5" title={r.owner}>
+                    <td className="py-2 pl-3" title={r.owner}>
                       {ownerDisplay(r.owner)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {weighted ? r.mean.toFixed(3) : r.mean.toFixed(1)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {r.years}
                     </td>
                   </tr>
                 ))}
                 {bestOverallScores.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-2 text-center opacity-60">
+                    <td colSpan={3} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
                       No seasons found.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </Panel>
         </div>
         {/* Drafted points contribution */}
-        <div className="grid md:grid-cols-2 gap-3 mb-4">
+        <div className="grid gap-5 md:grid-cols-2 mb-6">
           {/* Per-season (single year) or ALL YEARS total, plus optional specific week */}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold">
-                Drafted Points — {dpIsAllYears ? "All Years" : dpYear}
-                {!dpIsAllYears && week ? ` (Week ${week})` : ""}
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-zinc-500">Year:</span>
+          <Panel
+            title={`Drafted Points — ${dpIsAllYears ? "All Years" : dpYear}${
+              !dpIsAllYears && week ? ` (Week ${week})` : ""
+            }`}
+            right={
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.26em]">
+                <span>Year</span>
                 <select
-                  className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
+                  className="rounded-full border border-amber-300/60 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-700 shadow-[0_18px_45px_-32px_rgba(251,191,36,0.85)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:bg-zinc-950/80 dark:text-amber-100"
                   value={dpYear}
                   onChange={(e) => setDpYear(e.target.value)}
                 >
@@ -8604,9 +8643,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
 
                 {!dpIsAllYears && (
                   <>
-                    <span className="text-zinc-500">Week:</span>
+                    <span>Week</span>
                     <select
-                      className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
+                      className="rounded-full border border-amber-300/60 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-700 shadow-[0_18px_45px_-32px_rgba(251,191,36,0.85)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:bg-zinc-950/80 dark:text-amber-100"
                       value={week}
                       onChange={(e) => setWeek(Number(e.target.value))}
                     >
@@ -8620,19 +8659,19 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                   </>
                 )}
               </div>
-            </div>
-
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase opacity-60">
+            }
+          >
+            <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-800/75 dark:text-amber-200/70">
                 <tr>
-                  <th className="text-left">Owner</th>
-                  <th className="text-right">Drafted Pts</th>
-                  <th className="text-right">Team Pts</th>
-                  <th className="text-right">% of Team</th>
+                  <th className="py-2 pl-3 text-left">Owner</th>
+                  <th className="py-2 text-right pr-3">Drafted Pts</th>
+                  <th className="py-2 text-right pr-3">Team Pts</th>
+                  <th className="py-2 text-right pr-3">% of Team</th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-zinc-200/50 dark:divide-zinc-800/60">
+              <tbody className="divide-y divide-amber-300/40 dark:divide-amber-500/20 text-[13px]">
                 {(dpIsAllYears
                   ? draftedPoints.totals
                   : week
@@ -8651,16 +8690,16 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                         r.week ? `-w${r.week}` : ""
                       }`}
                     >
-                      <td className="py-1.5" title={r.owner}>
+                      <td className="py-2 pl-3" title={r.owner}>
                         {ownerDisplay(r.owner)}
                       </td>
-                      <td className="py-1.5 text-right tabular-nums">
+                      <td className="py-2 pr-3 text-right tabular-nums">
                         {fmtPts(r.draftedPts)}
                       </td>
-                      <td className="py-1.5 text-right tabular-nums">
+                      <td className="py-2 pr-3 text-right tabular-nums">
                         {fmtPts(r.teamPts)}
                       </td>
-                      <td className="py-1.5 text-right tabular-nums">
+                      <td className="py-2 pr-3 text-right tabular-nums">
                         {fmtPct(r.pct)}
                       </td>
                     </tr>
@@ -8678,7 +8717,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                     )
                 ).length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-2 text-center opacity-60">
+                    <td colSpan={4} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
                       No drafted-points data for this selection.
                     </td>
                   </tr>
@@ -8686,57 +8725,54 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               </tbody>
             </table>
 
-            <div className="mt-2 text-[11px] text-zinc-500">
+            <div className="px-3 pb-3 pt-2 text-[11px] text-amber-900/80 dark:text-amber-100/75">
               Based on weekly starter lineups (bench/IR excluded). Keepers obey
               the toggle above.
             </div>
-          </div>
+          </Panel>
 
           {/* Totals across all seasons */}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <div className="text-sm font-semibold mb-2">
-              Drafted Points — Totals (All Years)
-            </div>
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase opacity-60">
+          <Panel title="Drafted Points — Totals (All Years)">
+            <table className="w-full text-sm text-amber-900 dark:text-amber-100">
+              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-800/75 dark:text-amber-200/70">
                 <tr>
-                  <th className="text-left">Owner</th>
-                  <th className="text-right">Drafted Pts</th>
-                  <th className="text-right">Team Pts</th>
-                  <th className="text-right">% of Team</th>
-                  <th className="text-right">Seasons</th>
+                  <th className="py-2 pl-3 text-left">Owner</th>
+                  <th className="py-2 text-right pr-3">Drafted Pts</th>
+                  <th className="py-2 text-right pr-3">Team Pts</th>
+                  <th className="py-2 text-right pr-3">% of Team</th>
+                  <th className="py-2 text-right pr-3">Seasons</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200/50 dark:divide-zinc-800/60">
+              <tbody className="divide-y divide-amber-300/40 dark:divide-amber-500/20 text-[13px]">
                 {draftedPoints.totals.map((r) => (
                   <tr key={r.owner}>
-                    <td className="py-1.5" title={r.owner}>
+                    <td className="py-2 pl-3" title={r.owner}>
                       {ownerDisplay(r.owner)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {fmtPts(r.draftedPts)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {fmtPts(r.teamPts)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {fmtPct(r.pct)}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
+                    <td className="py-2 pr-3 text-right tabular-nums">
                       {r.seasons}
                     </td>
                   </tr>
                 ))}
                 {draftedPoints.totals.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-2 text-center opacity-60">
+                    <td colSpan={5} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
                       No seasons found.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </Panel>
         </div>
 
         {/* Help modal */}
