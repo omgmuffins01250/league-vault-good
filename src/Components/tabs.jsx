@@ -1,5 +1,5 @@
 // All tab components bundled in one module.
-// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, MoneyTab, RecordsTab, TradesTab
+// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
@@ -3276,6 +3276,1010 @@ export function PlacementsTab({
       </Card>
 
       {/* (Chart section unchanged) ... */}
+    </div>
+  );
+}
+
+function __resolveOwnerName(league, season, teamId) {
+  const seasonNum = Number(season);
+  const teamNum = Number(teamId);
+  if (!Number.isFinite(teamNum)) return null;
+  try {
+    const resolved = ownerName?.(seasonNum, teamNum);
+    if (resolved) return resolved;
+  } catch {}
+  const fallback = (obj, ...keys) =>
+    keys.reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
+  return (
+    fallback(league, "ownerByTeamByYear", seasonNum, teamNum) ||
+    fallback(league, "ownerByTeamByYear", String(seasonNum), teamNum) ||
+    fallback(league, "ownerByTeamByYear", seasonNum, String(teamNum)) ||
+    fallback(league, "ownerByTeamByYear", String(seasonNum), String(teamNum)) ||
+    null
+  );
+}
+
+const __DEFAULT_START_SLOTS = new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]);
+const __RECAP_SLOT_LABEL = {
+  0: "QB",
+  1: "QB",
+  2: "RB",
+  3: "WR",
+  4: "WR",
+  5: "WR",
+  6: "TE",
+  7: "FLEX",
+  16: "DST",
+  17: "K",
+  20: "Bench",
+  21: "IR",
+  23: "FLEX",
+};
+const __RECAP_POS_LABEL = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST" };
+const __RECAP_SLOT_ORDER = [0, 2, 3, 4, 6, 7, 23, 16, 17, 21, 20];
+
+const __recapEntrySlotId = (e) =>
+  e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
+const __recapEntryPts = (e) => {
+  const n = Number(
+    e?.appliedTotal ??
+      e?.playerPoints?.appliedTotal ??
+      e?.appliedStatTotal ??
+      e?.pts ??
+      0
+  );
+  return Number.isFinite(n) ? n : 0;
+};
+const __recapEntryProj = (e) => {
+  const n = Number(
+    e?.proj ??
+      e?.projStart ??
+      e?.projectedStart ??
+      e?.playerPoints?.projectedTotal ??
+      0
+  );
+  return Number.isFinite(n) ? n : 0;
+};
+const __recapEntryPosId = (e) => {
+  const val =
+    e?.defaultPositionId ??
+    e?.playerPoolEntry?.player?.defaultPositionId ??
+    e?.player?.defaultPositionId ??
+    e?.posId;
+  const num = Number(val);
+  return Number.isFinite(num) ? num : null;
+};
+
+function __resolveCurrentWeekExclusiveSimple(
+  league,
+  currentWeekByYear,
+  season
+) {
+  const candidates = new Set();
+  const push = (value) => {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) candidates.add(Math.floor(n));
+  };
+  const keys = [season, Number(season), String(season)].filter(
+    (k) => k != null
+  );
+  keys.forEach((key) => {
+    if (currentWeekByYear) {
+      push(currentWeekByYear[key]);
+      push(currentWeekByYear[String(key)]);
+    }
+    push(league?.currentWeekByYear?.[key]);
+    push(league?.currentWeekByYear?.[String(key)]);
+    push(league?.espnCurrentWeekBySeason?.[key]);
+    push(league?.espnCurrentWeekBySeason?.[String(key)]);
+    push(league?.currentWeekBySeason?.[key]);
+    push(league?.currentWeekBySeason?.[String(key)]);
+  });
+  keys.forEach((key) => {
+    const seasonInfo =
+      league?.seasonsByYear?.[key] ||
+      league?.seasonsByYear?.[String(key)] ||
+      null;
+    if (!seasonInfo) return;
+    [
+      seasonInfo?.currentWeek,
+      seasonInfo?.currentMatchupPeriod,
+      seasonInfo?.currentMatchupPeriodId,
+      seasonInfo?.status?.currentMatchupPeriod,
+      seasonInfo?.status?.currentScoringPeriod,
+      seasonInfo?.status?.latestScoringPeriod,
+      seasonInfo?.status?.matchupPeriodId,
+    ].forEach(push);
+  });
+  if (!candidates.size) return 0;
+  return Math.max(...candidates);
+}
+
+function __collectGamesForSeason(league, season) {
+  const out = [];
+  const seasonNum = Number(season);
+  if (!Number.isFinite(seasonNum)) return out;
+  const pushGame = ({ week, team1Id, team2Id, score1, score2 }) => {
+    if (!Number.isFinite(week) || week <= 0) return;
+    if (!Number.isFinite(team1Id) || !Number.isFinite(team2Id)) return;
+    out.push({
+      week: Math.floor(week),
+      team1Id,
+      team2Id,
+      score1: Number.isFinite(score1) ? score1 : null,
+      score2: Number.isFinite(score2) ? score2 : null,
+    });
+  };
+
+  if (Array.isArray(league?.games)) {
+    for (const g of league.games) {
+      const s = Number(g?.season ?? g?.year);
+      if (s !== seasonNum) continue;
+      const week = Number(
+        g?.week ?? g?.matchupPeriodId ?? g?.scoringPeriodId ?? g?.period
+      );
+      const t1 = Number(
+        g?.team1?.teamId ??
+          g?.team1?.team?.id ??
+          g?.team1?.id ??
+          g?.home?.teamId ??
+          g?.home?.team?.id ??
+          g?.home?.id ??
+          g?.team1Id ??
+          g?.homeTeamId
+      );
+      const t2 = Number(
+        g?.team2?.teamId ??
+          g?.team2?.team?.id ??
+          g?.team2?.id ??
+          g?.away?.teamId ??
+          g?.away?.team?.id ??
+          g?.away?.id ??
+          g?.team2Id ??
+          g?.awayTeamId
+      );
+      const s1 = Number(
+        g?.team1?.score ??
+          g?.home?.score ??
+          g?.team1Score ??
+          g?.points_for ??
+          g?.pf
+      );
+      const s2 = Number(
+        g?.team2?.score ??
+          g?.away?.score ??
+          g?.team2Score ??
+          g?.points_against ??
+          g?.pa
+      );
+      pushGame({ week, team1Id: t1, team2Id: t2, score1: s1, score2: s2 });
+    }
+    if (out.length) return out;
+  }
+
+  const seasonObj =
+    league?.seasonsByYear?.[seasonNum] ||
+    league?.seasonsByYear?.[String(seasonNum)] ||
+    null;
+  if (seasonObj?.schedule) {
+    for (const m of seasonObj.schedule || []) {
+      const week = Number(
+        m?.matchupPeriodId ?? m?.scoringPeriodId ?? m?.period ?? m?.week
+      );
+      const home = m?.home ?? m?.homeTeam ?? {};
+      const away = m?.away ?? m?.awayTeam ?? {};
+      const t1 = Number(home?.teamId ?? home?.team?.id ?? home?.id);
+      const t2 = Number(away?.teamId ?? away?.team?.id ?? away?.id);
+      const pickScore = (side) => {
+        const total = Number(side?.totalPoints);
+        if (Number.isFinite(total)) return total;
+        const byWeek = side?.pointsByScoringPeriod;
+        const wkVal = byWeek ? Number(byWeek?.[week]) : NaN;
+        return Number.isFinite(wkVal) ? wkVal : null;
+      };
+      pushGame({
+        week,
+        team1Id: t1,
+        team2Id: t2,
+        score1: pickScore(home),
+        score2: pickScore(away),
+      });
+    }
+  }
+  return out;
+}
+
+function __buildTeamWeekTotalsForSeason({
+  rostersByYear,
+  lineupSlotsByYear,
+  league,
+  currentWeekByYear,
+  season,
+}) {
+  const totals = {};
+  const seasonNum = Number(season);
+  if (!Number.isFinite(seasonNum)) return totals;
+  const byTeam = rostersByYear?.[seasonNum] || rostersByYear?.[String(seasonNum)] || {};
+  const capExclusive = __resolveCurrentWeekExclusiveSimple(
+    league,
+    currentWeekByYear,
+    seasonNum
+  );
+  const startSlots = __buildStartSlots(lineupSlotsByYear?.[seasonNum] || {});
+  const startSlotSet = startSlots.length
+    ? new Set(startSlots)
+    : __DEFAULT_START_SLOTS;
+
+  for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
+    const teamId = Number(teamKey);
+    if (!Number.isFinite(teamId)) continue;
+    totals[teamId] = totals[teamId] || {};
+    for (const [weekKey, entriesRaw] of Object.entries(byWeek || {})) {
+      const weekNum = Number(weekKey);
+      if (!Number.isFinite(weekNum)) continue;
+      if (capExclusive > 0 && weekNum >= capExclusive) continue;
+      const entries = Array.isArray(entriesRaw) ? entriesRaw : [];
+      let proj = 0;
+      let actual = 0;
+      for (const entry of entries) {
+        const slotId = Number(__recapEntrySlotId(entry));
+        if (!startSlotSet.has(slotId)) continue;
+        proj += __recapEntryProj(entry);
+        actual += __recapEntryPts(entry);
+      }
+      totals[teamId][weekNum] = { proj, actual };
+    }
+  }
+  return totals;
+}
+
+function __computeLuckScoresForSeason({
+  league,
+  season,
+  games,
+  teamWeekTotals,
+  hiddenManagers,
+}) {
+  const diffTotals = {};
+  const hidden = hiddenManagers || new Set();
+  games.forEach((game) => {
+    const { week, team1Id, team2Id } = game;
+    const owner1 = __resolveOwnerName(league, season, team1Id);
+    const owner2 = __resolveOwnerName(league, season, team2Id);
+    if (!owner1 || !owner2) return;
+    if (hidden.has(owner1) || hidden.has(owner2)) return;
+    const oppTotals1 = teamWeekTotals?.[team2Id]?.[week];
+    const oppTotals2 = teamWeekTotals?.[team1Id]?.[week];
+    const diff1 = (oppTotals1?.proj ?? 0) - (oppTotals1?.actual ?? 0);
+    const diff2 = (oppTotals2?.proj ?? 0) - (oppTotals2?.actual ?? 0);
+    diffTotals[owner1] = (diffTotals[owner1] || 0) + diff1;
+    diffTotals[owner2] = (diffTotals[owner2] || 0) + diff2;
+  });
+
+  const entries = Object.entries(diffTotals);
+  if (!entries.length) return {};
+  let min = Infinity;
+  let max = -Infinity;
+  entries.forEach(([, value]) => {
+    if (value < min) min = value;
+    if (value > max) max = value;
+  });
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return {};
+  const range = max - min;
+  const scaled = {};
+  entries.forEach(([owner, value]) => {
+    let normalized;
+    if (range === 0) normalized = 50;
+    else normalized = ((value - min) / range) * 100;
+    scaled[owner] = Math.max(0, Math.min(100, normalized));
+  });
+  return scaled;
+}
+
+function __computeSeasonWins({
+  league,
+  season,
+  games,
+  teamWeekTotals,
+  hiddenManagers,
+}) {
+  const wins = {};
+  const hidden = hiddenManagers || new Set();
+  games.forEach((game) => {
+    const { week, team1Id, team2Id, score1, score2 } = game;
+    const owner1 = __resolveOwnerName(league, season, team1Id);
+    const owner2 = __resolveOwnerName(league, season, team2Id);
+    if (!owner1 || !owner2) return;
+    if (hidden.has(owner1) || hidden.has(owner2)) return;
+    const totals1 = teamWeekTotals?.[team1Id]?.[week] || {};
+    const totals2 = teamWeekTotals?.[team2Id]?.[week] || {};
+    const actual1 = Number.isFinite(totals1.actual) ? totals1.actual : score1;
+    const actual2 = Number.isFinite(totals2.actual) ? totals2.actual : score2;
+    if (!Number.isFinite(actual1) || !Number.isFinite(actual2)) return;
+    if (actual1 > actual2) wins[owner1] = (wins[owner1] || 0) + 1;
+    else if (actual2 > actual1) wins[owner2] = (wins[owner2] || 0) + 1;
+  });
+  return wins;
+}
+
+function __computeHighestScore({
+  league,
+  season,
+  teamWeekTotals,
+  hiddenManagers,
+}) {
+  let best = null;
+  const hidden = hiddenManagers || new Set();
+  for (const [teamIdStr, byWeek] of Object.entries(teamWeekTotals || {})) {
+    const teamId = Number(teamIdStr);
+    for (const [weekStr, totals] of Object.entries(byWeek || {})) {
+      const pts = Number(totals?.actual);
+      if (!Number.isFinite(pts)) continue;
+      const owner = __resolveOwnerName(league, season, teamId);
+      if (!owner || hidden.has(owner)) continue;
+      if (!best || pts > best.points) {
+        best = {
+          owner,
+          week: Number(weekStr),
+          points: pts,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+function __podiumColor(place) {
+  if (place === 1) return "from-amber-300 via-amber-200 to-amber-100";
+  if (place === 2) return "from-zinc-300 via-zinc-200 to-zinc-100";
+  if (place === 3) return "from-orange-300 via-orange-200 to-yellow-100";
+  return "from-slate-200 via-slate-100 to-white";
+}
+
+const __CONFETTI_COLORS = [
+  "#FACC15",
+  "#60A5FA",
+  "#F472B6",
+  "#34D399",
+  "#F97316",
+  "#A855F7",
+];
+
+function ConfettiOverlay({ active }) {
+  const pieces = React.useMemo(() => {
+    return Array.from({ length: 120 }).map((_, index) => {
+      const left = Math.random() * 100;
+      const delay = Math.random() * 1.5;
+      const duration = 4 + Math.random() * 2.5;
+      const size = 6 + Math.random() * 6;
+      const color = __CONFETTI_COLORS[index % __CONFETTI_COLORS.length];
+      return { left, delay, duration, size, color };
+    });
+  }, []);
+
+  if (!active) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {pieces.map((piece, idx) => (
+        <span
+          key={idx}
+          className="absolute block rounded-sm"
+          style={{
+            left: `${piece.left}%`,
+            width: `${piece.size}px`,
+            height: `${piece.size * 2}px`,
+            backgroundColor: piece.color,
+            animation: `yv-confetti ${piece.duration}s linear ${piece.delay}s forwards`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* YearlyRecapTab ------------------------------------------------------------ */
+export function YearlyRecapTab({
+  league,
+  rostersByYear = {},
+  lineupSlotsByYear = {},
+  ownerByTeamByYear = {},
+  currentWeekByYear = {},
+}) {
+  if (!league) return null;
+
+  const hiddenManagersSet = React.useMemo(() => {
+    const list = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    return new Set(list);
+  }, [league?.hiddenManagers]);
+
+  const completedSeasons = React.useMemo(() => {
+    const out = (league?.seasonsAll || []).filter((season) =>
+      Object.values(league?.placementMap || {}).some((byYear) =>
+        Number.isFinite(Number(byYear?.[season]))
+      )
+    );
+    return out.sort((a, b) => a - b);
+  }, [league?.seasonsAll, league?.placementMap]);
+
+  const latestSeason = completedSeasons.length
+    ? completedSeasons[completedSeasons.length - 1]
+    : null;
+
+  const placements = React.useMemo(() => {
+    if (!Number.isFinite(latestSeason)) return [];
+    const rows = [];
+    Object.entries(league?.placementMap || {}).forEach(([owner, byYear]) => {
+      if (hiddenManagersSet.has(owner)) return;
+      const place = Number(byYear?.[latestSeason]);
+      if (Number.isFinite(place) && place > 0) {
+        rows.push({ owner, place });
+      }
+    });
+    return rows.sort((a, b) => a.place - b.place);
+  }, [league?.placementMap, hiddenManagersSet, latestSeason]);
+
+  const topThree = placements.slice(0, 3);
+  const champion = topThree[0] || null;
+
+  const [confettiActive, setConfettiActive] = React.useState(false);
+  React.useEffect(() => {
+    if (!champion) return;
+    setConfettiActive(true);
+    const t = setTimeout(() => setConfettiActive(false), 5000);
+    return () => clearTimeout(t);
+  }, [champion?.owner, latestSeason]);
+
+  const teamNamesByOwner = league?.teamNamesByOwner || {};
+
+  const championTeamName = champion
+    ? teamNamesByOwner?.[champion.owner]?.[latestSeason] ||
+      teamNamesByOwner?.[champion.owner]?.[String(latestSeason)] ||
+      ""
+    : "";
+
+  const championSummary = React.useMemo(() => {
+    if (!champion) return null;
+    const member = (league?.members || []).find(
+      (m) => m?.name === champion.owner
+    );
+    const titles = Object.values(league?.placementMap?.[champion.owner] || {})
+      .map((val) => Number(val))
+      .filter((val) => val === 1).length;
+    let yearsInLeague = Number(member?.yearsPlayed);
+    if (!Number.isFinite(yearsInLeague) || yearsInLeague <= 0) {
+      const joined = Number(member?.joined);
+      if (Number.isFinite(joined) && Number.isFinite(latestSeason)) {
+        yearsInLeague = Math.max(1, latestSeason - joined + 1);
+      } else {
+        const seenSeasons = Object.keys(
+          league?.placementMap?.[champion.owner] || {}
+        )
+          .map((s) => Number(s))
+          .filter(Number.isFinite);
+        yearsInLeague = seenSeasons.length || 1;
+      }
+    }
+    const titleLabel =
+      titles <= 1
+        ? `won their first ever championship after ${yearsInLeague} year${
+            yearsInLeague === 1 ? "" : "s"
+          } in the league.`
+        : `won their ${ordinal(titles)} championship in ${yearsInLeague} year${
+            yearsInLeague === 1 ? "" : "s"
+          }.`;
+    return {
+      headline: `Congrats to ${champion.owner}${
+        championTeamName ? ` – ${championTeamName}` : ""
+      }`,
+      detail: `Manager ${champion.owner} ${titleLabel}`,
+    };
+  }, [champion, championTeamName, league?.members, league?.placementMap, latestSeason]);
+
+  const [selectedOwner, setSelectedOwner] = React.useState(
+    champion?.owner || null
+  );
+  React.useEffect(() => {
+    setSelectedOwner(champion?.owner || null);
+  }, [champion?.owner, latestSeason]);
+
+  const selectedPlacement = topThree.find((p) => p.owner === selectedOwner) ||
+    null;
+
+  const teamIdsForOwner = React.useMemo(() => {
+    if (!selectedOwner || !Number.isFinite(latestSeason)) return [];
+    const map = ownerByTeamByYear?.[latestSeason] ||
+      ownerByTeamByYear?.[String(latestSeason)] || {};
+    return Object.entries(map)
+      .filter(([, owner]) => owner === selectedOwner)
+      .map(([teamId]) => Number(teamId))
+      .filter(Number.isFinite);
+  }, [selectedOwner, ownerByTeamByYear, latestSeason]);
+
+  const seasonTeamTotals = React.useMemo(
+    () =>
+      __buildTeamWeekTotalsForSeason({
+        rostersByYear,
+        lineupSlotsByYear,
+        league,
+        currentWeekByYear,
+        season: latestSeason,
+      }),
+    [
+      rostersByYear,
+      lineupSlotsByYear,
+      league,
+      currentWeekByYear,
+      latestSeason,
+    ]
+  );
+
+  const gamesThisSeason = React.useMemo(
+    () => __collectGamesForSeason(league, latestSeason),
+    [league, latestSeason]
+  );
+
+  const winsBySeason = React.useMemo(() => {
+    const map = new Map();
+    completedSeasons.forEach((seasonVal) => {
+      const totals = __buildTeamWeekTotalsForSeason({
+        rostersByYear,
+        lineupSlotsByYear,
+        league,
+        currentWeekByYear,
+        season: seasonVal,
+      });
+      const seasonGames = __collectGamesForSeason(league, seasonVal);
+      const wins = __computeSeasonWins({
+        league,
+        season: seasonVal,
+        games: seasonGames,
+        teamWeekTotals: totals,
+        hiddenManagers: hiddenManagersSet,
+      });
+      map.set(seasonVal, wins);
+    });
+    return map;
+  }, [
+    completedSeasons,
+    rostersByYear,
+    lineupSlotsByYear,
+    league,
+    currentWeekByYear,
+    hiddenManagersSet,
+  ]);
+
+  const selectedTeamId = React.useMemo(() => {
+    for (const teamId of teamIdsForOwner) {
+      const byWeek = rostersByYear?.[latestSeason]?.[teamId];
+      if (byWeek && Object.keys(byWeek).length) return teamId;
+    }
+    return teamIdsForOwner[0] ?? null;
+  }, [teamIdsForOwner, rostersByYear, latestSeason]);
+
+  const rosterForSelected = React.useMemo(() => {
+    if (!Number.isFinite(latestSeason) || !Number.isFinite(selectedTeamId)) {
+      return { week: null, entries: [] };
+    }
+    const byWeek =
+      rostersByYear?.[latestSeason]?.[selectedTeamId] ||
+      rostersByYear?.[String(latestSeason)]?.[selectedTeamId] ||
+      {};
+    const weeks = Object.keys(byWeek)
+      .map((w) => Number(w))
+      .filter((w) => Number.isFinite(w))
+      .sort((a, b) => b - a);
+    for (const wk of weeks) {
+      const entries = byWeek?.[wk];
+      if (Array.isArray(entries) && entries.length) {
+        return { week: wk, entries };
+      }
+    }
+    return { week: null, entries: [] };
+  }, [rostersByYear, latestSeason, selectedTeamId]);
+
+  const rosterStartSlots = React.useMemo(() => {
+    if (!Number.isFinite(latestSeason)) return [];
+    return __buildStartSlots(lineupSlotsByYear?.[latestSeason] || {});
+  }, [lineupSlotsByYear, latestSeason]);
+
+  const rosterStartSet = React.useMemo(() => {
+    const arr = rosterStartSlots;
+    return arr.length ? new Set(arr) : __DEFAULT_START_SLOTS;
+  }, [rosterStartSlots]);
+
+  const rosterGroups = React.useMemo(() => {
+    const entries = Array.isArray(rosterForSelected.entries)
+      ? rosterForSelected.entries
+      : [];
+    const starters = [];
+    const bench = [];
+    entries.forEach((entry) => {
+      const slotId = Number(__recapEntrySlotId(entry));
+      const target = rosterStartSet.has(slotId) ? starters : bench;
+      target.push(entry);
+    });
+    const sortBySlot = (list) =>
+      list.sort((a, b) => {
+        const slotA = Number(__recapEntrySlotId(a));
+        const slotB = Number(__recapEntrySlotId(b));
+        const idxA = __RECAP_SLOT_ORDER.indexOf(slotA);
+        const idxB = __RECAP_SLOT_ORDER.indexOf(slotB);
+        return idxA - idxB;
+      });
+    sortBySlot(starters);
+    sortBySlot(bench);
+    return { starters, bench };
+  }, [rosterForSelected.entries, rosterStartSet]);
+
+  const luckScores = React.useMemo(
+    () =>
+      __computeLuckScoresForSeason({
+        league,
+        season: latestSeason,
+        games: gamesThisSeason,
+        teamWeekTotals: seasonTeamTotals,
+        hiddenManagers: hiddenManagersSet,
+      }),
+    [
+      league,
+      latestSeason,
+      gamesThisSeason,
+      seasonTeamTotals,
+      hiddenManagersSet,
+    ]
+  );
+
+  const luckiest = React.useMemo(() => {
+    let best = null;
+    Object.entries(luckScores || {}).forEach(([owner, value]) => {
+      if (hiddenManagersSet.has(owner)) return;
+      if (!Number.isFinite(value)) return;
+      if (!best || value > best.value) best = { owner, value };
+    });
+    return best;
+  }, [luckScores, hiddenManagersSet]);
+
+  const unluckiest = React.useMemo(() => {
+    let worst = null;
+    Object.entries(luckScores || {}).forEach(([owner, value]) => {
+      if (hiddenManagersSet.has(owner)) return;
+      if (!Number.isFinite(value)) return;
+      if (!worst || value < worst.value) worst = { owner, value };
+    });
+    return worst;
+  }, [luckScores, hiddenManagersSet]);
+
+  const highestScore = React.useMemo(
+    () =>
+      __computeHighestScore({
+        league,
+        season: latestSeason,
+        teamWeekTotals: seasonTeamTotals,
+        hiddenManagers: hiddenManagersSet,
+      }),
+    [league, latestSeason, seasonTeamTotals, hiddenManagersSet]
+  );
+
+  const seasonWins = React.useMemo(
+    () =>
+      __computeSeasonWins({
+        league,
+        season: latestSeason,
+        games: gamesThisSeason,
+        teamWeekTotals: seasonTeamTotals,
+        hiddenManagers: hiddenManagersSet,
+      }),
+    [
+      league,
+      latestSeason,
+      gamesThisSeason,
+      seasonTeamTotals,
+      hiddenManagersSet,
+    ]
+  );
+
+  const mostWins = React.useMemo(() => {
+    let best = null;
+    Object.entries(seasonWins || {}).forEach(([owner, value]) => {
+      if (!Number.isFinite(value)) return;
+      if (!best || value > best.value) best = { owner, value };
+    });
+    return best;
+  }, [seasonWins]);
+
+  const previousSeason = completedSeasons.length > 1
+    ? completedSeasons[completedSeasons.length - 2]
+    : null;
+
+  const improvement = React.useMemo(() => {
+    if (!Number.isFinite(latestSeason) || !Number.isFinite(previousSeason)) {
+      return { mostImproved: null, biggestDrop: null };
+    }
+    const currentWins = winsBySeason.get(latestSeason) || {};
+    const prevWins = winsBySeason.get(previousSeason) || {};
+    let best = null;
+    let worst = null;
+    const owners = new Set([
+      ...Object.keys(currentWins || {}),
+      ...Object.keys(prevWins || {}),
+    ]);
+    owners.forEach((owner) => {
+      if (hiddenManagersSet.has(owner)) return;
+      const delta = (currentWins?.[owner] || 0) - (prevWins?.[owner] || 0);
+      if (delta > 0 && (!best || delta > best.delta)) {
+        best = { owner, delta };
+      }
+      if (delta < 0 && (!worst || delta < worst.delta)) {
+        worst = { owner, delta };
+      }
+    });
+    return { mostImproved: best, biggestDrop: worst };
+  }, [
+    latestSeason,
+    previousSeason,
+    winsBySeason,
+    hiddenManagersSet,
+  ]);
+
+  if (!Number.isFinite(latestSeason) || !championSummary) {
+    return (
+      <Card title="Yearly Recap">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
+          No completed seasons found yet. Finish a season to unlock the recap.
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="relative overflow-hidden border-white/40 dark:border-white/10 bg-white/90 dark:bg-zinc-950/70">
+        <ConfettiOverlay active={confettiActive} />
+        <div className="relative z-10 flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-xs font-semibold uppercase tracking-[0.45em] text-slate-500 dark:text-slate-300">
+            {latestSeason} Season Recap
+          </div>
+          <div className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-800 dark:text-white">
+            {championSummary.headline}
+          </div>
+          <div className="max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-300">
+            {championSummary.detail}
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        title="Podium Finishers"
+        subtitle="Tap a finalist to view their championship roster"
+        className="relative overflow-hidden border-white/35 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70"
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          {topThree.map((entry) => {
+            const isActive = entry.owner === selectedOwner;
+            return (
+              <button
+                key={entry.owner}
+                type="button"
+                onClick={() => setSelectedOwner(entry.owner)}
+                className={`relative flex flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
+                  entry.place
+                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform ${
+                  isActive ? "ring-2 ring-amber-400" : "hover:-translate-y-1"
+                }`}
+              >
+                <span className="text-4xl" aria-hidden>
+                  {entry.place === 1
+                    ? "🥇"
+                    : entry.place === 2
+                    ? "🥈"
+                    : "🥉"}
+                </span>
+                <div className="text-xs uppercase tracking-[0.4em] text-slate-600/80 dark:text-slate-800/80">
+                  {ordinal(entry.place)}
+                </div>
+                <div className="text-lg font-semibold text-slate-800 dark:text-slate-900">
+                  {entry.owner}
+                </div>
+                <div className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-600/80 dark:text-slate-800/80">
+                  {teamNamesByOwner?.[entry.owner]?.[latestSeason] ||
+                    teamNamesByOwner?.[entry.owner]?.[String(latestSeason)] ||
+                    "Team"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card
+        title="Championship Roster"
+        subtitle={
+          selectedPlacement
+            ? `${selectedPlacement.owner} · Week ${
+                rosterForSelected.week != null
+                  ? rosterForSelected.week
+                  : "—"
+              }`
+            : "Select a finalist to view their roster"
+        }
+        className="border-white/35 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70"
+      >
+        {selectedPlacement && rosterForSelected.entries.length ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {[{ label: "Starters", list: rosterGroups.starters }, { label: "Bench & Other", list: rosterGroups.bench }].map(
+              ({ label, list }) => (
+                <div key={label} className="space-y-3">
+                  <div className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                    {label}
+                  </div>
+                  <div className="space-y-2">
+                    {list.length ? (
+                      list.map((entry, idx) => {
+                        const slotId = Number(__recapEntrySlotId(entry));
+                        const slotLabel =
+                          __RECAP_SLOT_LABEL[slotId] || `Slot ${slotId}`;
+                        const posId = __recapEntryPosId(entry);
+                        const posLabel =
+                          posId != null ? __RECAP_POS_LABEL[posId] || "" : "";
+                        return (
+                          <div
+                            key={`${slotLabel}-${idx}`}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-white/40 bg-white/90 px-3 py-2 text-sm shadow-[0_16px_36px_-30px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70"
+                          >
+                            <div>
+                              <div className="font-semibold text-slate-800 dark:text-slate-100">
+                                {entry?.name || "Unknown Player"}
+                              </div>
+                              <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                                {slotLabel}
+                                {posLabel ? ` • ${posLabel}` : ""}
+                              </div>
+                            </div>
+                            <div className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-300">
+                              {__fmtPts(__recapEntryPts(entry))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-white/50 px-4 py-6 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                        No data available.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/50 px-4 py-6 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+            Roster data for this finalist is unavailable.
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title="Season Snapshots"
+        className="border-white/35 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70"
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Highest Scorer
+            </div>
+            {highestScore ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {highestScore.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  Week {highestScore.week} · {__fmtPts(highestScore.points)} pts
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">No scoring data.</div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Most Wins
+            </div>
+            {mostWins ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {mostWins.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  {mostWins.value} win{mostWins.value === 1 ? "" : "s"}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">No win data.</div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Most Improved
+            </div>
+            {improvement.mostImproved ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {improvement.mostImproved.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  +{improvement.mostImproved.delta} win{improvement.mostImproved.delta === 1 ? "" : "s"} vs {previousSeason}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Not enough history to calculate.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Biggest Faller
+            </div>
+            {improvement.biggestDrop ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {improvement.biggestDrop.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  {improvement.biggestDrop.delta}
+                  {" "}win
+                  {Math.abs(improvement.biggestDrop.delta) === 1 ? "" : "s"} vs {previousSeason}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Not enough history to calculate.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Luckiest (Luck Index)
+            </div>
+            {luckiest ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {luckiest.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  {Math.round(luckiest.value)} score
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">Luck data unavailable.</div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-4 py-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70">
+            <div className="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+              Unluckiest (Luck Index)
+            </div>
+            {unluckiest ? (
+              <>
+                <div className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {unluckiest.owner}
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-300">
+                  {Math.round(unluckiest.value)} score
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 dark:text-slate-400">Luck data unavailable.</div>
+            )}
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
