@@ -4611,14 +4611,6 @@ export function RecordsTab({ league }) {
   const Medal = ({ place }) =>
     place === 1 ? "🥇" : place === 2 ? "🥈" : place === 3 ? "🥉" : null;
 
-  // sizes small so 5 lines fit
-  const sizeForIdx = (i) =>
-    i === 0
-      ? "text-sm md:text-base"
-      : i === 1
-      ? "text-[13px] md:text-sm"
-      : "text-xs md:text-[13px]";
-
   // “see more” modal state
   const [moreKey, setMoreKey] = React.useState(null);
   const closeMore = () => setMoreKey(null);
@@ -4627,35 +4619,56 @@ export function RecordsTab({ league }) {
   const TopSection = ({ title, bigLine, listAll, renderRow, moreKeyName }) => {
     const top5 = listAll.slice(0, 5);
     const tail2to5 = top5.slice(1);
+    const badgeClass = (place) =>
+      place === 1
+        ? "bg-gradient-to-br from-amber-300/85 via-amber-200/70 to-emerald-200/70 text-amber-900 dark:from-amber-500/35 dark:via-amber-400/25 dark:to-emerald-400/25 dark:text-amber-100"
+        : place === 2
+        ? "bg-gradient-to-br from-zinc-200/85 via-zinc-100/60 to-zinc-200/70 text-zinc-900 dark:from-zinc-500/30 dark:via-zinc-400/20 dark:to-zinc-500/25 dark:text-zinc-100"
+        : place === 3
+        ? "bg-gradient-to-br from-orange-200/85 via-orange-100/60 to-amber-200/65 text-orange-900 dark:from-orange-500/30 dark:via-orange-400/20 dark:to-amber-500/25 dark:text-orange-100"
+        : "bg-white/80 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-white/50 dark:border-white/10";
 
     return (
-      <Card title={title}>
+      <Card
+        title={title}
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {bigLine ? (
-          <div className="text-lg md:text-xl font-semibold text-white/95 leading-snug">
-            {bigLine}
+          <div className="relative overflow-hidden rounded-2xl border border-white/35 dark:border-white/10 px-4 py-4 shadow-[0_32px_68px_-44px_rgba(15,23,42,0.95)]">
+            <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(115%_140%_at_0%_0%,rgba(251,191,36,0.22),transparent_58%),radial-gradient(120%_145%_at_100%_100%,rgba(45,212,191,0.18),transparent_62%)]" />
+            <div className="relative text-base md:text-xl font-semibold leading-snug text-slate-800 dark:text-slate-100 drop-shadow-[0_1px_0_rgba(255,255,255,0.35)] dark:drop-shadow-none">
+              {bigLine}
+            </div>
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
 
         {tail2to5.length > 0 && (
-          <ul className="mt-2 space-y-1.5">
+          <ul className="mt-4 space-y-2">
             {tail2to5.map((item, i) => {
               const overallPlace = i + 2;
               return (
-                <li
-                  key={i}
-                  className={`flex items-baseline gap-2 ${sizeForIdx(i)}`}
-                >
-                  <span className="w-5 shrink-0 text-sm md:text-base">
+                <li key={i} className="flex items-center gap-3">
+                  <div
+                    className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold uppercase tracking-[0.24em] shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${badgeClass(
+                      overallPlace
+                    )}`}
+                  >
                     {overallPlace <= 3 ? (
-                      <Medal place={overallPlace} />
+                      <span className="text-lg leading-none">
+                        <Medal place={overallPlace} />
+                      </span>
                     ) : (
-                      <span className="opacity-70">{overallPlace}.</span>
+                      <span>{overallPlace}</span>
                     )}
-                  </span>
-                  <div className="text-zinc-300">
-                    {renderRow(item, overallPlace)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-[13px] md:text-sm leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
+                      {renderRow(item, overallPlace)}
+                    </div>
                   </div>
                 </li>
               );
@@ -4665,10 +4678,11 @@ export function RecordsTab({ league }) {
 
         {listAll.length > 5 && (
           <button
-            className="btn btn-sm mt-3"
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/35 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-600 transition-colors duration-200 ease-out hover:border-amber-300/70 hover:text-amber-500 dark:text-slate-200 dark:hover:text-amber-300"
             onClick={() => setMoreKey(moreKeyName)}
           >
-            + See more
+            <span className="text-xs">View full list</span>
+            <span aria-hidden="true">↗</span>
           </button>
         )}
       </Card>
@@ -4680,12 +4694,13 @@ export function RecordsTab({ league }) {
     weeklyHigh: {
       title: "Highest Points (week) — more",
       items: topWeeklyHighAll.slice(5, 25),
-      render: (g, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
+      render: (g) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {g.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4695,8 +4710,7 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
+            )} pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -4705,11 +4719,13 @@ export function RecordsTab({ league }) {
     weeklyWinners: {
       title: "Most Highest-Scoring Weeks — more",
       items: topWeeklyWinnersAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
           </span>
         </div>
       ),
@@ -4718,12 +4734,13 @@ export function RecordsTab({ league }) {
     weeklyLow: {
       title: "Lowest Points (week) — more",
       items: topWeeklyLowAll.slice(5, 25),
-      render: (g, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
+      render: (g) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {g.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4733,8 +4750,7 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
+            )} pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -4742,11 +4758,13 @@ export function RecordsTab({ league }) {
     seasonPFHigh: {
       title: "Highest Points (season) — more",
       items: topSeasonPFHighAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pf)} pts (S{r.season})
           </span>
         </div>
       ),
@@ -4754,11 +4772,13 @@ export function RecordsTab({ league }) {
     seasonPFLow: {
       title: "Lowest Points (season) — more",
       items: topSeasonPFLowAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pf)} pts (S{r.season})
           </span>
         </div>
       ),
@@ -4766,11 +4786,13 @@ export function RecordsTab({ league }) {
     winsHigh: {
       title: "Most Wins (season) — more",
       items: topSeasonWinsHighAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.wins} wins (S{r.season})
           </span>
         </div>
       ),
@@ -4778,11 +4800,13 @@ export function RecordsTab({ league }) {
     winsLow: {
       title: "Least Wins (season) — more",
       items: topSeasonWinsLowAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.wins} wins (S{r.season})
           </span>
         </div>
       ),
@@ -4790,11 +4814,13 @@ export function RecordsTab({ league }) {
     streaks: {
       title: "Longest Win Streak — more",
       items: longestStreaks.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {r.best} (S{r.season} W{fmtWeek(r.startW)} → W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.best} straight (S{r.season} W{fmtWeek(r.startW)} → W
             {fmtWeek(r.endW)})
           </span>
         </div>
@@ -4803,11 +4829,13 @@ export function RecordsTab({ league }) {
     players: {
       title: "Highest Scoring Player — more",
       items: highestScoringPlayersAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.team} — {r.player} — {Math.round(r.pts)} (S{r.season} W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.team}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {r.player} — {Math.round(r.pts)} pts (S{r.season} W
             {fmtWeek(r.week)})
           </span>
         </div>
@@ -4816,11 +4844,13 @@ export function RecordsTab({ league }) {
     diff: {
       title: "Largest Win Differential — more",
       items: largestDiffAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.winner} over {r.loser} — {Math.round(r.diff)} (S{r.season} W
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.winner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            over {r.loser} — {Math.round(r.diff)} diff (S{r.season} W
             {fmtWeek(r.week)})
           </span>
         </div>
@@ -4829,11 +4859,13 @@ export function RecordsTab({ league }) {
     pa: {
       title: "League Punching Bag — more (Highest Points Against, season)",
       items: topPunchingBagAll.slice(5, 25),
-      render: (r, idx) => (
-        <div className="flex gap-2">
-          <span className="opacity-60">{idx}.</span>
-          <span>
-            {r.owner} — {Math.round(r.pa)} against (S{r.season})
+      render: (r) => (
+        <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {r.owner}
+          </span>
+          <span className="text-slate-500 dark:text-slate-300">
+            — {Math.round(r.pa)} against (S{r.season})
           </span>
         </div>
       ),
@@ -4841,14 +4873,14 @@ export function RecordsTab({ league }) {
     poapps: {
       title: "Most Playoff Appearances — more",
       items: poArr.slice(5, 25),
-      render: (r, idx) => {
+      render: (r) => {
         const [owner, cnt] = r;
         return (
-          <div className="flex gap-2">
-            <span className="opacity-60">{idx}.</span>
-            <span>
-              {owner} — {cnt}
+          <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+            <span className="font-semibold text-slate-800 dark:text-slate-100">
+              {owner}
             </span>
+            <span className="text-slate-500 dark:text-slate-300">— {cnt}</span>
           </div>
         );
       },
@@ -4859,33 +4891,44 @@ export function RecordsTab({ league }) {
 
   // ---------- UI ----------
   return (
-    <div className="grid md:grid-cols-2 gap-4 text-sm">
-      {/* Scope picker */}
-      <div className="md:col-span-2">
-        <Card
-          title="Records scope"
-          right={
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">Show:</span>
-              <select
-                className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-              >
-                <option value="regular">Regular season</option>
-                <option value="playoffs">Playoffs</option>
-                <option value="all">All games</option>
-              </select>
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-80 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(59,130,246,0.22),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(45,212,191,0.18),transparent_60%)]" />
+      <div className="grid md:grid-cols-2 gap-5 text-sm">
+        {/* Scope picker */}
+        <div className="md:col-span-2">
+          <Card
+            title="Records scope"
+            className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+            right={
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+                <span>Show</span>
+                <div className="relative">
+                  <select
+                    className="appearance-none rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 pr-8 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                    value={scope}
+                    onChange={(e) => setScope(e.target.value)}
+                  >
+                    <option value="regular">Regular season</option>
+                    <option value="playoffs">Playoffs</option>
+                    <option value="all">All games</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-400 dark:text-slate-500">
+                    ▾
+                  </span>
+                </div>
+              </div>
+            }
+          >
+            <div className="rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-40px_rgba(15,23,42,0.9)]">
+              Calculations use finished games only. Season totals use completed
+              seasons only. Current scope:{" "}
+              <span className="font-semibold text-amber-600 dark:text-amber-300">
+                {scopeLabel}
+              </span>
+              .
             </div>
-          }
-        >
-          <div className="text-xs text-zinc-500">
-            Calculations use finished games only. Season totals use completed
-            seasons only. Current scope:{" "}
-            <span className="font-medium">{scopeLabel}</span>.
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
 
       {/* Highest Points (week) */}
       <TopSection
@@ -5150,17 +5193,28 @@ export function RecordsTab({ league }) {
       />
 
       {/* Most Championships (all tied shown as 🥇) */}
-      <Card title="Most Championships">
+      <Card
+        title="Most Championships"
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {mostChamps.length ? (
-          <div className="space-y-1">
-            {mostChamps.slice(0, 5).map(([o, c]) => (
-              <div key={`mc-${o}`} className="text-sm md:text-base font-medium">
-                🥇 {o} — {c}
+          <div className="space-y-2">
+            {mostChamps.slice(0, 5).map(([o, c], idx) => (
+              <div key={`mc-${o}`} className="flex items-center gap-3">
+                <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300/90 via-yellow-200/75 to-emerald-200/70 text-lg shadow-[0_20px_55px_-32px_rgba(15,23,42,0.95)]">
+                  {idx === 0 ? "🏆" : "🥇"}
+                </div>
+                <div className="flex-1 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm md:text-base leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
+                  <span className="font-semibold">{o}</span>
+                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
       </Card>
 
@@ -5188,65 +5242,100 @@ export function RecordsTab({ league }) {
       />
 
       {/* Most Sackos */}
-      <Card title="Most Sackos">
+      <Card
+        title="Most Sackos"
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
         {sackoArr.length ? (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {sackoArr.slice(0, 5).map(([o, c], i) => (
-              <div
-                key={`ms-${o}`}
-                className={`${
-                  i === 0 ? "text-sm md:text-base font-medium" : ""
-                }`}
-              >
-                {i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : ""}
-                {o} — {c}
+              <div key={`ms-${o}`} className="flex items-center gap-3">
+                <div
+                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${
+                    i === 0
+                      ? "bg-gradient-to-br from-rose-300/85 via-red-200/65 to-amber-200/70 text-rose-900"
+                      : "bg-white/70 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border border-white/40 dark:border-white/10"
+                  }`}
+                >
+                  {i === 0 ? "💀" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                </div>
+                <div className="flex-1 rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm leading-snug text-slate-700 dark:text-slate-100">
+                  <span className="font-semibold">{o}</span>
+                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div>—</div>
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+            —
+          </div>
         )}
       </Card>
 
       {/* footnote */}
-      <Card>
-        <div className="text-xs text-zinc-500">
-          Transactions/trades require extra data from ESPN or your CSV. If your
-          CSV includes per-season columns named <code>transactions</code> or{" "}
-          <code>trades</code>, the Trades / Transactions tab will show them.
-          Include <code>trade_partner</code> (or traded_with / partner /
-          trade_with) to get most common pairings.
+      <Card
+        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+      >
+        <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-38px_rgba(15,23,42,0.92)]">
+          Transactions and trades need supplemental data from ESPN or your CSV.
+          If your file includes per-season columns named <code>transactions</code>{" "}
+          or <code>trades</code>, the Trades / Transactions tab will display
+          them. Include <code>trade_partner</code> (or traded_with / partner /
+          trade_with) to surface the most common pairings.
         </div>
       </Card>
+    </div>
 
       {/* See-more modal */}
       {activeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={closeMore} />
-          <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900">
-              <div className="text-base font-semibold">{activeModal.title}</div>
-              <button className="btn btn-xs" onClick={closeMore}>
-                Close
-              </button>
-            </div>
-            <div
-              className="p-3 overflow-y-auto"
-              style={{ maxHeight: "calc(85vh - 48px)" }}
-            >
-              {activeModal.items.length ? (
-                <ol className="space-y-1">
-                  {activeModal.items.map((item, i) => (
-                    <li key={i} className="text-sm text-zinc-200">
-                      {activeModal.render(item, i + 6 /* numbers start at 6 */)}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <div className="text-sm opacity-70 px-2 py-3">
-                  No more results.
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={closeMore}
+          />
+          <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/90 dark:bg-slate-950/85 shadow-[0_45px_110px_-50px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-0 opacity-85 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(59,130,246,0.18),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(45,212,191,0.16),transparent_62%)]" />
+            <div className="relative">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 border-b border-white/40 dark:border-white/10 bg-white/85 dark:bg-slate-950/80 backdrop-blur-xl">
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700 dark:text-slate-200">
+                  {activeModal.title}
                 </div>
-              )}
+                <button
+                  className="inline-flex items-center gap-1 rounded-full border border-white/40 dark:border-white/15 bg-white/80 dark:bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 transition hover:text-amber-500 dark:hover:text-amber-300"
+                  onClick={closeMore}
+                >
+                  Close
+                </button>
+              </div>
+              <div
+                className="p-5 overflow-y-auto text-sm text-slate-700 dark:text-slate-200"
+                style={{ maxHeight: "calc(85vh - 72px)" }}
+              >
+                {activeModal.items.length ? (
+                  <ol className="space-y-2">
+                    {activeModal.items.map((item, i) => {
+                      const place = i + 6;
+                      return (
+                        <li key={i}>
+                          <div className="flex items-center gap-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-white/[0.07] px-4 py-2 shadow-[0_24px_65px_-40px_rgba(15,23,42,0.95)]">
+                            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/85 dark:bg-white/10 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                              {place}
+                            </span>
+                            <div className="flex-1 leading-snug">
+                              {activeModal.render(item, place)}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-3 text-sm text-slate-500 dark:text-slate-300">
+                    No more results.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
