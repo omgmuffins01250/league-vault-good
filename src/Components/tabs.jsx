@@ -3019,7 +3019,7 @@ export function PlacementsTab({
         right={
           <SoftButton
             onClick={() => setShowPlayoffInputs((v) => !v)}
-            className="text-amber-800 dark:text-amber-200 bg-gradient-to-r from-amber-200/90 via-amber-100/70 to-yellow-200/80 border-amber-400/70 hover:shadow-[0_26px_60px_-32px_rgba(245,158,11,0.6)]"
+            className="text-amber-900 dark:text-amber-100 bg-gradient-to-r from-amber-400/90 via-amber-300/80 to-yellow-300/80 border-amber-200/70 shadow-[0_18px_40px_-26px_rgba(245,158,11,0.65)] hover:shadow-[0_26px_60px_-28px_rgba(245,158,11,0.75)]"
             title={showPlayoffInputs ? "Collapse inputs" : "Expand inputs"}
           >
             {showPlayoffInputs ? "Collapse" : "Expand"}
@@ -3068,117 +3068,108 @@ export function PlacementsTab({
       </Card>
 
       {/* Placements grid */}
-      <div className="overflow-x-auto">
-        <div className="relative min-w-full overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl">
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-0 opacity-70 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(110%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
-            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
-          </div>
-          <div className="relative">
-            <table className="min-w-[720px] w-full text-[13px] text-slate-700 dark:text-slate-200">
-              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0 z-10">
-                <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-                  <th className="px-4 py-3 text-left">
-                    {/* NEW: clickable header */}
-                    <button
-                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
-                      onClick={() => toggleGrid("member")}
-                      title="Sort by member"
-                    >
-                      Member{" "}
-                      <span className="opacity-60 text-xs">
-                        {sortArrow(gridSort, "member")}
-                      </span>
-                    </button>
-                  </th>
-                  {seasons.map((yr) => (
-                    <th key={yr} className="px-4 py-3 text-center">
-                      {/* NEW: clickable year header */}
+      <Card title="Placements by season" subtitle="Final finishes by manager across every recorded year">
+        <div className="overflow-x-auto">
+          <div className="relative min-w-full overflow-hidden rounded-2xl border border-white/25 dark:border-white/10 bg-white/75 dark:bg-zinc-950/50 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.9)] backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
+            <div className="relative overflow-x-auto">
+              <table className="min-w-[720px] w-full text-[13px] text-slate-800 dark:text-slate-200">
+                <thead className="sticky top-0 z-20 bg-slate-950/85 text-slate-200 uppercase tracking-[0.22em] text-[11px]">
+                  <tr className="border-b border-white/20">
+                    <th className="px-4 py-3 text-left">
                       <button
-                        className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
-                        onClick={() => toggleGrid(yr)}
-                        title={`Sort by ${yr}`}
+                        className="inline-flex items-center gap-1 font-semibold"
+                        onClick={() => toggleGrid("member")}
+                        title="Sort by member"
                       >
-                        {yr}{" "}
-                        <span className="opacity-60 text-xs">
-                          {sortArrow(gridSort, yr)}
+                        Member{" "}
+                        <span className="text-xs opacity-60">
+                          {sortArrow(gridSort, "member")}
                         </span>
                       </button>
                     </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody className="relative z-10 divide-y divide-white/40 dark:divide-white/10">
-                {/* NEW: ownersSorted */}
-                {ownersSorted.map((member, idx) => (
-                  <tr
-                    key={member}
-                    className={`transition-colors ${
-                      idx % 2 === 0
-                        ? "bg-white/70 dark:bg-white/[0.04]"
-                        : "bg-white/45 dark:bg-white/[0.025]"
-                    } hover:bg-sky-100/60 dark:hover:bg-sky-500/10`}
-                  >
-                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                      {member}
-                    </td>
-                    {seasons.map((yr) => {
-                      const place = league.placementMap?.[member]?.[yr];
-                      const poCnt = Number(mergedPlayoffTeams?.[yr] || 0);
-                      const hasPOInfo = poCnt > 0;
-                      const madePO = !!(place && hasPOInfo && place <= poCnt);
-
-                      return (
-                        <td
-                          key={`${member}-${yr}`}
-                          className="px-4 py-3 text-center"
+                    {seasons.map((yr) => (
+                      <th key={yr} className="px-4 py-3 text-center">
+                        <button
+                          className="inline-flex items-center justify-center gap-1 font-semibold"
+                          onClick={() => toggleGrid(yr)}
+                          title={`Sort by ${yr}`}
                         >
-                          {place ? (
-                            <span
-                              className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.55)] ${
-                                madePO
-                                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100"
-                                  : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-200"
-                              }`}
-                              title={
-                                hasPOInfo
-                                  ? madePO
-                                    ? "Playoffs: Yes"
-                                    : "Playoffs: No"
-                                  : "Playoffs: (unknown for this season)"
-                              }
-                            >
-                              {(() => {
-                                const m = medalFor(Number(place));
-                                if (m)
+                          {yr}{" "}
+                          <span className="text-xs opacity-60">
+                            {sortArrow(gridSort, yr)}
+                          </span>
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody className="relative z-10 divide-y divide-white/20">
+                  {ownersSorted.map((member, idx) => (
+                    <tr
+                      key={member}
+                      className={`transition-colors duration-200 ease-out ${
+                        idx % 2 === 0
+                          ? "bg-white/65 dark:bg-white/[0.035]"
+                          : "bg-white/40 dark:bg-white/[0.02]"
+                      } hover:bg-white/85 dark:hover:bg-white/10`}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 text-left font-semibold text-slate-900 dark:text-slate-100">
+                        {member}
+                      </td>
+                      {seasons.map((yr) => {
+                        const place = league.placementMap?.[member]?.[yr];
+                        const poCnt = Number(mergedPlayoffTeams?.[yr] || 0);
+                        const hasPOInfo = poCnt > 0;
+                        const madePO = !!(place && hasPOInfo && place <= poCnt);
+
+                        return (
+                          <td key={`${member}-${yr}`} className="px-4 py-3 text-center">
+                            {place ? (
+                              <span
+                                className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-[0_8px_20px_-12px_rgba(15,23,42,0.65)] backdrop-blur ${
+                                  madePO
+                                    ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100"
+                                    : "bg-slate-900/80 text-slate-100 dark:bg-slate-200/20 dark:text-slate-100"
+                                }`}
+                                title={
+                                  hasPOInfo
+                                    ? madePO
+                                      ? "Playoffs: Yes"
+                                      : "Playoffs: No"
+                                    : "Playoffs: (unknown for this season)"
+                                }
+                              >
+                                {(() => {
+                                  const m = medalFor(Number(place));
+                                  if (m)
+                                    return (
+                                      <span className="text-lg drop-shadow-sm">
+                                        {m}
+                                      </span>
+                                    );
                                   return (
-                                    <span className="text-lg drop-shadow-sm">
-                                      {m}
+                                    <span className="tabular-nums font-semibold">
+                                      {ordinalSafe(Number(place))}
                                     </span>
                                   );
-                                return (
-                                  <span className="tabular-nums font-semibold">
-                                    {ordinalSafe(Number(place))}
-                                  </span>
-                                );
-                              })()}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 dark:text-slate-500">
-                              —
-                            </span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                                })()}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 dark:text-slate-500">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
       {/* ============================================================
           Placements over time (toggle owners, shaded playoff area)
           ============================================================ */}
