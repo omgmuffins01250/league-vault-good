@@ -1,15 +1,11 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, TableBox } from "/project/workspace/src/Components/ui.jsx";
-import ManagerMergeControl from "/project/workspace/src/Components/ManagerMergeControl.jsx";
-import {
-  ownerName,
-  canonicalizeOwner,
-  primeOwnerMaps,
-} from "/project/workspace/src/ownerMaps.jsx";
+import { Card, TableBox } from "./src/Components/ui.jsx";
+import ManagerMergeControl from "./src/Components/ManagerMergeControl.jsx";
+import { ownerName, canonicalizeOwner, primeOwnerMaps } from "./src/ownerMaps.jsx";
 // near the top of App.jsx (or tabs.jsx)
-import "/project/workspace/src/Data/finishData.jsx";
+import "./src/Data/finishData.jsx";
 import {
   ResponsiveContainer,
   ComposedChart,
