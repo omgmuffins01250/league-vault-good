@@ -5945,31 +5945,85 @@ export function TradesTab({
     return out;
   }, [ownersUnion, filtered, metricValue]);
 
-  const PickupRow = ({ a, showOwner = true }) => (
-    <div className="flex items-center justify-between py-1 px-2 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800">
-      <div className="truncate">
-        {showOwner ? (
-          <>
-            <span className="font-medium">{a.owner || "—"}</span>
-            <span className="mx-1 text-zinc-400">•</span>
-          </>
-        ) : null}
-        <span className="font-medium">{a.player}</span>
-        {a.pos ? (
-          <span className="ml-1 text-xs text-zinc-500">({a.pos})</span>
-        ) : null}
-        <span className="mx-1 text-zinc-400">•</span>
-        <span>
-          Wk {a.weekAcquired}, {a.season}
-        </span>
-        <span className="mx-1 text-zinc-400">•</span>
-        <span className="text-xs text-zinc-500">
-          {a.weeks} wk{a.weeks === 1 ? "" : "s"}
+  const FancySelect = ({ label, className = "", children, ...props }) => (
+    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+      {label ? <span>{label}</span> : null}
+      <div className="relative">
+        <select
+          {...props}
+          className={`appearance-none min-w-[8.75rem] px-4 py-2 pr-9 rounded-full border border-white/60 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60 transition-all ${className}`}
+        >
+          {children}
+        </select>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500">
+          ▾
         </span>
       </div>
-      <div className="text-right tabular-nums">
-        <div>{fmt1(a.totalPts)} pts</div>
-        <div className="text-xs text-zinc-500">{fmt2(a.ppg)} ppg</div>
+    </label>
+  );
+
+  const FancyStepper = ({ label, value, onDec, onInc }) => (
+    <div className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+      <span>{label}</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(59,130,246,0.6)] transition-transform hover:-translate-y-0.5"
+          onClick={onDec}
+        >
+          –
+        </button>
+        <span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/60 dark:bg-zinc-950/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
+          {value}
+        </span>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 text-slate-700 dark:text-slate-200 shadow-[0_18px_40px_-30px_rgba(168,85,247,0.55)] transition-transform hover:-translate-y-0.5"
+          onClick={onInc}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+
+  const PickupRow = ({ a, showOwner = true, rank }) => (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 px-4 py-3 shadow-[0_28px_60px_-40px_rgba(59,130,246,0.65)] transition-all hover:-translate-y-[1px] hover:shadow-[0_26px_55px_-32px_rgba(129,140,248,0.75)]">
+      <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(236,72,153,0.14),transparent_60%)]" />
+      <div className="relative flex items-center gap-4">
+        {rank ? (
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 dark:border-white/15 bg-gradient-to-br from-indigo-500/20 via-sky-400/20 to-emerald-400/30 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
+            #{rank}
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+            {showOwner ? (
+              <>
+                <span>{a.owner || "—"}</span>
+                <span className="mx-1 text-slate-400">•</span>
+              </>
+            ) : null}
+            <span>{a.player}</span>
+            {a.pos ? (
+              <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">({a.pos})</span>
+            ) : null}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
+            <span>
+              Wk {a.weekAcquired}, {a.season}
+            </span>
+            <span>{a.weeks} wk{a.weeks === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+            {fmt1(a.totalPts)} pts
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 tabular-nums">
+            {fmt2(a.ppg)} PPG
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -5981,10 +6035,9 @@ export function TradesTab({
           yearFilter === "all" ? " (All-time)" : ` (${yearFilter})`
         }`}
         right={
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* Season */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+          <div className="flex flex-wrap items-end gap-3 justify-end">
+            <FancySelect
+              label="Season"
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
               title="Season"
@@ -5995,11 +6048,10 @@ export function TradesTab({
                   {y}
                 </option>
               ))}
-            </select>
+            </FancySelect>
 
-            {/* Scope */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Scope"
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
               title="Scope"
@@ -6007,11 +6059,10 @@ export function TradesTab({
               <option value="regular">Regular season</option>
               <option value="playoffs">Playoffs</option>
               <option value="all">All games</option>
-            </select>
+            </FancySelect>
 
-            {/* Position */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Position"
               value={posFilter}
               onChange={(e) => setPosFilter(e.target.value)}
               title="Position"
@@ -6025,64 +6076,44 @@ export function TradesTab({
               <option value="K">K</option>
               <option value="WR/RB/TE">WR/RB/TE</option>
               <option value="WR/RB">WR/RB</option>
-            </select>
+            </FancySelect>
 
-            {/* Metric */}
-            <select
-              className="bg-transparent border rounded px-2 py-1 text-sm"
+            <FancySelect
+              label="Metric"
               value={rankMetric}
               onChange={(e) => setRankMetric(e.target.value)}
               title="Ranking metric"
             >
               <option value="total">Rank by Total points</option>
               <option value="ppg">Rank by PPG</option>
-            </select>
+            </FancySelect>
 
-            {/* Min weeks */}
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-xs text-zinc-500">Min weeks:</span>
-              <button
-                className="px-2 py-1 border rounded"
-                onClick={() =>
-                  setMinWeeks((x) => Math.max(1, Number(x || 0) - 1))
-                }
-              >
-                –
-              </button>
-              <span className="px-2">{minWeeks}</span>
-              <button
-                className="px-2 py-1 border rounded"
-                onClick={() =>
-                  setMinWeeks((x) => Math.min(99, Number(x || 0) + 1))
-                }
-              >
-                +
-              </button>
-            </div>
+            <FancyStepper
+              label="Min Weeks"
+              value={minWeeks}
+              onDec={() => setMinWeeks((x) => Math.max(1, Number(x || 0) - 1))}
+              onInc={() => setMinWeeks((x) => Math.min(99, Number(x || 0) + 1))}
+            />
           </div>
         }
       >
         {filtered.length === 0 ? (
-          <div className="text-sm text-zinc-500">
+          <div className="text-sm text-slate-500 dark:text-slate-400">
             No qualifying free-agency acquisitions found.
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-3">
             {top5Global.map((a, i) => (
-              <div
+              <PickupRow
                 key={`${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                className="flex"
-              >
-                <div className="w-6 text-zinc-400">{i + 1}.</div>
-                <div className="flex-1">
-                  <PickupRow a={a} />
-                </div>
-              </div>
+                a={a}
+                rank={i + 1}
+              />
             ))}
           </div>
         )}
 
-        <div className="mt-3 text-xs text-zinc-500">
+        <div className="mt-4 text-[10px] uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
           {rankMetric === "ppg"
             ? "PPG since acquisition"
             : "Total points since acquisition"}{" "}
@@ -6102,10 +6133,7 @@ export function TradesTab({
         <button
           onClick={() => setMoreGlobal(true)}
           title="Show more"
-          className="absolute bottom-6 right-6 w-8 h-8 rounded-full border flex items-center justify-center
-                     translate-x-1/2 translate-y-1/2
-                     bg-white/80 dark:bg-zinc-900/80 backdrop-blur shadow-md
-                     hover:bg-white dark:hover:bg-zinc-800 transition-all"
+          className="absolute bottom-6 right-6 inline-flex h-9 w-9 translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-indigo-500/30 via-violet-500/30 to-fuchsia-500/40 text-[13px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-26px_rgba(124,58,237,0.7)] backdrop-blur transition-all hover:scale-105"
         >
           +
         </button>
@@ -6139,7 +6167,7 @@ export function TradesTab({
                 <button
                   onClick={() => setMoreOwner(o)}
                   title="Show more"
-                  className="w-6 h-6 rounded-full border flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-gradient-to-br from-emerald-400/25 via-sky-400/25 to-indigo-500/30 text-[12px] font-semibold text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-30px_rgba(56,189,248,0.65)] transition-transform hover:scale-105"
                 >
                   +
                 </button>
@@ -6147,21 +6175,18 @@ export function TradesTab({
             }
           >
             {list.length === 0 ? (
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
                 No qualifying pickups.
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {list.map((a, i) => (
-                  <div
+                  <PickupRow
                     key={`${o}-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                    className="flex"
-                  >
-                    <div className="w-6 text-zinc-400">{i + 1}.</div>
-                    <div className="flex-1">
-                      <PickupRow a={a} showOwner={false} />
-                    </div>
-                  </div>
+                    a={a}
+                    showOwner={false}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
@@ -6222,51 +6247,52 @@ export function TradesTab({
   const TransactionsTable = () => (
     <Card
       title={
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <span>{metricLabel} by Member (per season)</span>
-          <div className="flex items-center gap-2">
-            <label className="text-sm opacity-80">Metric:</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value)}
-              className="bg-transparent border rounded px-2 py-1 text-sm"
-            >
-              {METRIC_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FancySelect
+            label="Metric"
+            value={metric}
+            onChange={(e) => setMetric(e.target.value)}
+            title="Metric"
+          >
+            {METRIC_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </FancySelect>
         </div>
       }
     >
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm border-collapse">
-          <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-            <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-              <th className="px-3 py-2 text-left">Member</th>
+      <div className="overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-zinc-950/50 backdrop-blur">
+        <table className="min-w-full text-[13px]">
+          <thead className="sticky top-0 bg-gradient-to-r from-indigo-500/20 via-sky-400/20 to-emerald-400/25 text-[10px] uppercase tracking-[0.3em] text-slate-600 dark:text-slate-200">
+            <tr className="divide-x divide-white/40 dark:divide-white/10">
+              <th className="px-4 py-3 text-left font-semibold">Member</th>
               {seasonsForTable.map((yr) => (
-                <th key={`h-${yr}`} className="px-3 py-2 text-center">
+                <th key={`h-${yr}`} className="px-4 py-3 text-center font-semibold">
                   {yr}
                 </th>
               ))}
-              <th className="px-3 py-2 text-center">Total</th>
+              <th className="px-4 py-3 text-center font-semibold">Total</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          <tbody className="divide-y divide-white/45 dark:divide-white/10 text-sm text-slate-700 dark:text-slate-200">
             {rowsTx.map((r) => (
-              <tr key={r.owner} className="text-center">
-                <td className="text-left px-3 py-2 font-medium">{r.owner}</td>
+              <tr
+                key={r.owner}
+                className="transition-colors hover:bg-white/55 dark:hover:bg-white/5"
+              >
+                <td className="px-4 py-3 text-left font-semibold">{r.owner}</td>
                 {seasonsForTable.map((yr) => (
                   <td
                     key={`${r.owner}-${yr}`}
-                    className="px-3 py-2 tabular-nums"
+                    className="px-4 py-3 text-center tabular-nums"
                   >
                     {r[yr] || 0}
                   </td>
                 ))}
-                <td className="px-3 py-2 font-semibold tabular-nums">
+                <td className="px-4 py-3 text-center font-semibold tabular-nums text-indigo-600 dark:text-indigo-300">
                   {r.total || 0}
                 </td>
               </tr>
@@ -6294,37 +6320,36 @@ export function TradesTab({
     return (
       <div className="fixed inset-0 z-50">
         <div
-          className="absolute inset-0 bg-black/50"
+          className="absolute inset-0 bg-slate-950/75 backdrop-blur"
           onClick={onClose}
           aria-hidden="true"
         />
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(680px,92vw)] max-h-[80vh] overflow-auto rounded-xl bg-white dark:bg-zinc-900 shadow-xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="font-semibold">{owner} — Top 20 FA Pickups</div>
+        <div className="absolute left-1/2 top-1/2 w-[min(680px,92vw)] max-h-[82vh] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl border border-white/20 dark:border-white/10 bg-white/85 dark:bg-zinc-950/80 shadow-[0_35px_85px_-45px_rgba(59,130,246,0.8)] backdrop-blur-xl">
+          <div className="relative flex items-center justify-between gap-3 border-b border-white/40 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 px-6 py-4">
+            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600 dark:text-slate-200">
+              {owner} — Top 20 FA Pickups
+            </div>
             <button
-              className="px-2 py-1 rounded border hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-br from-rose-500/25 via-amber-400/20 to-emerald-400/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-30px_rgba(244,114,182,0.6)] transition-transform hover:scale-105"
               onClick={onClose}
             >
               Close
             </button>
           </div>
-          <div className="p-3">
+          <div className="p-5">
             {mine.length === 0 ? (
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
                 No qualifying pickups.
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {mine.map((a, i) => (
-                  <div
+                  <PickupRow
                     key={`${owner}-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                    className="flex"
-                  >
-                    <div className="w-6 text-zinc-400">{i + 1}.</div>
-                    <div className="flex-1">
-                      <PickupRow a={a} showOwner={false} />
-                    </div>
-                  </div>
+                    a={a}
+                    showOwner={false}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
@@ -6346,37 +6371,36 @@ export function TradesTab({
       {moreGlobal ? (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-slate-950/75 backdrop-blur"
             onClick={() => setMoreGlobal(false)}
             aria-hidden="true"
           />
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(720px,92vw)] max-h-[80vh] overflow-auto rounded-xl bg-white dark:bg-zinc-900 shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-              <div className="font-semibold">Best Pickups — Top 20</div>
+          <div className="absolute left-1/2 top-1/2 w-[min(720px,92vw)] max-h-[82vh] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-3xl border border-white/20 dark:border-white/10 bg-white/85 dark:bg-zinc-950/80 shadow-[0_35px_85px_-45px_rgba(59,130,246,0.8)] backdrop-blur-xl">
+            <div className="relative flex items-center justify-between gap-3 border-b border-white/40 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 px-6 py-4">
+              <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600 dark:text-slate-200">
+                Best Pickups — Top 20
+              </div>
               <button
-                className="px-2 py-1 rounded border hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-br from-rose-500/25 via-amber-400/20 to-emerald-400/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-700 dark:text-slate-100 shadow-[0_20px_45px_-30px_rgba(244,114,182,0.6)] transition-transform hover:scale-105"
                 onClick={() => setMoreGlobal(false)}
               >
                 Close
               </button>
             </div>
-            <div className="p-3">
+            <div className="p-5">
               {top20Global.length === 0 ? (
-                <div className="text-sm text-zinc-500">
+                <div className="text-sm text-slate-500 dark:text-slate-400">
                   No qualifying pickups.
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-3">
                   {top20Global.map((a, i) => (
-                    <div
+                    <PickupRow
                       key={`global-${a.season}-${a.weekAcquired}-${a.playerId}-${i}`}
-                      className="flex"
-                    >
-                      <div className="w-6 text-zinc-400">{i + 1}.</div>
-                      <div className="flex-1">
-                        <PickupRow a={a} showOwner={true} />
-                      </div>
-                    </div>
+                      a={a}
+                      showOwner={true}
+                      rank={i + 1}
+                    />
                   ))}
                 </div>
               )}
