@@ -40,18 +40,18 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-base-100 shadow-xl rounded-xl p-8">
-        <h1 className="text-3xl font-bold text-center mb-2">Sign in</h1>
-        <p className="text-center text-base-content/70 mb-8">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-slate-900/70 backdrop-blur-sm shadow-2xl rounded-2xl p-8 border border-white/10 text-white">
+        <h1 className="text-3xl font-bold text-left mb-2">Sign in</h1>
+        <p className="text-left text-slate-200/80 mb-8">
           Access your LeagueVault account to manage memberships and leagues.
         </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <label className="form-control">
-            <span className="label-text">Email</span>
+            <span className="label-text text-white text-sm font-medium">Email</span>
             <input
               type="email"
-              className="input input-bordered"
+              className="input input-bordered bg-slate-800/70 border-white/20 text-white placeholder:text-slate-300"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
@@ -59,10 +59,10 @@ export default function SignInPage() {
             />
           </label>
           <label className="form-control">
-            <span className="label-text">Password</span>
+            <span className="label-text text-white text-sm font-medium">Password</span>
             <input
               type="password"
-              className="input input-bordered"
+              className="input input-bordered bg-slate-800/70 border-white/20 text-white placeholder:text-slate-300"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
@@ -74,7 +74,7 @@ export default function SignInPage() {
             Sign in
           </button>
         </form>
-        <div className="mt-6 text-center text-sm">
+        <div className="mt-6 text-center text-sm text-slate-200">
           <span>Don't have an account? </span>
           <Link
             to="/signup"

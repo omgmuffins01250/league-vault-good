@@ -23,31 +23,65 @@ export default function HomePage() {
         <div className="flex-1">
           <span className="btn btn-ghost normal-case text-xl">LeagueVault</span>
         </div>
-        <div className="flex-none gap-2">
-          {isSignedIn ? (
-            <>
-              <span className="hidden text-gray-600 sm:inline">
-                {user}
-              </span>
-              <button
-                className="btn btn-ghost"
-                onClick={() => {
-                  signOut();
-                  nav("/", { replace: true });
-                }}
-              >
-                Sign out
-              </button>
-              <Link className="btn btn-primary" to="/app">
-                Enter App
-              </Link>
-            </>
-          ) : (
-            <button className="btn btn-primary" onClick={handleSignIn}>
-              Sign in
-            </button>
-          )}
-        </div>
+        <nav className="flex-none flex items-center gap-2">
+          <a href="#contact" className="btn btn-ghost normal-case">
+            Contact
+          </a>
+          <div className="dropdown dropdown-end">
+            <label
+              tabIndex={0}
+              className="btn btn-ghost btn-circle avatar placeholder"
+            >
+              <div className="bg-primary/10 text-primary rounded-full w-12">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h2c0-2.761 2.239-5 5-5s5 2.239 5 5h2c0-3.866-3.134-7-7-7z" />
+                </svg>
+              </div>
+            </label>
+            <ul
+              tabIndex={0}
+              className="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-48"
+            >
+              {isSignedIn ? (
+                <>
+                  <li className="font-semibold text-gray-600 px-2 py-1">
+                    Hi, {user || "Manager"}
+                  </li>
+                  <li>
+                    <Link to="/app">Enter App</Link>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        signOut();
+                        nav("/", { replace: true });
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <button type="button" onClick={handleSignIn}>
+                      Sign in
+                    </button>
+                  </li>
+                  <li>
+                    <Link to="/signup">Sign up</Link>
+                  </li>
+                </>
+              )}
+            </ul>
+          </div>
+        </nav>
       </header>
 
       {/* HERO */}
