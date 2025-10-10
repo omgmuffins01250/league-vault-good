@@ -3065,7 +3065,10 @@ export function PlacementsTab({
       </Card>
 
       {/* Placements grid */}
-      <Card title="Placements by season" subtitle="Final finishes by manager across every recorded year">
+      <Card
+        title="Placements by season"
+        subtitle="Final finishes by manager across every recorded year"
+      >
         <div className="overflow-x-auto">
           <div className="relative min-w-full overflow-hidden rounded-2xl border border-white/25 dark:border-white/10 bg-white/75 dark:bg-zinc-950/50 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.9)] backdrop-blur-xl">
             <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
@@ -3122,7 +3125,10 @@ export function PlacementsTab({
                         const madePO = !!(place && hasPOInfo && place <= poCnt);
 
                         return (
-                          <td key={`${member}-${yr}`} className="px-4 py-3 text-center">
+                          <td
+                            key={`${member}-${yr}`}
+                            className="px-4 py-3 text-center"
+                          >
                             {place ? (
                               <span
                                 className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-[0_8px_20px_-12px_rgba(15,23,42,0.65)] backdrop-blur ${
@@ -3154,7 +3160,9 @@ export function PlacementsTab({
                                 })()}
                               </span>
                             ) : (
-                              <span className="text-slate-400 dark:text-slate-500">—</span>
+                              <span className="text-slate-400 dark:text-slate-500">
+                                —
+                              </span>
                             )}
                           </td>
                         );
@@ -7886,13 +7894,7 @@ export function RosterTab({
             </tr>
             <tr className="text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-400">
               <th />
-              <th className="pr-3 text-right align-top">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/50 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.42em] text-slate-500 dark:text-slate-300 shadow-[0_16px_40px_-30px_rgba(148,163,184,0.6)]">
-                  {showProj
-                    ? "Actual · Projected · Potential · Left"
-                    : "Actual · Potential · Left"}
-                </span>
-              </th>
+              <th className="pr-3 text-right align-top"></th>
               {weeks.map((w) => {
                 const t = perWeekTotals[w] || {
                   actual: 0,
