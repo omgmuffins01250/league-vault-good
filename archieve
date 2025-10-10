@@ -1770,14 +1770,24 @@ export function PlacementsTab({
 }) {
   if (!league) return null;
 
-  const owners = league.owners || [];
+  const hiddenManagersSet = React.useMemo(() => {
+    const list = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    return new Set(list);
+  }, [league?.hiddenManagers]);
+
+  const owners = React.useMemo(
+    () => (league.owners || []).filter((name) => !hiddenManagersSet.has(name)),
+    [league?.owners, hiddenManagersSet]
+  );
   const seasons = league.seasonsAll || [];
   // Everyone who has any placement data (used for totals + “last place” math).
   const allOwnersForPlacements = React.useMemo(() => {
     const pm = league?.placementMap;
-    return pm && typeof pm === "object" ? Object.keys(pm) : [];
-  }, [league?.placementMap]);
-
+    if (!pm || typeof pm !== "object") return [];
+    return Object.keys(pm).filter((name) => !hiddenManagersSet.has(name));
+  }, [league?.placementMap, hiddenManagersSet]);
   const maxPlaceBySeason = React.useMemo(() => {
     const out = {};
     (seasons || []).forEach((yr) => {
@@ -11461,7 +11471,6 @@ export function LuckIndexTab({
     league?.seasonsByYear,
     league?.proTeams,
   ]);
-
   // This IS the Luck Index for now
   const comp1ByOwnerYear = comp1Data.totals;
   const comp1DetailByOwnerYear = comp1Data.details;
@@ -11549,7 +11558,87 @@ export function LuckIndexTab({
     injuryWeightAlpha,
     normalizedWaiverRound,
   ]);
-  const luckByOwnerYear = comp1ByOwnerYear;
+  const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
+    const { invert = false } = options;
+    const entries = [];
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const [owner, bySeason] of Object.entries(data || {})) {
+      for (const [seasonKey, value] of Object.entries(bySeason || {})) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) continue;
+        entries.push({ owner, seasonKey, value: numeric });
+        if (numeric < min) min = numeric;
+        if (numeric > max) max = numeric;
+      }
+    }
+
+    if (!entries.length || !Number.isFinite(min) || !Number.isFinite(max)) {
+      return { scaled: {}, min: null, max: null };
+    }
+
+    const range = max - min;
+    const scaled = {};
+
+    for (const { owner, seasonKey, value } of entries) {
+      let normalized;
+      if (range === 0) {
+        normalized = 100;
+      } else if (invert) {
+        normalized = ((max - value) / range) * 100;
+      } else {
+        normalized = ((value - min) / range) * 100;
+      }
+      const clamped = Math.max(0, Math.min(100, normalized));
+      scaled[owner] ??= {};
+      scaled[owner][seasonKey] = clamped;
+    }
+
+    return { scaled, min, max };
+  }, []);
+
+  const comp1ScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(comp1ByOwnerYear),
+    [comp1ByOwnerYear, normalizeOwnerYearTotals]
+  );
+  const comp1ScaledByOwnerYear = comp1ScaledData.scaled;
+  const comp1Min = comp1ScaledData.min;
+  const comp1Max = comp1ScaledData.max;
+
+  const injuryScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(injuryByOwnerYear, { invert: true }),
+    [injuryByOwnerYear, normalizeOwnerYearTotals]
+  );
+  const injuryScaledByOwnerYear = injuryScaledData.scaled;
+  const injuryMin = injuryScaledData.min;
+  const injuryMax = injuryScaledData.max;
+
+  const luckByOwnerYear = React.useMemo(() => {
+    const out = {};
+    const ownersSet = new Set([
+      ...Object.keys(comp1ScaledByOwnerYear || {}),
+      ...Object.keys(injuryScaledByOwnerYear || {}),
+    ]);
+
+    for (const owner of ownersSet) {
+      const seasonsSet = new Set([
+        ...Object.keys(comp1ScaledByOwnerYear?.[owner] || {}),
+        ...Object.keys(injuryScaledByOwnerYear?.[owner] || {}),
+      ]);
+
+      for (const seasonKey of seasonsSet) {
+        const c1 = comp1ScaledByOwnerYear?.[owner]?.[seasonKey];
+        const c2 = injuryScaledByOwnerYear?.[owner]?.[seasonKey];
+        if (Number.isFinite(c1) && Number.isFinite(c2)) {
+          out[owner] ??= {};
+          out[owner][seasonKey] = (c1 + c2) / 2;
+        }
+      }
+    }
+
+    return out;
+  }, [comp1ScaledByOwnerYear, injuryScaledByOwnerYear]);
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
   const owners = React.useMemo(() => {
@@ -11574,7 +11663,7 @@ export function LuckIndexTab({
   }, [comp2Detail, hiddenManagersSet]);
 
   // --- Table helper ---
-  const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1) : "—");
+  const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -11645,6 +11734,25 @@ export function LuckIndexTab({
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Scores normalized between 0 (least lucky) and 100 (most lucky) by
+          averaging opponent luck and injury resilience on their respective
+          ranges.
+          {Number.isFinite(comp1Min) && Number.isFinite(comp1Max) && (
+            <>
+              {" "}
+              Opponent luck span: {comp1Min.toFixed(1)} to {comp1Max.toFixed(1)}{" "}
+              pts.
+            </>
+          )}
+          {Number.isFinite(injuryMin) && Number.isFinite(injuryMax) && (
+            <>
+              {" "}
+              Injury weeks span: {injuryMin.toFixed(0)} to{" "}
+              {injuryMax.toFixed(0)}.
+            </>
+          )}
+        </p>
       </Card>
 
       {/* ===== Component Breakdown ===== */}
