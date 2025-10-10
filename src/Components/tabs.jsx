@@ -2374,7 +2374,12 @@ export function PlacementsTab({
 }) {
   if (!league) return null;
 
-  const SoftButton = ({ children, className = "", disabled = false, ...props }) => (
+  const SoftButton = ({
+    children,
+    className = "",
+    disabled = false,
+    ...props
+  }) => (
     <button
       type="button"
       disabled={disabled}
@@ -2384,7 +2389,11 @@ export function PlacementsTab({
         bg-gradient-to-r from-white/95 via-white/80 to-white/90 dark:from-zinc-900/80 dark:via-zinc-900/55 dark:to-zinc-950/70
         border border-white/70 dark:border-white/10 shadow-[0_18px_40px_-28px_rgba(30,41,59,0.85)] backdrop-blur transition-all duration-200
         ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_52px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70
-        ${disabled ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none" : ""}
+        ${
+          disabled
+            ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none"
+            : ""
+        }
         ${className}`}
     >
       <span className="tracking-[0.32em]">{children}</span>
@@ -2567,8 +2576,9 @@ export function PlacementsTab({
     const bestAvg = playable
       .filter((s) => Number.isFinite(s.avg) && s.avg > 0)
       .sort((a, b) => a.avg - b.avg)[0];
-    const mostTitles = [...summary]
-      .sort((a, b) => b.firsts - a.firsts || a.avg - b.avg)[0];
+    const mostTitles = [...summary].sort(
+      (a, b) => b.firsts - a.firsts || a.avg - b.avg
+    )[0];
     const bestPlayoff = playable
       .map((s) => ({
         ...s,
@@ -2586,8 +2596,7 @@ export function PlacementsTab({
         detail: `${bestAvg.count} season${bestAvg.count === 1 ? "" : "s"}`,
         accent:
           "from-amber-200/80 via-orange-200/70 to-rose-200/60 border-amber-300/70 shadow-[0_25px_60px_-35px_rgba(245,158,11,0.75)] text-amber-900 dark:text-amber-100",
-        textGradient:
-          "from-amber-500 via-orange-500 to-rose-500",
+        textGradient: "from-amber-500 via-orange-500 to-rose-500",
       });
     }
     if (mostTitles) {
@@ -2602,8 +2611,7 @@ export function PlacementsTab({
             : `${mostTitles.firsts} trophies earned`,
         accent:
           "from-sky-200/80 via-indigo-200/70 to-purple-200/60 border-sky-300/60 shadow-[0_25px_60px_-35px_rgba(96,165,250,0.7)] text-slate-800 dark:text-slate-100",
-        textGradient:
-          "from-sky-500 via-blue-500 to-indigo-500",
+        textGradient: "from-sky-500 via-blue-500 to-indigo-500",
       });
     }
     if (bestPlayoff) {
@@ -2616,8 +2624,7 @@ export function PlacementsTab({
         detail: `${bestPlayoff.playoffs} of ${bestPlayoff.count} seasons`,
         accent:
           "from-emerald-200/80 via-teal-200/70 to-cyan-200/60 border-emerald-300/60 shadow-[0_25px_60px_-35px_rgba(16,185,129,0.7)] text-emerald-900 dark:text-emerald-100",
-        textGradient:
-          "from-emerald-500 via-teal-500 to-cyan-500",
+        textGradient: "from-emerald-500 via-teal-500 to-cyan-500",
       });
     }
     return tiles;
@@ -2925,7 +2932,10 @@ export function PlacementsTab({
                       const madePO = !!(place && hasPOInfo && place <= poCnt);
 
                       return (
-                        <td key={`${member}-${yr}`} className="px-4 py-3 text-center">
+                        <td
+                          key={`${member}-${yr}`}
+                          className="px-4 py-3 text-center"
+                        >
                           {place ? (
                             <span
                               className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.55)] ${
@@ -2943,7 +2953,12 @@ export function PlacementsTab({
                             >
                               {(() => {
                                 const m = medalFor(Number(place));
-                                if (m) return <span className="text-lg drop-shadow-sm">{m}</span>;
+                                if (m)
+                                  return (
+                                    <span className="text-lg drop-shadow-sm">
+                                      {m}
+                                    </span>
+                                  );
                                 return (
                                   <span className="tabular-nums font-semibold">
                                     {ordinalSafe(Number(place))}
@@ -2952,7 +2967,9 @@ export function PlacementsTab({
                               })()}
                             </span>
                           ) : (
-                            <span className="text-slate-400 dark:text-slate-500">—</span>
+                            <span className="text-slate-400 dark:text-slate-500">
+                              —
+                            </span>
                           )}
                         </td>
                       );
@@ -2970,7 +2987,10 @@ export function PlacementsTab({
       <Card title="Placements over time">
         {/* Quick toggles */}
         <div className="mb-3 flex flex-wrap gap-2">
-          <SoftButton className="px-2 py-1 text-[10px]" onClick={selectAllOwners}>
+          <SoftButton
+            className="px-2 py-1 text-[10px]"
+            onClick={selectAllOwners}
+          >
             Select all
           </SoftButton>
           <SoftButton
@@ -3191,7 +3211,12 @@ export function PlacementsTab({
 /* MoneyTab (updated with dynamic heat, collapse, copy/paste, and earnings chart) */
 export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
   if (!league) return null;
-  const SoftButton = ({ children, className = "", disabled = false, ...props }) => (
+  const SoftButton = ({
+    children,
+    className = "",
+    disabled = false,
+    ...props
+  }) => (
     <button
       type="button"
       disabled={disabled}
@@ -3201,7 +3226,11 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
         bg-gradient-to-r from-white/95 via-white/80 to-white/90 dark:from-zinc-900/80 dark:via-zinc-900/55 dark:to-zinc-950/70
         border border-white/70 dark:border-white/10 shadow-[0_18px_40px_-28px_rgba(30,41,59,0.85)] backdrop-blur transition-all duration-200
         ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_52px_-28px_rgba(59,130,246,0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70
-        ${disabled ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none" : ""}
+        ${
+          disabled
+            ? "opacity-40 cursor-not-allowed hover:translate-y-0 hover:shadow-none"
+            : ""
+        }
         ${className}`}
     >
       <span className="tracking-[0.32em]">{children}</span>
@@ -3384,8 +3413,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
     return 0;
   });
 
-  const fmtCurrency = (n) =>
-    `$${Math.round(Number(n || 0)).toLocaleString()}`;
+  const fmtCurrency = (n) => `$${Math.round(Number(n || 0)).toLocaleString()}`;
   const totalEarnedAll = rows.reduce(
     (sum, r) => sum + (Number(r.earned) || 0),
     0
@@ -3394,10 +3422,11 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
     (sum, r) => sum + (Number(r.invested) || 0),
     0
   );
-  const topEarnerRow = rows.reduce((best, cur) =>
-    best == null || Number(cur.earned || 0) > Number(best.earned || 0)
-      ? cur
-      : best,
+  const topEarnerRow = rows.reduce(
+    (best, cur) =>
+      best == null || Number(cur.earned || 0) > Number(best.earned || 0)
+        ? cur
+        : best,
     null
   );
   const bestRoiRow = rows
@@ -3409,10 +3438,11 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
           : best,
       null
     );
-  const weeklyBossRow = rows.reduce((best, cur) =>
-    best == null || Number(cur.weekly || 0) > Number(best.weekly || 0)
-      ? cur
-      : best,
+  const weeklyBossRow = rows.reduce(
+    (best, cur) =>
+      best == null || Number(cur.weekly || 0) > Number(best.weekly || 0)
+        ? cur
+        : best,
     null
   );
   const moneyHeroTiles = [
@@ -3422,9 +3452,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
           label: "Total Prize Pool",
           owner: "League",
           value: fmtCurrency(totalEarnedAll),
-          detail: `${fmtCurrency(totalInvestedAll)} collected across ${seasons.length} season${
-            seasons.length === 1 ? "" : "s"
-          }`,
+          detail: `${fmtCurrency(totalInvestedAll)} collected across ${
+            seasons.length
+          } season${seasons.length === 1 ? "" : "s"}`,
           accent:
             "from-amber-200/85 via-yellow-200/70 to-orange-200/60 border-amber-300/70 shadow-[0_28px_60px_-35px_rgba(251,191,36,0.75)] text-amber-900 dark:text-amber-100",
           textGradient: "from-amber-500 via-orange-500 to-yellow-500",
@@ -3451,9 +3481,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
           label: "Best ROI",
           owner: bestRoiRow.owner,
           value: `${Math.round(Number(bestRoiRow.roi || 0) * 100)}%`,
-          detail: `${fmtCurrency(Number(bestRoiRow.earned || 0))} on ${fmtCurrency(
-            Number(bestRoiRow.invested || 0)
-          )}`,
+          detail: `${fmtCurrency(
+            Number(bestRoiRow.earned || 0)
+          )} on ${fmtCurrency(Number(bestRoiRow.invested || 0))}`,
           accent:
             "from-emerald-200/80 via-teal-200/70 to-cyan-200/60 border-emerald-300/70 shadow-[0_28px_60px_-35px_rgba(52,211,153,0.65)] text-emerald-900 dark:text-emerald-100",
           textGradient: "from-emerald-500 via-teal-500 to-cyan-500",
@@ -3764,9 +3794,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                         Copy
                       </SoftButton>
                     ) : copiedFrom === yr ? (
-                      <span
-                        className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-900 dark:text-emerald-100 bg-gradient-to-r from-emerald-200/80 via-emerald-100/70 to-teal-200/60 border border-emerald-300/70 shadow-[0_18px_40px_-30px_rgba(16,185,129,0.6)]"
-                      >
+                      <span className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-900 dark:text-emerald-100 bg-gradient-to-r from-emerald-200/80 via-emerald-100/70 to-teal-200/60 border border-emerald-300/70 shadow-[0_18px_40px_-30px_rgba(16,185,129,0.6)]">
                         Copied ✓
                       </span>
                     ) : (
@@ -3930,7 +3958,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                       title="Sort by Member"
                     >
                       Member
-                      <span className="opacity-70 text-xs">{sortIndicator("owner")}</span>
+                      <span className="opacity-70 text-xs">
+                        {sortIndicator("owner")}
+                      </span>
                     </button>
                   </th>
 
@@ -3941,7 +3971,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                       title="Sort by Invested"
                     >
                       Invested
-                      <span className="opacity-70 text-xs">{sortIndicator("invested")}</span>
+                      <span className="opacity-70 text-xs">
+                        {sortIndicator("invested")}
+                      </span>
                     </button>
                   </th>
 
@@ -3952,7 +3984,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                       title="Sort by Earned"
                     >
                       Earned
-                      <span className="opacity-70 text-xs">{sortIndicator("earned")}</span>
+                      <span className="opacity-70 text-xs">
+                        {sortIndicator("earned")}
+                      </span>
                     </button>
                   </th>
 
@@ -3963,19 +3997,28 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                       title="Sort by ROI"
                     >
                       ROI
-                      <span className="opacity-70 text-xs">{sortIndicator("roi")}</span>
+                      <span className="opacity-70 text-xs">
+                        {sortIndicator("roi")}
+                      </span>
                     </button>
                   </th>
 
                   {[1, 2, 3].map((place) => (
-                    <th key={`place-h-${place}`} className="px-4 py-3 text-center">
+                    <th
+                      key={`place-h-${place}`}
+                      className="px-4 py-3 text-center"
+                    >
                       <button
                         className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
                         onClick={() => toggleSort(`place${place}`)}
-                        title={`Sort by ${place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}`}
+                        title={`Sort by ${
+                          place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"
+                        }`}
                       >
                         {place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}
-                        <span className="opacity-70 text-xs">{sortIndicator(`place${place}`)}</span>
+                        <span className="opacity-70 text-xs">
+                          {sortIndicator(`place${place}`)}
+                        </span>
                       </button>
                     </th>
                   ))}
@@ -3988,7 +4031,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                         title="Sort by Weekly payouts"
                       >
                         Weekly
-                        <span className="opacity-70 text-xs">{sortIndicator("weekly")}</span>
+                        <span className="opacity-70 text-xs">
+                          {sortIndicator("weekly")}
+                        </span>
                       </button>
                     </th>
                   )}
@@ -3997,7 +4042,10 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                     [...Array(payoutTiers - 3)].map((_, idx) => {
                       const place = idx + 4;
                       return (
-                        <th key={`place-h-${place}`} className="px-4 py-3 text-center">
+                        <th
+                          key={`place-h-${place}`}
+                          className="px-4 py-3 text-center"
+                        >
                           <button
                             className="inline-flex items-center justify-center gap-1 font-semibold uppercase tracking-[0.22em] text-[11px] text-slate-600 dark:text-slate-200"
                             onClick={() => toggleSort(`place${place}`)}
@@ -4011,7 +4059,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                               : place === 3
                               ? "rd"
                               : "th"}
-                            <span className="opacity-70 text-xs">{sortIndicator(`place${place}`)}</span>
+                            <span className="opacity-70 text-xs">
+                              {sortIndicator(`place${place}`)}
+                            </span>
                           </button>
                         </th>
                       );
@@ -4094,7 +4144,10 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                         return (
                           <td key={`p-${place}`} className="px-4 py-3">
                             <span className="inline-flex min-w-[86px] items-center justify-center rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-800 dark:text-slate-100 bg-white/70 dark:bg-white/[0.08] shadow-[0_20px_45px_-32px_rgba(15,23,42,0.85)]">
-                              ${Math.round(r.byPlace[place] || 0).toLocaleString()}
+                              $
+                              {Math.round(
+                                r.byPlace[place] || 0
+                              ).toLocaleString()}
                             </span>
                           </td>
                         );
@@ -7909,12 +7962,14 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               </div>
             ) : null}
           </div>
-          {right ? <div className="flex items-center gap-2 text-[11px] text-amber-900/75 dark:text-amber-100/80">{right}</div> : null}
+          {right ? (
+            <div className="flex items-center gap-2 text-[11px] text-amber-900/75 dark:text-amber-100/80">
+              {right}
+            </div>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-white/50 dark:border-white/5 bg-white/70 dark:bg-amber-900/10 backdrop-blur-sm">
-          <div className="overflow-hidden rounded-[1.1rem]">
-            {children}
-          </div>
+          <div className="overflow-hidden rounded-[1.1rem]">{children}</div>
         </div>
       </div>
     </div>
@@ -8463,11 +8518,19 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         <div className="mb-4 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 p-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_30px_65px_-48px_rgba(15,23,42,0.55)] backdrop-blur">
           Showing each manager’s drafted players for {year}. Columns include
           Round, Overall pick,{" "}
-          <span className="font-semibold text-amber-700 dark:text-amber-200">Pick&nbsp;POS</span>{" "}
+          <span className="font-semibold text-amber-700 dark:text-amber-200">
+            Pick&nbsp;POS
+          </span>{" "}
           (your league’s RB/WR/… order), Player,{" "}
-          <span className="font-semibold text-amber-700 dark:text-amber-200">ADP</span>,{" "}
-          <span className="font-semibold text-amber-700 dark:text-amber-200">POS</span>{" "}
-          (FantasyPros position rank like <em>WR5</em>), Finish (Pos), and Keeper.
+          <span className="font-semibold text-amber-700 dark:text-amber-200">
+            ADP
+          </span>
+          ,{" "}
+          <span className="font-semibold text-amber-700 dark:text-amber-200">
+            POS
+          </span>{" "}
+          (FantasyPros position rank like <em>WR5</em>), Finish (Pos), and
+          Keeper.
         </div>
 
         {/* controls */}
@@ -8504,7 +8567,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               />
             </label>
 
-            <label className={`${goldToggleCls(includeKeepers)} cursor-pointer`}>
+            <label
+              className={`${goldToggleCls(includeKeepers)} cursor-pointer`}
+            >
               <input
                 type="checkbox"
                 className="sr-only"
@@ -8567,7 +8632,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                 ))}
                 {bestYearScores.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
+                    <td
+                      colSpan={3}
+                      className="py-3 text-center text-amber-900/70 dark:text-amber-100/70"
+                    >
                       No scorable picks this year.
                     </td>
                   </tr>
@@ -8609,7 +8677,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                 ))}
                 {bestOverallScores.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
+                    <td
+                      colSpan={3}
+                      className="py-3 text-center text-amber-900/70 dark:text-amber-100/70"
+                    >
                       No seasons found.
                     </td>
                   </tr>
@@ -8717,7 +8788,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                     )
                 ).length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
+                    <td
+                      colSpan={4}
+                      className="py-3 text-center text-amber-900/70 dark:text-amber-100/70"
+                    >
                       No drafted-points data for this selection.
                     </td>
                   </tr>
@@ -8765,7 +8839,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                 ))}
                 {draftedPoints.totals.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-3 text-center text-amber-900/70 dark:text-amber-100/70">
+                    <td
+                      colSpan={5}
+                      className="py-3 text-center text-amber-900/70 dark:text-amber-100/70"
+                    >
                       No seasons found.
                     </td>
                   </tr>
@@ -8857,14 +8934,24 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                         <thead className="sticky top-0 bg-white/85 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-800/85 dark:bg-amber-950/40 dark:text-amber-100/80">
                           <tr className="border-b border-amber-300/50 dark:border-amber-500/30">
                             {breakdownRows.some((r) => r.year) && (
-                              <th className="px-3 py-2 text-left w-[68px]">Year</th>
+                              <th className="px-3 py-2 text-left w-[68px]">
+                                Year
+                              </th>
                             )}
                             <th className="px-3 py-2 text-left w-[56px]">Rd</th>
                             <th className="px-3 py-2 text-left">Player</th>
-                            <th className="px-3 py-2 text-center w-[70px]">ADP</th>
-                            <th className="px-3 py-2 text-center w-[90px]">Pick POS</th>
-                            <th className="px-3 py-2 text-center w-[110px]">Finish POS</th>
-                            <th className="px-3 py-2 text-right w-[110px]">Contribution</th>
+                            <th className="px-3 py-2 text-center w-[70px]">
+                              ADP
+                            </th>
+                            <th className="px-3 py-2 text-center w-[90px]">
+                              Pick POS
+                            </th>
+                            <th className="px-3 py-2 text-center w-[110px]">
+                              Finish POS
+                            </th>
+                            <th className="px-3 py-2 text-right w-[110px]">
+                              Contribution
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-amber-200/60 dark:divide-amber-500/30">
@@ -8880,7 +8967,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                                 key={r.key}
                                 className="transition-colors duration-150 ease-out hover:bg-white/70 dark:hover:bg-amber-500/20"
                               >
-                                {r.year && <td className="px-3 py-2">{r.year}</td>}
+                                {r.year && (
+                                  <td className="px-3 py-2">{r.year}</td>
+                                )}
                                 <td className="px-3 py-2">{r.round}</td>
                                 <td className="px-3 py-2">{r.player}</td>
                                 <td className="px-3 py-2 text-center tabular-nums">
@@ -8946,11 +9035,15 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                     <tr className="border-b border-amber-300/50 dark:border-amber-500/30">
                       <th className="px-3 py-2 text-left w-[56px]">Rd</th>
                       <th className="px-3 py-2 text-left w-[88px]">Overall</th>
-                      <th className="px-3 py-2 text-left w-[90px]">Pick&nbsp;POS</th>
+                      <th className="px-3 py-2 text-left w-[90px]">
+                        Pick&nbsp;POS
+                      </th>
                       <th className="px-3 py-2 text-left">Player</th>
                       <th className="px-3 py-2 text-center w-[90px]">ADP</th>
                       <th className="px-3 py-2 text-center w-[90px]">POS</th>
-                      <th className="px-3 py-2 text-center w-[120px]">Finish (Pos)</th>
+                      <th className="px-3 py-2 text-center w-[120px]">
+                        Finish (Pos)
+                      </th>
                       <th className="px-3 py-2 text-center w-[90px]">Keeper</th>
                     </tr>
                   </thead>
@@ -9247,12 +9340,13 @@ export function PlayoffProbTab({
                 Playoff Probability by Record
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-300/90 max-w-2xl">
-                For each week N, explore the historical probability of making the playoffs given that week&apos;s record. The sample uses only regular-season games, and a playoff berth means finishing at or above the playoff-team line for that season.
+                For each week N, explore the historical probability of making
+                the playoffs given that week&apos;s record. The sample uses only
+                regular-season games, and a playoff berth means finishing at or
+                above the playoff-team line for that season.
               </p>
             </div>
-            <label
-              className="inline-flex items-center gap-3 self-start rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-200 shadow-[0_18px_32px_-22px_rgba(15,23,42,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-25px_rgba(34,197,94,0.5)]"
-            >
+            <label className="inline-flex items-center gap-3 self-start rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-200 shadow-[0_18px_32px_-22px_rgba(15,23,42,0.75)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-25px_rgba(34,197,94,0.5)]">
               <input
                 type="checkbox"
                 className="checkbox checkbox-sm border-slate-400/60"
@@ -11798,10 +11892,14 @@ export function ScenarioTab({
             const joint = lastTimeAll(group, category, option);
             return (
               <div className="mb-4 rounded-2xl border border-amber-300/40 bg-gradient-to-r from-amber-200/40 via-amber-100/30 to-amber-300/40 px-4 py-3 text-[13px] text-amber-900 shadow-[0_18px_40px_-30px_rgba(245,158,11,0.7)] dark:border-amber-400/40 dark:text-amber-100 dark:from-amber-500/10 dark:via-amber-400/10 dark:to-amber-500/10">
-                <span className="font-semibold uppercase tracking-[0.25em] text-[11px] text-amber-600 dark:text-amber-200">Last combo</span>
+                <span className="font-semibold uppercase tracking-[0.25em] text-[11px] text-amber-600 dark:text-amber-200">
+                  Last combo
+                </span>
                 <div className="mt-1">
                   <span className="opacity-80">Last time </span>
-                  <span className="font-semibold tracking-wide">{group.join(" + ")}</span>
+                  <span className="font-semibold tracking-wide">
+                    {group.join(" + ")}
+                  </span>
                   <span className="opacity-80"> all matched: </span>
                 </div>
                 {joint ? (
@@ -11855,7 +11953,10 @@ export function ScenarioTab({
                   if (uniqueNames.length === 0) {
                     return (
                       <tr className="bg-white/60 dark:bg-white/[0.03]">
-                        <td colSpan={2} className="px-4 py-6 text-center text-slate-500 dark:text-slate-300">
+                        <td
+                          colSpan={2}
+                          className="px-4 py-6 text-center text-slate-500 dark:text-slate-300"
+                        >
                           No managers to show.
                         </td>
                       </tr>
@@ -12901,7 +13002,8 @@ export function LuckIndexTab({
                       <td className={managerCellClass}>{o}</td>
                       {seasons.map((y) => {
                         const v = comp1ByOwnerYear?.[o]?.[y];
-                        const rows = (comp1DetailByOwnerYear?.[o]?.[y] || []).length;
+                        const rows = (comp1DetailByOwnerYear?.[o]?.[y] || [])
+                          .length;
                         return (
                           <td key={y} className={valueCellClass}>
                             {Number.isFinite(v) && rows ? (
@@ -13206,7 +13308,9 @@ export function LuckIndexTab({
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                  {isWeightedView ? "Weighted Injury Impact" : "Injury Weeks Lost"}
+                  {isWeightedView
+                    ? "Weighted Injury Impact"
+                    : "Injury Weeks Lost"}
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
                   {comp2Detail.owner} — {comp2Detail.season}
@@ -13262,7 +13366,8 @@ export function LuckIndexTab({
                     {comp2DetailRows
                       .slice()
                       .sort((a, b) => {
-                        const wDiff = Number(a?.week || 0) - Number(b?.week || 0);
+                        const wDiff =
+                          Number(a?.week || 0) - Number(b?.week || 0);
                         if (wDiff !== 0) return wDiff;
                         return (a?.player || "").localeCompare(b?.player || "");
                       })
@@ -13280,7 +13385,9 @@ export function LuckIndexTab({
                               : "—"
                             : null;
                         return (
-                          <tr key={`${row.week}-${row.pid ?? row.player}-${idx}`}>
+                          <tr
+                            key={`${row.week}-${row.pid ?? row.player}-${idx}`}
+                          >
                             <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
                               W{row.week}
                             </td>
