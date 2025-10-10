@@ -2572,6 +2572,8 @@ export default function App() {
                     lineupSlotsByYear={lineupSlotsByYear}
                     currentWeekByYear={currentWeekBySeason}
                     rosterAcqByYear={rosterAcqByYear}
+                    league={leagueWithHidden}
+                    hiddenManagers={leagueWithHidden?.hiddenManagers}
                   />
                 )}
                 {league &&

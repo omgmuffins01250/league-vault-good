@@ -1770,14 +1770,24 @@ export function PlacementsTab({
 }) {
   if (!league) return null;
 
-  const owners = league.owners || [];
+  const hiddenManagersSet = React.useMemo(() => {
+    const list = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    return new Set(list);
+  }, [league?.hiddenManagers]);
+
+  const owners = React.useMemo(
+    () => (league.owners || []).filter((name) => !hiddenManagersSet.has(name)),
+    [league?.owners, hiddenManagersSet]
+  );
   const seasons = league.seasonsAll || [];
   // Everyone who has any placement data (used for totals + “last place” math).
   const allOwnersForPlacements = React.useMemo(() => {
     const pm = league?.placementMap;
-    return pm && typeof pm === "object" ? Object.keys(pm) : [];
-  }, [league?.placementMap]);
-
+    if (!pm || typeof pm !== "object") return [];
+    return Object.keys(pm).filter((name) => !hiddenManagersSet.has(name));
+  }, [league?.placementMap, hiddenManagersSet]);
   const maxPlaceBySeason = React.useMemo(() => {
     const out = {};
     (seasons || []).forEach((yr) => {
