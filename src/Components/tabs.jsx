@@ -791,48 +791,101 @@ export function MembersTab({ league }) {
   const seasonsDescRaw = [...seasons].sort((a, b) => b - a);
   const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
   const labelFor = (yr) => `${yr} Team Name`;
+  const latestLabel = latest ? `Updated through ${latest}` : null;
+
   return (
-    <TableBox>
-      <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-        <tr className="border-b-2 border-zinc-300 dark:border-zinc-700">
-          <th className="px-3 py-2 text-left">Member</th>
-          <th className="px-3 py-2 text-center">Yr Joined</th>
-          <th className="px-3 py-2 text-center">Yrs Played</th>
-          <th className="px-3 py-2 text-center">Current Team</th>
-          {seasonsDesc.map((yr) => (
-            <th
-              key={`hdr-${yr}`}
-              className="px-3 py-2 text-center whitespace-nowrap w-48"
-            >
-              {labelFor(yr)}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 [&>tr:nth-child(odd)]:bg-zinc-50 dark:[&>tr:nth-child(odd)]:bg-zinc-900 [&>tr:hover]:bg-zinc-100 dark:[&>tr:hover]:bg-zinc-800">
-        {league.members.map((m) => (
-          <tr key={m.id}>
-            {/* OWNER (manager) NAME */}
-            <td className="px-3 py-2 font-medium text-left">{m.name}</td>
-            <td className="px-3 py-2 text-center">{m.joined}</td>
-            <td className="px-3 py-2 text-center">{m.yearsPlayed}</td>
-            {/* Current team (fallback to most recent season’s saved team_name) */}
-            <td className="px-3 py-2 text-center">
-              {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
-            </td>
-            {/* Per-season team names, newest -> oldest (with fixed width) */}
-            {seasonsDesc.map((yr) => (
-              <td
-                key={`${m.id}-${yr}`}
-                className="px-3 py-2 text-center whitespace-nowrap w-48"
-              >
-                {teamNames?.[m.name]?.[yr] || "—"}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </TableBox>
+    <Card
+      title="League Members"
+      subtitle="Tenure, entry year, and the evolving team identities for every manager in your league."
+      right={
+        latestLabel ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+            {latestLabel}
+          </span>
+        ) : null
+      }
+    >
+      <div className="space-y-6">
+        <div className="text-xs uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
+          MEMBER LEDGER
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
+          <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
+          <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-[780px] text-sm text-slate-700 dark:text-slate-200">
+              <thead className="text-[11px] uppercase tracking-[0.26em] text-slate-500/90 dark:text-slate-400/80">
+                <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600 dark:text-slate-200">
+                    Member
+                  </th>
+                  <th className="px-4 py-3 text-center font-medium">Yr Joined</th>
+                  <th className="px-4 py-3 text-center font-medium">Yrs Played</th>
+                  <th className="px-4 py-3 text-center font-medium whitespace-nowrap">
+                    Current Team
+                  </th>
+                  {seasonsDesc.map((yr) => (
+                    <th
+                      key={`hdr-${yr}`}
+                      className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                    >
+                      {labelFor(yr)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="[&>tr:nth-child(odd)]:bg-white/70 dark:[&>tr:nth-child(odd)]:bg-white/5 [&>tr]:border-b [&>tr]:border-white/40 dark:[&>tr]:border-white/10">
+                {league.members.map((m) => (
+                  <tr
+                    key={m.id}
+                    className="transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
+                  >
+                    {/* OWNER (manager) NAME */}
+                    <td className="px-5 py-3 text-left">
+                      <div className="flex flex-col">
+                        <span className="text-base font-semibold tracking-tight text-slate-800 dark:text-slate-100">
+                          {m.name}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
+                          Manager
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums font-semibold text-slate-600 dark:text-slate-200">
+                      {m.joined}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-600 dark:text-emerald-300">
+                        {m.yearsPlayed}
+                      </span>
+                    </td>
+                    {/* Current team (fallback to most recent season’s saved team_name) */}
+                    <td className="px-4 py-3 text-center">
+                      <span className="inline-flex items-center justify-center rounded-full border border-amber-400/50 bg-amber-300/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 dark:text-amber-200">
+                        {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
+                      </span>
+                    </td>
+                    {/* Per-season team names, newest -> oldest (with fixed width) */}
+                    {seasonsDesc.map((yr) => (
+                      <td
+                        key={`${m.id}-${yr}`}
+                        className="px-4 py-3 text-center"
+                      >
+                        <div className="inline-flex min-w-[11rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-600 dark:text-slate-200 whitespace-nowrap">
+                          {teamNames?.[m.name]?.[yr] || "—"}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 /* CareerTab — Playful Sport styling (wider + ticks + hover tooltip) */
