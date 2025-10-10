@@ -2552,6 +2552,7 @@ export default function App() {
                     league={leagueWithHidden}
                     rawRows={rawRows}
                     rostersByYear={rostersByYear}
+                    currentWeekByYear={currentWeekBySeason}
                   />
                 )}
 

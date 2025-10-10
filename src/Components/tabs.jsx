@@ -5613,6 +5613,237 @@ const __entryIsOnByeForWeek = (entry, week) => {
   const weeks = __entryByeWeekNumbers(entry);
   return weeks.some((n) => n === w);
 };
+const __normalizeTeamToken = (value) => {
+  if (value == null) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  return str.toUpperCase();
+};
+
+const __hasAnyEntries = (value) => {
+  if (!value) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (value instanceof Map) return value.size > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return false;
+};
+
+const __seasonKeyVariants = (seasonKey) => {
+  const keys = [];
+  if (seasonKey != null) keys.push(seasonKey);
+  const seasonNum = Number(seasonKey);
+  if (Number.isFinite(seasonNum)) {
+    keys.push(seasonNum);
+    const str = String(seasonNum);
+    if (str !== seasonKey) keys.push(str);
+  }
+  return keys
+    .map((k) => (typeof k === "number" ? k : String(k)))
+    .filter((k, idx, arr) => {
+      if (k == null || k === "" || k === "NaN") return false;
+      return arr.indexOf(k) === idx;
+    });
+};
+
+const __getFromContainer = (container, key) => {
+  if (!container) return undefined;
+  if (container instanceof Map) return container.get(key);
+  if (typeof container.get === "function") {
+    try {
+      const val = container.get(key);
+      if (val !== undefined) return val;
+    } catch {}
+  }
+  return container[key];
+};
+
+function __resolveProTeamsForSeason(seasonKey, league) {
+  const variants = __seasonKeyVariants(seasonKey);
+  const pick = (source) => {
+    if (!source) return null;
+    for (const key of variants) {
+      const direct = __getFromContainer(source, key);
+      if (__hasAnyEntries(direct)) return direct;
+      if (typeof key === "string") {
+        const alt = __getFromContainer(source, Number(key));
+        if (__hasAnyEntries(alt)) return alt;
+      } else if (Number.isFinite(key)) {
+        const alt = __getFromContainer(source, String(key));
+        if (__hasAnyEntries(alt)) return alt;
+      }
+    }
+    return null;
+  };
+
+  const fromByYear = pick(league?.proTeamsByYear);
+  if (__hasAnyEntries(fromByYear)) return fromByYear;
+
+  const seasonObj = pick(league?.seasonsByYear);
+  if (__hasAnyEntries(seasonObj)) {
+    const nested =
+      seasonObj?.proTeams ??
+      seasonObj?.proTeamsById ??
+      seasonObj?.proTeamsMap ??
+      seasonObj?.proTeamInfo;
+    if (__hasAnyEntries(nested)) return nested;
+  }
+
+  if (__hasAnyEntries(league?.proTeams)) return league.proTeams;
+
+  try {
+    const payload = JSON.parse(window.name || "{}");
+    const payloadByYear = pick(payload?.proTeamsByYear);
+    if (__hasAnyEntries(payloadByYear)) return payloadByYear;
+
+    if (Array.isArray(payload?.seasons)) {
+      const seasonNum = Number(seasonKey);
+      const seasonFromPayload = payload.seasons.find((s) => {
+        const sid = Number(s?.seasonId);
+        if (Number.isFinite(seasonNum)) return sid === seasonNum;
+        return variants.some((key) => String(sid) === String(key));
+      });
+      if (__hasAnyEntries(seasonFromPayload)) {
+        const nested =
+          seasonFromPayload?.proTeams ??
+          seasonFromPayload?.proTeamsById ??
+          seasonFromPayload?.proTeamsMap ??
+          seasonFromPayload?.proTeamInfo;
+        if (__hasAnyEntries(nested)) return nested;
+      }
+    }
+
+    if (__hasAnyEntries(payload?.proTeams)) return payload.proTeams;
+  } catch {}
+
+  return null;
+}
+
+const __teamByeWeekNumbers = (team) => {
+  const set = new Set();
+  __collectWeekNums(team?.byeWeek, set);
+  __collectWeekNums(team?.byeWeeks, set);
+  __collectWeekNums(team?.byeWeekSchedule, set);
+  __collectWeekNums(team?.byeWeekNumber, set);
+  __collectWeekNums(team?.byeWeekNumbers, set);
+  __collectWeekNums(team?.byeWeek?.week, set);
+  __collectWeekNums(team?.byeWeek?.byeWeek, set);
+  return Array.from(set).sort((a, b) => a - b);
+};
+
+function __buildProTeamLookup(source) {
+  const byeById = new Map();
+  const abbrevToId = new Map();
+  if (!__hasAnyEntries(source)) return { byeById, abbrevToId };
+
+  const pushTeam = (team, key) => {
+    if (!team || typeof team !== "object") return;
+    const idCand =
+      team?.id ??
+      team?.teamId ??
+      team?.proTeamId ??
+      (Number.isFinite(Number(key)) ? Number(key) : null);
+    const id = Number(idCand);
+    if (!Number.isFinite(id)) return;
+
+    const byeWeeks = __teamByeWeekNumbers(team);
+    if (byeWeeks.length) byeById.set(id, byeWeeks[0]);
+
+    const tokens = [
+      team?.abbrev,
+      team?.abbreviation,
+      team?.teamAbbrev,
+      team?.teamAbbreviation,
+      team?.shortName,
+      team?.nickname,
+      team?.nickName,
+      team?.nameShort,
+    ];
+    const location = String(team?.location || "").trim();
+    const name = String(team?.name || "").trim();
+    if (location) tokens.push(location);
+    if (name) tokens.push(name);
+    if (location && name) tokens.push(`${location} ${name}`);
+
+    tokens
+      .map(__normalizeTeamToken)
+      .filter(Boolean)
+      .forEach((token) => {
+        if (!abbrevToId.has(token)) abbrevToId.set(token, id);
+      });
+  };
+
+  if (source instanceof Map) {
+    source.forEach((team, key) => pushTeam(team, key));
+  } else if (Array.isArray(source)) {
+    source.forEach((team, idx) => pushTeam(team, team?.id ?? idx));
+  } else if (typeof source === "object") {
+    Object.entries(source).forEach(([key, team]) => pushTeam(team, key));
+  }
+
+  return { byeById, abbrevToId };
+}
+
+function __entryProTeamIds(entry, abbrevToId) {
+  const ids = new Set();
+  if (!entry) return [];
+
+  const lookup = (token) => {
+    if (!token) return;
+    const numeric = Number(token);
+    if (Number.isFinite(numeric)) {
+      ids.add(numeric);
+      return;
+    }
+    const norm = __normalizeTeamToken(token);
+    if (!norm) return;
+    if (abbrevToId instanceof Map && abbrevToId.has(norm)) {
+      ids.add(abbrevToId.get(norm));
+      return;
+    }
+    if (abbrevToId && typeof abbrevToId === "object") {
+      const cand = abbrevToId[norm];
+      const candId = Number(
+        cand?.id ?? cand?.teamId ?? cand?.proTeamId ?? cand
+      );
+      if (Number.isFinite(candId)) ids.add(candId);
+    }
+  };
+
+  const candidates = [
+    entry?.proTeamId,
+    entry?.proTeam,
+    entry?.teamId,
+    entry?.nflTeamId,
+    entry?.player?.proTeamId,
+    entry?.player?.proTeam,
+    entry?.player?.teamId,
+    entry?.player?.nflTeamId,
+    entry?.player?.proTeamIdCurrent,
+    entry?.player?.proTeamAbbreviation,
+    entry?.player?.teamAbbreviation,
+    entry?.playerPoolEntry?.proTeamId,
+    entry?.playerPoolEntry?.proTeam,
+    entry?.playerPoolEntry?.teamId,
+    entry?.playerPoolEntry?.player?.proTeamId,
+    entry?.playerPoolEntry?.player?.proTeam,
+    entry?.playerPoolEntry?.player?.teamId,
+    entry?.playerPoolEntry?.player?.nflTeamId,
+    entry?.playerPoolEntry?.player?.proTeamIdCurrent,
+    entry?.playerPoolEntry?.player?.proTeamAbbreviation,
+    entry?.playerPoolEntry?.player?.teamAbbreviation,
+  ];
+  candidates.forEach(lookup);
+
+  return Array.from(ids);
+}
+
+function __entryHasTeamBye(entry, week, lookup) {
+  if (!lookup) return false;
+  const w = Number(week);
+  if (!Number.isFinite(w) || w <= 0) return false;
+  const ids = __entryProTeamIds(entry, lookup.abbrevToId);
+  return ids.some((id) => Number.isFinite(id) && lookup.byeById.get(id) === w);
+}
 
 // Build the list of starting slotIds for this league (exclude BENCH/IR)
 function __buildStartSlots(lineupCounts = {}) {
@@ -10585,6 +10816,7 @@ export function LuckIndexTab({
   rawRows = [],
   rostersByYear = {},
   playerProjByYear = {},
+  currentWeekByYear: currentWeekByYearOverride = {},
 }) {
   if (!league) return null;
   const hiddenManagersSet = React.useMemo(
@@ -10599,7 +10831,8 @@ export function LuckIndexTab({
       rostersByYear,
       seasonsByYear: league?.seasonsByYear,
       ownerByTeamByYear: league?.ownerByTeamByYear,
-      currentWeekByYear: league?.currentWeekByYear,
+      currentWeekByYear:
+        league?.currentWeekByYear || currentWeekByYearOverride || {},
     };
   }
 
@@ -10838,6 +11071,7 @@ export function LuckIndexTab({
         pushFromSource(league?.currentWeekByYear, key);
         pushFromSource(league?.espnCurrentWeekBySeason, key);
         pushFromSource(league?.currentWeekBySeason, key);
+        pushFromSource(currentWeekByYearOverride, key);
         pushFromSource(league?.currentWeek, key);
       }
 
@@ -10858,7 +11092,7 @@ export function LuckIndexTab({
       if (!candidates.size) return 0;
       return Math.max(...candidates);
     },
-    [league, get]
+    [league, get, currentWeekByYearOverride]
   );
 
   // --- Build name index (playerId → name) from existing rosters ---
@@ -11021,6 +11255,18 @@ export function LuckIndexTab({
   const comp2Data = React.useMemo(() => {
     const totals = {};
     const details = {};
+    const proTeamLookupCache = new Map();
+    const getProTeamLookup = (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamLookupCache.has(cacheKey)) {
+        return proTeamLookupCache.get(cacheKey);
+      }
+      const lookup = __buildProTeamLookup(
+        __resolveProTeamsForSeason(seasonKey, league)
+      );
+      proTeamLookupCache.set(cacheKey, lookup);
+      return lookup;
+    };
 
     const resolvePlayerId = (entry) => {
       const cand =
@@ -11078,6 +11324,7 @@ export function LuckIndexTab({
     for (const [seasonKey, byTeam] of Object.entries(rostersByYear || {})) {
       const seasonNum = Number(seasonKey);
       const currentWeekExclusive = resolveCurrentWeekExclusive(seasonKey);
+      const proTeamLookup = getProTeamLookup(seasonKey);
       for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
         const teamId = Number(teamKey);
         const owner = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
@@ -11094,7 +11341,7 @@ export function LuckIndexTab({
             if (__entryIsOnByeForWeek(entry, weekNum)) continue;
             const proj = __entryProj(entry);
             if (proj > 0) continue;
-            if (__entryIsOnByeForWeek(entry, weekNum)) continue;
+            if (__entryHasTeamBye(entry, weekNum, proTeamLookup)) continue;
 
             const pid = resolvePlayerId(entry);
             const seenKey =
@@ -11129,6 +11376,9 @@ export function LuckIndexTab({
     ownerNameOf,
     nameIndex,
     START_SLOTS,
+    league?.proTeamsByYear,
+    league?.seasonsByYear,
+    league?.proTeams,
   ]);
 
   // This IS the Luck Index for now
