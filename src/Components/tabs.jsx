@@ -821,8 +821,12 @@ export function MembersTab({ league }) {
                   <th className="px-5 py-3 text-left font-semibold text-slate-600 dark:text-slate-200">
                     Member
                   </th>
-                  <th className="px-4 py-3 text-center font-medium">Yr Joined</th>
-                  <th className="px-4 py-3 text-center font-medium">Yrs Played</th>
+                  <th className="px-4 py-3 text-center font-medium">
+                    Yr Joined
+                  </th>
+                  <th className="px-4 py-3 text-center font-medium">
+                    Yrs Played
+                  </th>
                   <th className="px-4 py-3 text-center font-medium whitespace-nowrap">
                     Current Team
                   </th>
@@ -4806,7 +4810,8 @@ export function RecordsTab({ league }) {
             {g.owner}
           </span>
           <span className="text-slate-500 dark:text-slate-300">
-            — {Math.round(
+            —{" "}
+            {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4816,7 +4821,8 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )} pts (S{g.season} W{fmtWeek(g.week)})
+            )}{" "}
+            pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -4846,7 +4852,8 @@ export function RecordsTab({ league }) {
             {g.owner}
           </span>
           <span className="text-slate-500 dark:text-slate-300">
-            — {Math.round(
+            —{" "}
+            {Math.round(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -4856,7 +4863,8 @@ export function RecordsTab({ league }) {
                 g.pts,
                 g.fpts
               )
-            )} pts (S{g.season} W{fmtWeek(g.week)})
+            )}{" "}
+            pts (S{g.season} W{fmtWeek(g.week)})
           </span>
         </div>
       ),
@@ -5036,362 +5044,365 @@ export function RecordsTab({ league }) {
           </Card>
         </div>
 
-      {/* Highest Points (week) */}
-      <TopSection
-        title="Highest Points (week)"
-        bigLine={
-          weeklyHigh.owner ? (
+        {/* Highest Points (week) */}
+        <TopSection
+          title="Highest Points (week)"
+          bigLine={
+            weeklyHigh.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {weeklyHigh.owner} — {Math.round(weeklyHigh.val)} (S
+                {weeklyHigh.season} W{fmtWeek(weeklyHigh.week)})
+              </span>
+            ) : null
+          }
+          listAll={topWeeklyHighAll}
+          renderRow={(g) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {weeklyHigh.owner} — {Math.round(weeklyHigh.val)} (S
-              {weeklyHigh.season} W{fmtWeek(weeklyHigh.week)})
+              {g.owner} —{" "}
+              {Math.round(
+                pickNum(
+                  g.pf,
+                  g.points_for,
+                  g.points,
+                  g.score,
+                  g.owner_points,
+                  g.pts,
+                  g.fpts
+                )
+              )}{" "}
+              (S{g.season} W{fmtWeek(g.week)})
             </span>
-          ) : null
-        }
-        listAll={topWeeklyHighAll}
-        renderRow={(g) => (
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
-              pickNum(
-                g.pf,
-                g.points_for,
-                g.points,
-                g.score,
-                g.owner_points,
-                g.pts,
-                g.fpts
-              )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
-          </span>
-        )}
-        moreKeyName="weeklyHigh"
-      />
+          )}
+          moreKeyName="weeklyHigh"
+        />
 
-      {/* Most Highest-Scoring Weeks (manager who topped the week most often) */}
-      <TopSection
-        title="Most Highest-Scoring Weeks"
-        bigLine={
-          topWeeklyWinnersAll.length ? (
+        {/* Most Highest-Scoring Weeks (manager who topped the week most often) */}
+        <TopSection
+          title="Most Highest-Scoring Weeks"
+          bigLine={
+            topWeeklyWinnersAll.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {topWeeklyWinnersAll[0].owner} — {topWeeklyWinnersAll[0].cnt}{" "}
+                {topWeeklyWinnersAll[0].cnt === 1 ? "week" : "weeks"}
+              </span>
+            ) : null
+          }
+          listAll={topWeeklyWinnersAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {topWeeklyWinnersAll[0].owner} — {topWeeklyWinnersAll[0].cnt}{" "}
-              {topWeeklyWinnersAll[0].cnt === 1 ? "week" : "weeks"}
+              {r.owner} — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
             </span>
-          ) : null
-        }
-        listAll={topWeeklyWinnersAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {r.cnt} {r.cnt === 1 ? "week" : "weeks"}
-          </span>
-        )}
-        moreKeyName="weeklyWinners"
-      />
+          )}
+          moreKeyName="weeklyWinners"
+        />
 
-      {/* Lowest Points (week) */}
-      <TopSection
-        title="Lowest Points (week)"
-        bigLine={
-          weeklyLow.owner ? (
+        {/* Lowest Points (week) */}
+        <TopSection
+          title="Lowest Points (week)"
+          bigLine={
+            weeklyLow.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {weeklyLow.owner} — {Math.round(weeklyLow.val)} (S
+                {weeklyLow.season} W{fmtWeek(weeklyLow.week)})
+              </span>
+            ) : null
+          }
+          listAll={topWeeklyLowAll}
+          renderRow={(g) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {weeklyLow.owner} — {Math.round(weeklyLow.val)} (S
-              {weeklyLow.season} W{fmtWeek(weeklyLow.week)})
+              {g.owner} —{" "}
+              {Math.round(
+                pickNum(
+                  g.pf,
+                  g.points_for,
+                  g.points,
+                  g.score,
+                  g.owner_points,
+                  g.pts,
+                  g.fpts
+                )
+              )}{" "}
+              (S{g.season} W{fmtWeek(g.week)})
             </span>
-          ) : null
-        }
-        listAll={topWeeklyLowAll}
-        renderRow={(g) => (
-          <span>
-            {g.owner} —{" "}
-            {Math.round(
-              pickNum(
-                g.pf,
-                g.points_for,
-                g.points,
-                g.score,
-                g.owner_points,
-                g.pts,
-                g.fpts
-              )
-            )}{" "}
-            (S{g.season} W{fmtWeek(g.week)})
-          </span>
-        )}
-        moreKeyName="weeklyLow"
-      />
+          )}
+          moreKeyName="weeklyLow"
+        />
 
-      {/* Highest Points (season) */}
-      <TopSection
-        title="Highest Points (season)"
-        bigLine={
-          seasonHigh.owner ? (
+        {/* Highest Points (season) */}
+        <TopSection
+          title="Highest Points (season)"
+          bigLine={
+            seasonHigh.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {seasonHigh.owner} — {Math.round(seasonHigh.val)} (S
+                {seasonHigh.season})
+              </span>
+            ) : null
+          }
+          listAll={topSeasonPFHighAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {seasonHigh.owner} — {Math.round(seasonHigh.val)} (S
-              {seasonHigh.season})
+              {r.owner} — {Math.round(r.pf)} (S{r.season})
             </span>
-          ) : null
-        }
-        listAll={topSeasonPFHighAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
-          </span>
-        )}
-        moreKeyName="seasonPFHigh"
-      />
+          )}
+          moreKeyName="seasonPFHigh"
+        />
 
-      {/* Lowest Points (season) */}
-      <TopSection
-        title="Lowest Points (season)"
-        bigLine={
-          seasonLow.owner ? (
+        {/* Lowest Points (season) */}
+        <TopSection
+          title="Lowest Points (season)"
+          bigLine={
+            seasonLow.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {seasonLow.owner} — {Math.round(seasonLow.val)} (S
+                {seasonLow.season})
+              </span>
+            ) : null
+          }
+          listAll={topSeasonPFLowAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {seasonLow.owner} — {Math.round(seasonLow.val)} (S
-              {seasonLow.season})
+              {r.owner} — {Math.round(r.pf)} (S{r.season})
             </span>
-          ) : null
-        }
-        listAll={topSeasonPFLowAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {Math.round(r.pf)} (S{r.season})
-          </span>
-        )}
-        moreKeyName="seasonPFLow"
-      />
+          )}
+          moreKeyName="seasonPFLow"
+        />
 
-      {/* Most Wins (season) */}
-      <TopSection
-        title="Most Wins (season)"
-        bigLine={
-          mostWins.owner ? (
+        {/* Most Wins (season) */}
+        <TopSection
+          title="Most Wins (season)"
+          bigLine={
+            mostWins.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {mostWins.owner} — {mostWins.val} (S{mostWins.season})
+              </span>
+            ) : null
+          }
+          listAll={topSeasonWinsHighAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {mostWins.owner} — {mostWins.val} (S{mostWins.season})
+              {r.owner} — {r.wins} (S{r.season})
             </span>
-          ) : null
-        }
-        listAll={topSeasonWinsHighAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
-          </span>
-        )}
-        moreKeyName="winsHigh"
-      />
+          )}
+          moreKeyName="winsHigh"
+        />
 
-      {/* Least Wins (season) */}
-      <TopSection
-        title="Least Wins (season)"
-        bigLine={
-          leastWins.owner ? (
+        {/* Least Wins (season) */}
+        <TopSection
+          title="Least Wins (season)"
+          bigLine={
+            leastWins.owner ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {leastWins.owner} — {leastWins.val} (S{leastWins.season})
+              </span>
+            ) : null
+          }
+          listAll={topSeasonWinsLowAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {leastWins.owner} — {leastWins.val} (S{leastWins.season})
+              {r.owner} — {r.wins} (S{r.season})
             </span>
-          ) : null
-        }
-        listAll={topSeasonWinsLowAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {r.wins} (S{r.season})
-          </span>
-        )}
-        moreKeyName="winsLow"
-      />
+          )}
+          moreKeyName="winsLow"
+        />
 
-      {/* Longest Win Streak (per season) */}
-      <TopSection
-        title="Longest Win Streak"
-        bigLine={
-          longestStreaks.length ? (
+        {/* Longest Win Streak (per season) */}
+        <TopSection
+          title="Longest Win Streak"
+          bigLine={
+            longestStreaks.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {longestStreaks[0].owner} — {longestStreaks[0].best} (S
+                {longestStreaks[0].season} W{fmtWeek(longestStreaks[0].startW)}{" "}
+                → W{fmtWeek(longestStreaks[0].endW)})
+              </span>
+            ) : null
+          }
+          listAll={longestStreaks}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {longestStreaks[0].owner} — {longestStreaks[0].best} (S
-              {longestStreaks[0].season} W{fmtWeek(longestStreaks[0].startW)} →
-              W{fmtWeek(longestStreaks[0].endW)})
+              {r.owner} — {r.best} (S{r.season} W{fmtWeek(r.startW)} → W
+              {fmtWeek(r.endW)})
             </span>
-          ) : null
-        }
-        listAll={longestStreaks}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {r.best} (S{r.season} W{fmtWeek(r.startW)} → W
-            {fmtWeek(r.endW)})
-          </span>
-        )}
-        moreKeyName="streaks"
-      />
+          )}
+          moreKeyName="streaks"
+        />
 
-      {/* Highest Scoring Player */}
-      <TopSection
-        title="Highest Scoring Player"
-        bigLine={
-          highestScoringPlayersAll.length ? (
+        {/* Highest Scoring Player */}
+        <TopSection
+          title="Highest Scoring Player"
+          bigLine={
+            highestScoringPlayersAll.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {highestScoringPlayersAll[0].owner} —{" "}
+                {highestScoringPlayersAll[0].player} —{" "}
+                {Math.round(highestScoringPlayersAll[0].pts)} (S
+                {highestScoringPlayersAll[0].season} W
+                {fmtWeek(highestScoringPlayersAll[0].week)})
+              </span>
+            ) : null
+          }
+          listAll={highestScoringPlayersAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {highestScoringPlayersAll[0].owner} —{" "}
-              {highestScoringPlayersAll[0].player} —{" "}
-              {Math.round(highestScoringPlayersAll[0].pts)} (S
-              {highestScoringPlayersAll[0].season} W
-              {fmtWeek(highestScoringPlayersAll[0].week)})
+              {r.owner} — {r.player} — {Math.round(r.pts)} (S{r.season} W
+              {fmtWeek(r.week)})
             </span>
-          ) : null
-        }
-        listAll={highestScoringPlayersAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {r.player} — {Math.round(r.pts)} (S{r.season} W
-            {fmtWeek(r.week)})
-          </span>
-        )}
-        moreKeyName="players"
-      />
+          )}
+          moreKeyName="players"
+        />
 
-      {/* Largest Win Differential */}
-      <TopSection
-        title="Largest Win Differential"
-        bigLine={
-          largestDiffAll.length ? (
+        {/* Largest Win Differential */}
+        <TopSection
+          title="Largest Win Differential"
+          bigLine={
+            largestDiffAll.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {largestDiffAll[0].winner} over {largestDiffAll[0].loser} —{" "}
+                {Math.round(largestDiffAll[0].diff)} (S
+                {largestDiffAll[0].season} W{fmtWeek(largestDiffAll[0].week)})
+              </span>
+            ) : null
+          }
+          listAll={largestDiffAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {largestDiffAll[0].winner} over {largestDiffAll[0].loser} —{" "}
-              {Math.round(largestDiffAll[0].diff)} (S{largestDiffAll[0].season}{" "}
-              W{fmtWeek(largestDiffAll[0].week)})
+              {r.winner} over {r.loser} — {Math.round(r.diff)} (S{r.season} W
+              {fmtWeek(r.week)})
             </span>
-          ) : null
-        }
-        listAll={largestDiffAll}
-        renderRow={(r) => (
-          <span>
-            {r.winner} over {r.loser} — {Math.round(r.diff)} (S{r.season} W
-            {fmtWeek(r.week)})
-          </span>
-        )}
-        moreKeyName="diff"
-      />
+          )}
+          moreKeyName="diff"
+        />
 
-      {/* Highest Points Against (season) */}
-      <TopSection
-        title="League Punching Bag — Highest Points Against (season)"
-        bigLine={
-          topPunchingBagAll.length ? (
+        {/* Highest Points Against (season) */}
+        <TopSection
+          title="League Punching Bag — Highest Points Against (season)"
+          bigLine={
+            topPunchingBagAll.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {topPunchingBagAll[0].owner} —{" "}
+                {Math.round(topPunchingBagAll[0].pa)} against (S
+                {topPunchingBagAll[0].season})
+              </span>
+            ) : null
+          }
+          listAll={topPunchingBagAll}
+          renderRow={(r) => (
             <span>
-              <span className="mr-1">🥇</span>
-              {topPunchingBagAll[0].owner} —{" "}
-              {Math.round(topPunchingBagAll[0].pa)} against (S
-              {topPunchingBagAll[0].season})
+              {r.owner} — {Math.round(r.pa)} against (S{r.season})
             </span>
-          ) : null
-        }
-        listAll={topPunchingBagAll}
-        renderRow={(r) => (
-          <span>
-            {r.owner} — {Math.round(r.pa)} against (S{r.season})
-          </span>
-        )}
-        moreKeyName="pa"
-      />
+          )}
+          moreKeyName="pa"
+        />
 
-      {/* Most Championships (all tied shown as 🥇) */}
-      <Card
-        title="Most Championships"
-        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
-      >
-        {mostChamps.length ? (
-          <div className="space-y-2">
-            {mostChamps.slice(0, 5).map(([o, c], idx) => (
-              <div key={`mc-${o}`} className="flex items-center gap-3">
-                <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300/90 via-yellow-200/75 to-emerald-200/70 text-lg shadow-[0_20px_55px_-32px_rgba(15,23,42,0.95)]">
-                  {idx === 0 ? "🏆" : "🥇"}
+        {/* Most Championships (all tied shown as 🥇) */}
+        <Card
+          title="Most Championships"
+          className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+        >
+          {mostChamps.length ? (
+            <div className="space-y-2">
+              {mostChamps.slice(0, 5).map(([o, c], idx) => (
+                <div key={`mc-${o}`} className="flex items-center gap-3">
+                  <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300/90 via-yellow-200/75 to-emerald-200/70 text-lg shadow-[0_20px_55px_-32px_rgba(15,23,42,0.95)]">
+                    {idx === 0 ? "🏆" : "🥇"}
+                  </div>
+                  <div className="flex-1 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm md:text-base leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
+                    <span className="font-semibold">{o}</span>
+                    <span className="ml-1 text-slate-500 dark:text-slate-300">
+                      — {c}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex-1 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm md:text-base leading-snug text-slate-700 dark:text-slate-100 shadow-[0_22px_55px_-38px_rgba(15,23,42,0.92)]">
-                  <span className="font-semibold">{o}</span>
-                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-            —
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+              —
+            </div>
+          )}
+        </Card>
 
-      {/* Most Playoff Appearances */}
-      <TopSection
-        title="Most Playoff Appearances"
-        bigLine={
-          poArr.length ? (
-            <span>
-              <span className="mr-1">🥇</span>
-              {poArr[0][0]} — {poArr[0][1]}
-            </span>
-          ) : null
-        }
-        listAll={poArr}
-        renderRow={(r) => {
-          const [o, c] = r;
-          return (
-            <span>
-              {o} — {c}
-            </span>
-          );
-        }}
-        moreKeyName="poapps"
-      />
+        {/* Most Playoff Appearances */}
+        <TopSection
+          title="Most Playoff Appearances"
+          bigLine={
+            poArr.length ? (
+              <span>
+                <span className="mr-1">🥇</span>
+                {poArr[0][0]} — {poArr[0][1]}
+              </span>
+            ) : null
+          }
+          listAll={poArr}
+          renderRow={(r) => {
+            const [o, c] = r;
+            return (
+              <span>
+                {o} — {c}
+              </span>
+            );
+          }}
+          moreKeyName="poapps"
+        />
 
-      {/* Most Sackos */}
-      <Card
-        title="Most Sackos"
-        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
-      >
-        {sackoArr.length ? (
-          <div className="space-y-2">
-            {sackoArr.slice(0, 5).map(([o, c], i) => (
-              <div key={`ms-${o}`} className="flex items-center gap-3">
-                <div
-                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${
-                    i === 0
-                      ? "bg-gradient-to-br from-rose-300/85 via-red-200/65 to-amber-200/70 text-rose-900"
-                      : "bg-white/70 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border border-white/40 dark:border-white/10"
-                  }`}
-                >
-                  {i === 0 ? "💀" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+        {/* Most Sackos */}
+        <Card
+          title="Most Sackos"
+          className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
+        >
+          {sackoArr.length ? (
+            <div className="space-y-2">
+              {sackoArr.slice(0, 5).map(([o, c], i) => (
+                <div key={`ms-${o}`} className="flex items-center gap-3">
+                  <div
+                    className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] ${
+                      i === 0
+                        ? "bg-gradient-to-br from-rose-300/85 via-red-200/65 to-amber-200/70 text-rose-900"
+                        : "bg-white/70 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 border border-white/40 dark:border-white/10"
+                    }`}
+                  >
+                    {i === 0 ? "💀" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                  </div>
+                  <div className="flex-1 rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm leading-snug text-slate-700 dark:text-slate-100">
+                    <span className="font-semibold">{o}</span>
+                    <span className="ml-1 text-slate-500 dark:text-slate-300">
+                      — {c}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex-1 rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 py-2 text-sm leading-snug text-slate-700 dark:text-slate-100">
-                  <span className="font-semibold">{o}</span>
-                  <span className="ml-1 text-slate-500 dark:text-slate-300">— {c}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-            —
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/60 dark:bg-white/[0.05] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+              —
+            </div>
+          )}
+        </Card>
 
-      {/* footnote */}
-      <Card
-        className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
-      >
-        <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-38px_rgba(15,23,42,0.92)]">
-          Transactions and trades need supplemental data from ESPN or your CSV.
-          If your file includes per-season columns named <code>transactions</code>{" "}
-          or <code>trades</code>, the Trades / Transactions tab will display
-          them. Include <code>trade_partner</code> (or traded_with / partner /
-          trade_with) to surface the most common pairings.
-        </div>
-      </Card>
-    </div>
+        {/* footnote */}
+        <Card className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10">
+          <div className="rounded-2xl border border-white/25 dark:border-white/10 bg-white/70 dark:bg-white/[0.05] px-4 py-4 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 shadow-[0_20px_55px_-38px_rgba(15,23,42,0.92)]">
+            Transactions and trades need supplemental data from ESPN or your
+            CSV. If your file includes per-season columns named{" "}
+            <code>transactions</code> or <code>trades</code>, the Trades /
+            Transactions tab will display them. Include{" "}
+            <code>trade_partner</code> (or traded_with / partner / trade_with)
+            to surface the most common pairings.
+          </div>
+        </Card>
+      </div>
 
       {/* See-more modal */}
       {activeModal && (
@@ -6201,14 +6212,18 @@ export function TradesTab({
             ) : null}
             <span>{a.player}</span>
             {a.pos ? (
-              <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">({a.pos})</span>
+              <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                ({a.pos})
+              </span>
             ) : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
             <span>
               Wk {a.weekAcquired}, {a.season}
             </span>
-            <span>{a.weeks} wk{a.weeks === 1 ? "" : "s"}</span>
+            <span>
+              {a.weeks} wk{a.weeks === 1 ? "" : "s"}
+            </span>
           </div>
         </div>
         <div className="text-right">
@@ -6465,7 +6480,10 @@ export function TradesTab({
             <tr className="divide-x divide-white/40 dark:divide-white/10">
               <th className="px-4 py-3 text-left font-semibold">Member</th>
               {seasonsForTable.map((yr) => (
-                <th key={`h-${yr}`} className="px-4 py-3 text-center font-semibold">
+                <th
+                  key={`h-${yr}`}
+                  className="px-4 py-3 text-center font-semibold"
+                >
                   {yr}
                 </th>
               ))}
@@ -7701,10 +7719,14 @@ export function RosterTab({
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium">
             {actualText ? (
-              <span className="tabular-nums text-slate-700 dark:text-slate-100">{actualText}</span>
+              <span className="tabular-nums text-slate-700 dark:text-slate-100">
+                {actualText}
+              </span>
             ) : null}
             {projText ? (
-              <span className="tabular-nums text-sky-600 dark:text-sky-300">{projText}</span>
+              <span className="tabular-nums text-sky-600 dark:text-sky-300">
+                {projText}
+              </span>
             ) : null}
           </div>
         </div>
@@ -7720,7 +7742,9 @@ export function RosterTab({
           <thead>
             <tr className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
               <th className="w-16 text-center font-semibold">Row</th>
-              <th className="w-32 font-semibold text-slate-600 dark:text-slate-100">Slot</th>
+              <th className="w-32 font-semibold text-slate-600 dark:text-slate-100">
+                Slot
+              </th>
               {weeks.map((w) => (
                 <th key={w} className="text-center font-semibold">
                   <span className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-600 dark:text-slate-200 shadow-[0_14px_35px_-26px_rgba(59,130,246,0.65)]">
@@ -7751,23 +7775,31 @@ export function RosterTab({
                     className="align-top text-center font-normal"
                   >
                     <div className="mx-auto w-full max-w-[140px] space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/75 dark:bg-zinc-900/65 px-3 py-2 text-[9px] uppercase tracking-[0.34em] text-slate-500 dark:text-slate-300 shadow-[0_20px_48px_-34px_rgba(59,130,246,0.75)]">
-                      <div className="text-slate-500 dark:text-slate-300">Actual</div>
+                      <div className="text-slate-500 dark:text-slate-300">
+                        Actual
+                      </div>
                       <div className="tabular-nums text-sm font-semibold text-slate-800 dark:text-slate-100">
                         {__fmtPts(t.actual)}
                       </div>
                       {showProj ? (
                         <>
-                          <div className="text-slate-500 dark:text-slate-300">Projected</div>
+                          <div className="text-slate-500 dark:text-slate-300">
+                            Projected
+                          </div>
                           <div className="tabular-nums text-xs font-semibold text-sky-600 dark:text-sky-300">
                             {__fmtPts(t.projected)}
                           </div>
                         </>
                       ) : null}
-                      <div className="text-slate-500 dark:text-slate-300">Potential</div>
+                      <div className="text-slate-500 dark:text-slate-300">
+                        Potential
+                      </div>
                       <div className="tabular-nums text-xs font-semibold text-indigo-600 dark:text-indigo-300">
                         {__fmtPts(t.potential)}
                       </div>
-                      <div className="text-slate-500 dark:text-slate-300">Left</div>
+                      <div className="text-slate-500 dark:text-slate-300">
+                        Left
+                      </div>
                       <div className="tabular-nums text-xs font-semibold text-rose-500 dark:text-rose-300">
                         {__fmtPts(t.left)}
                       </div>
@@ -7793,7 +7825,11 @@ export function RosterTab({
                   const e = __pickEntryForRow(entries, rs, teamId);
                   return (
                     <td key={w} className="align-top p-2">
-                      {e ? <NameCell entry={e} /> : <span className={noEntryCls}>—</span>}
+                      {e ? (
+                        <NameCell entry={e} />
+                      ) : (
+                        <span className={noEntryCls}>—</span>
+                      )}
                     </td>
                   );
                 })}
@@ -7827,7 +7863,9 @@ export function RosterTab({
         }
         right={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)]`}>
+            <div
+              className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(59,130,246,0.55)]`}
+            >
               {["table", "chart"].map((value) => (
                 <button
                   key={value}
@@ -7841,13 +7879,18 @@ export function RosterTab({
               ))}
             </div>
 
-            <div className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(217,70,239,0.55)]`}>
+            <div
+              className={`${summaryToggleWrapperCls} shadow-[0_18px_45px_-30px_rgba(217,70,239,0.55)]`}
+            >
               {["weekly", "yearly"].map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setSummaryMode(value)}
-                  className={summaryToggleBtnCls(summaryMode === value, "violet")}
+                  className={summaryToggleBtnCls(
+                    summaryMode === value,
+                    "violet"
+                  )}
                   aria-pressed={summaryMode === value}
                 >
                   {value.toUpperCase()}
@@ -7990,52 +8033,54 @@ export function RosterTab({
           <div className="h-[520px] w-full">
             <div className={chartFrameCls}>
               <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={
-                  summaryMode === "weekly" ? weeklyChartData : yearlyChartData
-                }
-                margin={{ top: 8, right: 24, bottom: 56, left: 8 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  opacity={0.25}
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="manager"
-                  interval={0}
-                  angle={-20}
-                  textAnchor="end"
-                  tick={{ fill: "#e5e7eb", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.28)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.28)" }}
-                />
-                <YAxis
-                  tick={{ fill: "#e5e7eb", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.28)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.28)" }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "rgba(24,24,27,0.95)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "#e5e7eb",
-                  }}
-                  formatter={(v, k) => [__fmtPts(v), k]}
-                />
-                {(summaryMode === "weekly" ? weekKeys : yearKeys).map(
-                  (key, i) => (
-                    <Bar
-                      key={key}
-                      dataKey={key}
-                      stackId="bench"
-                      fill={
-                        (summaryMode === "weekly" ? weekColors : yearColors)[i]
-                      }
-                    />
-                  )
-                )}
-              </BarChart>
+                <BarChart
+                  data={
+                    summaryMode === "weekly" ? weeklyChartData : yearlyChartData
+                  }
+                  margin={{ top: 8, right: 24, bottom: 56, left: 8 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    opacity={0.25}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="manager"
+                    interval={0}
+                    angle={-20}
+                    textAnchor="end"
+                    tick={{ fill: "#e5e7eb", fontSize: 12 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.28)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.28)" }}
+                  />
+                  <YAxis
+                    tick={{ fill: "#e5e7eb", fontSize: 12 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.28)" }}
+                    tickLine={{ stroke: "rgba(255,255,255,0.28)" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(24,24,27,0.95)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "#e5e7eb",
+                    }}
+                    formatter={(v, k) => [__fmtPts(v), k]}
+                  />
+                  {(summaryMode === "weekly" ? weekKeys : yearKeys).map(
+                    (key, i) => (
+                      <Bar
+                        key={key}
+                        dataKey={key}
+                        stackId="bench"
+                        fill={
+                          (summaryMode === "weekly" ? weekColors : yearColors)[
+                            i
+                          ]
+                        }
+                      />
+                    )
+                  )}
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -8167,10 +8212,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   const [breakdownRows, setBreakdownRows] = React.useState([]);
 
   const goldToggleCls = (active) =>
-    `relative inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.26em] uppercase transition-all duration-200 ease-out shadow-[0_18px_45px_-30px_rgba(59,130,246,0.65)] backdrop-blur ${
+    `relative inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.26em] uppercase transition-all duration-200 ease-out shadow-[0_18px_45px_-30px_rgba(251,191,36,0.75)] backdrop-blur ${
       active
-        ? "text-white border border-white/70 dark:border-white/20 bg-gradient-to-r from-sky-500/90 via-blue-500/85 to-indigo-500/85"
-        : "text-slate-600 dark:text-slate-300 border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 hover:border-sky-300/60 hover:text-sky-400"
+        ? "text-amber-900 dark:text-amber-100 border border-amber-300/70 bg-gradient-to-r from-amber-300/95 via-amber-200/90 to-amber-100/95 dark:from-amber-600/30 dark:via-amber-500/25 dark:to-amber-400/25"
+        : "text-amber-700 dark:text-amber-200 border border-amber-300/50 bg-white/80 dark:bg-zinc-900/60 hover:border-amber-300/70 hover:text-amber-400"
     }`;
 
   const Panel = ({ title, subtitle, children, right }) => (
@@ -8777,9 +8822,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                 onChange={(e) => setWeighted(e.target.checked)}
               />
               <span className="tracking-[0.32em]">Weighted</span>
-              <span className="text-[10px] font-medium uppercase text-sky-500/80 dark:text-sky-200/80">
+              <span className="text-[10px] font-medium uppercase text-amber-600/80 dark:text-amber-200/80">
                 (α)
               </span>
+
               <input
                 type="number"
                 step="0.1"
@@ -8820,7 +8866,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
 
             <button
               type="button"
-              className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 dark:border-white/15 bg-white/95 text-sky-500 shadow-[0_18px_40px_-28px_rgba(59,130,246,0.55)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-32px_rgba(59,130,246,0.7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 dark:bg-zinc-950/80 dark:text-sky-200"
+              className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-300/60 bg-white/95 text-amber-600 shadow-[0_18px_40px_-28px_rgba(251,191,36,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-32px_rgba(251,191,36,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 dark:bg-zinc-950/80 dark:text-amber-200"
               title="How the Best Drafter score is calculated"
               onClick={() => setShowExplain(true)}
             >
@@ -9249,7 +9295,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               onClick={() => openOwnerBreakdownForYear(owner)}
             >
               <span>{ownerDisplay(owner)}</span>
-              <span className="text-[9px] font-medium uppercase tracking-[0.4em] text-sky-500/80 dark:text-sky-200/70">
+              <span className="text-[9px] font-medium uppercase tracking-[0.4em] text-amber-500/90 dark:text-amber-200/80">
                 Picks
               </span>
             </button>
