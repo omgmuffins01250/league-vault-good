@@ -2271,9 +2271,6 @@ export function H2HTab({ league }) {
       >
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/90 dark:text-slate-400/90 mb-3">
           <Chip>{segLabel[seg]}</Chip>
-          <span className="uppercase tracking-[0.22em] text-[10px] text-slate-400 dark:text-slate-500">
-            Ties ignored
-          </span>
         </div>
 
         {/* Matrix */}
