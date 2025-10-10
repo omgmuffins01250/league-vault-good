@@ -8603,9 +8603,54 @@ export function WeeklyOutlookTab({
       .filter(Number.isFinite);
     return weeks.length ? Math.max(...weeks) : 1;
   }, [seasonThisYear, league?.games, currentYear]);
+  const COLORish_PROPS = new Set([
+    "color",
+    "background",
+    "background-color",
+    "background-image",
+    "border-color",
+    "border-top-color",
+    "border-right-color",
+    "border-bottom-color",
+    "border-left-color",
+    "outline-color",
+    "text-decoration-color",
+    "column-rule-color",
+    "caret-color",
+    "accent-color",
+    "fill",
+    "stroke",
+    "box-shadow",
+    "text-shadow",
+  ]);
+
+  const hasOKColor = (value) =>
+    typeof value === "string" && /okl(ch|ab)/i.test(value || "");
+
+  let sharedColorCtx = null;
+  const getColorContext = () => {
+    if (sharedColorCtx) return sharedColorCtx;
+    try {
+      sharedColorCtx = document.createElement("canvas").getContext("2d");
+    } catch {
+      sharedColorCtx = null;
+    }
+    return sharedColorCtx;
+  };
+
+  const normalizeColorValue = (ctx, value) => {
+    if (!value || !ctx || !hasOKColor(value)) return value;
+    try {
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = value;
+      return ctx.fillStyle;
+    } catch {
+      return value;
+    }
+  };
+
   // Inline computed styles into a deep clone of a node (so the SVG has everything it needs)
   function cloneWithInlineStyles(root, { filter } = {}) {
-    const doc = root.ownerDocument;
     const clone = root.cloneNode(true);
 
     const walk = (src, dst) => {
@@ -8613,62 +8658,33 @@ export function WeeklyOutlookTab({
         dst.remove(); // drop ignored nodes
         return;
       }
-      // copy computed styles
+      if (src.nodeType !== 1 || dst.nodeType !== 1) return;
       const cs = getComputedStyle(src);
-      // Some critical properties that affect rendering
-      const props = [
-        "all",
-        "appearance",
-        "background",
-        "background-color",
-        "background-image",
-        "background-position",
-        "background-size",
-        "background-repeat",
-        "border",
-        "border-radius",
-        "box-shadow",
-        "color",
-        "display",
-        "filter",
-        "flex",
-        "flex-direction",
-        "font",
-        "font-family",
-        "font-size",
-        "font-weight",
-        "font-style",
-        "gap",
-        "grid",
-        "height",
-        "isolation",
-        "justify-content",
-        "letter-spacing",
-        "line-height",
-        "margin",
-        "opacity",
-        "outline",
-        "overflow",
-        "padding",
-        "position",
-        "text-shadow",
-        "text-transform",
-        "transform",
-        "transform-origin",
-        "white-space",
-        "width",
-        "word-break",
-        "z-index",
-      ];
+
       const style = dst.style;
-      props.forEach((p) => {
-        const v = cs.getPropertyValue(p);
-        if (v) style.setProperty(p, v, cs.getPropertyPriority(p));
+      Array.from(cs).forEach((prop) => {
+        let value = cs.getPropertyValue(prop);
+        if (!value) return;
+
+        if (
+          COLORish_PROPS.has(prop) ||
+          /color/i.test(prop) ||
+          prop.includes("shadow") ||
+          prop === "background" ||
+          prop.startsWith("border")
+        ) {
+          value = normalizeColorValue(getColorContext(), value);
+          if (prop === "background-image" && hasOKColor(value)) {
+            // Drop gradients html2canvas / SVG can’t parse yet
+            value = "none";
+          }
+        }
+
+        style.setProperty(prop, value, cs.getPropertyPriority(prop));
       });
 
       // ensure images/fonts can load
       if (dst.tagName === "IMG") {
-        // if cross-origin images cause tainting, you can also filter them out via the filter() option
         dst.setAttribute("crossorigin", "anonymous");
       }
 
@@ -8789,8 +8805,17 @@ export function WeeklyOutlookTab({
       };
 
       const captureWithHtml2Canvas = async () => {
-        const { default: html2canvas } = await import("html2canvas");
-
+        const download = (dataUrl) => {
+          if (!dataUrl) throw new Error("No snapshot data generated");
+          const wk = Number(currentWeek) || 0;
+          const yr = Number(currentYear) || new Date().getFullYear();
+          const a = document.createElement("a");
+          a.href = dataUrl;
+          a.download = `weekly-outlook-wk${wk}-${yr}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        };
         // off-screen wrapper with same width as live node
         const rect = node.getBoundingClientRect();
         const wrapper = document.createElement("div");
@@ -8897,8 +8922,7 @@ export function WeeklyOutlookTab({
         dataUrl = await exportElementToPNG(node, {
           pixelRatio,
           backgroundColor,
-          filter: (el) =>
-            el?.getAttribute?.("data-snapshot-ignore") !== "true",
+          filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
         });
       }
 
