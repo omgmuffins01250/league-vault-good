@@ -1,37 +1,39 @@
 // src/HomePage.jsx
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { auth } from "./auth";
+import { useAppContext } from "./contexts/AppContext.jsx";
 import QASection from "./landing/components/QASection.jsx";
 import Contact from "./landing/components/Contact.jsx"; // ✅ import Contact
 
 export default function HomePage() {
   const nav = useNavigate();
   const loc = useLocation();
+  const { isSignedIn, user, signOut } = useAppContext();
 
   const handleSignIn = () => {
-    auth.signIn("mike@example.com"); // fake sign-in for now
     const dest = loc.state?.from || "/app";
-    nav(dest);
+    nav("/signin", {
+      state: { from: dest },
+    });
   };
 
   return (
-    <div className="min-h-screen bg-base-100 text-base-content">
+    <div className="min-h-screen bg-slate-50 text-gray-900">
       {/* NAV */}
-      <header className="navbar bg-base-200 shadow">
+      <header className="navbar bg-white shadow">
         <div className="flex-1">
           <span className="btn btn-ghost normal-case text-xl">LeagueVault</span>
         </div>
         <div className="flex-none gap-2">
-          {auth.isSignedIn() ? (
+          {isSignedIn ? (
             <>
-              <span className="opacity-70 hidden sm:inline">
-                {auth.currentUser()}
+              <span className="hidden text-gray-600 sm:inline">
+                {user}
               </span>
               <button
                 className="btn btn-ghost"
                 onClick={() => {
-                  auth.signOut();
-                  nav(0); // refresh to update buttons
+                  signOut();
+                  nav("/", { replace: true });
                 }}
               >
                 Sign out
@@ -53,12 +55,12 @@ export default function HomePage() {
         <h1 className="text-5xl font-bold leading-tight">
           Your league’s history, <span className="text-primary">unlocked</span>.
         </h1>
-        <p className="mt-4 text-lg opacity-80">
+        <p className="mt-4 text-lg text-gray-700">
           Upload ESPN data, explore career stats, trades, placements, and
           head-to-head in seconds.
         </p>
         <div className="mt-8 flex gap-3">
-          {auth.isSignedIn() ? (
+          {isSignedIn ? (
             <Link className="btn btn-primary" to="/app">
               Enter App
             </Link>
