@@ -5,7 +5,7 @@ export function SidebarButton({ children, active, onClick, disabled }) {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`btn btn-sm btn-block justify-start ${
+      className={`btn btn-sm btn-block justify-start !px-3 text-left normal-case ${
         active ? "btn-primary" : "btn-ghost"
       } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
