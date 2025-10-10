@@ -26,9 +26,19 @@ import {
   WeeklyOutlookTab,
   ScenarioTab,
   LuckIndexTab,
+  DEFAULT_LEAGUE_ICONS,
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
 const LS_KEY = "FL_STORE_v1";
+const DEFAULT_LEAGUE_ICON_GLYPH =
+  DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
+const DEFAULT_LEAGUE_ICON_OBJECT = {
+  type: "preset",
+  value: DEFAULT_LEAGUE_ICON_GLYPH,
+};
+function makeDefaultLeagueIcon() {
+  return { ...DEFAULT_LEAGUE_ICON_OBJECT };
+}
 /*
   Storage shape:
   {
@@ -44,6 +54,7 @@ const LS_KEY = "FL_STORE_v1";
         espnRostersByYear        // { [year]: { [teamId]: { [week]: [{pid,name,posId,slotId,pts,projStart?}] } } }
         espnPlayoffTeamsBySeason // { [year]: number }
         hiddenManagers            // [ "Name A", "Name B", ... ] — globally hidden in UI
+        leagueIcon                // { type: 'preset' | 'upload', value, previousPreset?, name? }
 
       }
     },
@@ -94,6 +105,7 @@ function upsertLeague({
   espnCurrentWeekBySeason,
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
+  leagueIcon,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -142,6 +154,10 @@ function upsertLeague({
       espnCurrentWeekBySeason,
       prev.espnCurrentWeekBySeason || {}
     ),
+    leagueIcon:
+      leagueIcon && typeof leagueIcon === "object"
+        ? leagueIcon
+        : prev.leagueIcon || { type: "preset", value: DEFAULT_LEAGUE_ICON_GLYPH },
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -1296,6 +1312,7 @@ function UserMenu({
 export default function App() {
   const [section, setSection] = useState("setup");
   const [leagueName, setLeagueName] = useState("Your Fantasy League");
+  const [leagueIcon, setLeagueIcon] = useState(makeDefaultLeagueIcon);
   const [derivedAll, setDerivedAll] = useState(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState("");
   const [selectedLeagueKey, setSelectedLeagueKey] = useState("");
@@ -1390,6 +1407,11 @@ export default function App() {
       setDraftByYear(rec?.draftByYear || {});
       setAdpSourceByYear(rec?.adpSourceByYear || {});
       setLeagueName(rec?.name || leagueName);
+      const iconFromStore =
+        rec?.leagueIcon && typeof rec.leagueIcon === "object"
+          ? normalizeLeagueIcon(rec.leagueIcon, makeDefaultLeagueIcon())
+          : makeDefaultLeagueIcon();
+      setLeagueIcon(iconFromStore);
       setMoneyInputs(rec?.moneyInputs || {});
       setActivityBySeason(rec?.activityBySeason || {});
       setRostersByYear(rec?.espnRostersByYear || {});
@@ -1427,6 +1449,7 @@ export default function App() {
       setPlayoffTeamsOverrides({});
       setCurrentWeekBySeason({});
       setScheduleByYear({});
+      setLeagueIcon(makeDefaultLeagueIcon());
     }
   }
 
@@ -1443,6 +1466,11 @@ export default function App() {
     setDraftByYear(rec.draftByYear || {});
     setAdpSourceByYear(rec.adpSourceByYear || {});
     setLeagueName(rec.name || "Your Fantasy League");
+    const iconFromStore =
+      rec?.leagueIcon && typeof rec.leagueIcon === "object"
+        ? normalizeLeagueIcon(rec.leagueIcon, makeDefaultLeagueIcon())
+        : makeDefaultLeagueIcon();
+    setLeagueIcon(iconFromStore);
     setMoneyInputs(rec.moneyInputs || {});
     setActivityBySeason(rec.activityBySeason || {});
     setRostersByYear(rec?.espnRostersByYear || {});
@@ -1481,6 +1509,7 @@ export default function App() {
     setRostersByYear({});
     setOwnerByTeamByYear({});
     setLeagueName("Your Fantasy League");
+    setLeagueIcon(makeDefaultLeagueIcon());
     rebuildFromStore();
     setLineupSlotsByYear({});
     setHiddenManagers(new Set());
@@ -1525,6 +1554,7 @@ export default function App() {
         espnCurrentWeekBySeason: currentWeekBySeason,
         espnScheduleByYear: scheduleByYear,
         hiddenManagers: Array.from(hiddenManagers),
+        leagueIcon,
       });
       return next;
     });
@@ -2005,6 +2035,7 @@ export default function App() {
         espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
         espnCurrentWeekBySeason: currentWeekBySeasonMap,
         espnScheduleByYear: scheduleMap,
+        leagueIcon,
       });
 
       setOwnerByTeamByYear(ownerMap);
@@ -2200,6 +2231,42 @@ export default function App() {
     return { leagueId, leagueName, platform, scoring, meta };
   }
 
+  function normalizeLeagueIcon(nextIcon, prevIcon) {
+    const fallbackPreset =
+      (prevIcon?.type === "preset" && prevIcon?.value) ||
+      prevIcon?.previousPreset ||
+      DEFAULT_LEAGUE_ICON_GLYPH;
+    if (!nextIcon || typeof nextIcon !== "object") {
+      return { type: "preset", value: fallbackPreset };
+    }
+    if (
+      nextIcon.type === "upload" &&
+      typeof nextIcon.value === "string" &&
+      nextIcon.value
+    ) {
+      const previousPreset =
+        nextIcon.previousPreset ||
+        (prevIcon?.type === "preset"
+          ? prevIcon.value
+          : prevIcon?.previousPreset) ||
+        DEFAULT_LEAGUE_ICON_GLYPH;
+      return {
+        type: "upload",
+        value: nextIcon.value,
+        name: nextIcon.name || "",
+        previousPreset,
+      };
+    }
+    if (
+      nextIcon.type === "preset" &&
+      typeof nextIcon.value === "string" &&
+      nextIcon.value
+    ) {
+      return { type: "preset", value: nextIcon.value };
+    }
+    return { type: "preset", value: fallbackPreset };
+  }
+
   function savePlayoffOverrides(nextOverrides) {
     const safe = nextOverrides || {};
     setPlayoffTeamsOverrides(safe);
@@ -2227,6 +2294,7 @@ export default function App() {
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
+      leagueIcon,
     });
   }
 
@@ -2257,8 +2325,46 @@ export default function App() {
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
+      leagueIcon,
     });
   }
+
+  function handleLeagueIconChange(nextIcon) {
+    const normalized = normalizeLeagueIcon(nextIcon, leagueIcon);
+    setLeagueIcon(normalized);
+    const { leagueId, leagueName, platform, scoring } =
+      getCurrentLeagueIdentity();
+    upsertLeague({
+      leagueId,
+      leagueKey: selectedLeague,
+      name: leagueName,
+      platform,
+      scoring,
+      rows: rawRows,
+      draftByYear,
+      adpSourceByYear,
+      moneyInputs,
+      activityBySeason,
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+      espnTeamNamesByOwner: teamNamesByOwner,
+      espnRostersByYear: rostersByYear,
+      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+      playoffTeamsOverrides: playoffTeamsOverrides,
+      espnCurrentWeekBySeason: currentWeekBySeason,
+      espnScheduleByYear: scheduleByYear,
+      hiddenManagers: Array.from(hiddenManagers),
+      leagueIcon: normalized,
+    });
+  }
+  const headerIconIsUpload =
+    leagueIcon?.type === "upload" &&
+    typeof leagueIcon?.value === "string" &&
+    leagueIcon.value;
+  const headerIconGlyph =
+    leagueIcon?.type === "preset" && leagueIcon?.value
+      ? leagueIcon.value
+      : leagueIcon?.previousPreset || DEFAULT_LEAGUE_ICON_GLYPH;
   return (
     <div
       data-theme="luxury"
@@ -2339,7 +2445,17 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="h-9 w-9 rounded-2xl bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold" />
+            <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
+              {headerIconIsUpload ? (
+                <img
+                  src={leagueIcon?.value}
+                  alt={`${leagueName || "League"} icon`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-lg leading-none">{headerIconGlyph}</span>
+              )}
+            </div>
             <div className="text-lg font-semibold">{leagueName}</div>
           </div>
           <div />
@@ -2494,8 +2610,11 @@ export default function App() {
                         espnCurrentWeekBySeason: currentWeekBySeason,
                         espnScheduleByYear: scheduleByYear,
                         hiddenManagers: nextArr, // persist
+                        leagueIcon,
                       });
                     }}
+                    leagueIcon={leagueIcon}
+                    onLeagueIconChange={handleLeagueIconChange}
                   />
                 )}
 

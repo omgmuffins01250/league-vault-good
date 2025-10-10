@@ -198,6 +198,21 @@ const TROPHIES = {
   2: "/trophies/silver.png",
   3: "/trophies/bronze.png",
 };
+
+export const DEFAULT_LEAGUE_ICONS = [
+  { glyph: "🏈", label: "Football" },
+  { glyph: "🏀", label: "Basketball" },
+  { glyph: "⚾️", label: "Baseball" },
+  { glyph: "🏒", label: "Hockey" },
+  { glyph: "⚽️", label: "Soccer" },
+  { glyph: "🎯", label: "Bullseye" },
+  { glyph: "🎲", label: "Dice" },
+  { glyph: "🛡️", label: "Shield" },
+  { glyph: "👑", label: "Crown" },
+  { glyph: "🔥", label: "Fire" },
+  { glyph: "⭐️", label: "Star" },
+  { glyph: "🎉", label: "Celebration" },
+];
 const ordinal = (n) => {
   if (n === 1) return "1st";
   if (n === 2) return "2nd";
@@ -516,9 +531,42 @@ export function SetupTab({
   onLegacyCsvMerged,
   hiddenManagers = new Set(), // ← add
   onChangeHiddenManagers, // ← add
+  leagueIcon,
+  onLeagueIconChange,
 }) {
   if (!derivedAll) return null;
   const league = selectedLeague && derivedAll?.byLeague?.[selectedLeague];
+  const defaultIconGlyph = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
+  const presetSelection =
+    leagueIcon?.type !== "upload" && leagueIcon?.value
+      ? leagueIcon.value
+      : null;
+  const isUploadActive =
+    leagueIcon?.type === "upload" &&
+    typeof leagueIcon?.value === "string" &&
+    leagueIcon.value;
+  const previewGlyph = presetSelection || defaultIconGlyph;
+  const handleIconUpload = (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      onLeagueIconChange?.({
+        type: "upload",
+        value,
+        name: file.name,
+        previousPreset: presetSelection || defaultIconGlyph,
+      });
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+  const handleRemoveUpload = () => {
+    const fallback =
+      leagueIcon?.previousPreset || presetSelection || defaultIconGlyph;
+    onLeagueIconChange?.({ type: "preset", value: fallback });
+  };
   const seasonsSource = useMemo(() => resolveSeasonsSource(league), [league]);
   const lineupSource = useMemo(() => resolveLineupSource(league), [league]);
   const { latestSeason, latestYear } = useMemo(() => {
@@ -678,6 +726,92 @@ export function SetupTab({
           ))}
         </select>
       </Card>
+      {league && (
+        <Card title="League icon">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/60 bg-white/90 text-3xl shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)] dark:border-white/10 dark:bg-zinc-900/70">
+              {isUploadActive ? (
+                <img
+                  src={leagueIcon?.value}
+                  alt={`${league?.meta?.name || "League"} icon`}
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <span>{previewGlyph}</span>
+              )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="league-icon-upload"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={handleIconUpload}
+                />
+                <label
+                  htmlFor="league-icon-upload"
+                  className="btn btn-sm btn-primary"
+                >
+                  Upload image
+                </label>
+                {isUploadActive && (
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-ghost"
+                    onClick={handleRemoveUpload}
+                  >
+                    Remove upload
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Upload a square image (PNG, JPG, WEBP, or SVG). It will appear in
+                the circle next to your league name.
+              </p>
+            </div>
+          </div>
+          {isUploadActive ? (
+            <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+              Remove the uploaded image to choose from the built-in icons.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                Or pick a quick icon
+              </div>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {DEFAULT_LEAGUE_ICONS.map((icon) => {
+                  const active =
+                    leagueIcon?.type !== "upload" &&
+                    leagueIcon?.value === icon.glyph;
+                  return (
+                    <button
+                      key={icon.glyph}
+                      type="button"
+                      onClick={() =>
+                        onLeagueIconChange?.({
+                          type: "preset",
+                          value: icon.glyph,
+                        })
+                      }
+                      aria-pressed={active}
+                      aria-label={`Use the ${icon.label} icon`}
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border text-2xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
+                        active
+                          ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:border-indigo-400/70 dark:text-indigo-300"
+                          : "border-zinc-300/70 text-zinc-600 hover:border-indigo-300 hover:text-indigo-500 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400/70 dark:hover:text-indigo-300"
+                      }`}
+                    >
+                      <span>{icon.glyph}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
       {/* Pre-2019 history helper unchanged... */}
       {league && (
         <ManagerMergeControl
