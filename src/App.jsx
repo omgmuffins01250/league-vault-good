@@ -2442,7 +2442,7 @@ export default function App() {
         </div>
       </div>
       {/* PAGE CONTAINER */}
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-3 md:px-5 py-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
@@ -2460,7 +2460,7 @@ export default function App() {
           </div>
           <div />
         </div>
-        <div className="mt-6 grid lg:grid-cols-[220px_1fr] gap-6">
+        <div className="mt-6 grid lg:grid-cols-[200px_1fr] gap-6">
           {/* SIDEBAR */}
           <aside className="space-y-2">
             <SidebarButton
