@@ -930,7 +930,6 @@ export function MembersTab({ league }) {
   return (
     <Card
       title="League Members"
-      subtitle="Tenure, entry year, and the evolving team identities for every manager in your league."
       right={
         latestLabel ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
@@ -940,10 +939,6 @@ export function MembersTab({ league }) {
       }
     >
       <div className="space-y-6">
-        <div className="text-[11px] uppercase tracking-[0.22em] ...">
-          MEMBER LEDGER
-        </div>
-
         <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
           <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
           <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
@@ -987,9 +982,6 @@ export function MembersTab({ league }) {
                         <span className="text-[14px] font-semibold tracking-tight ...">
                           {m.name}
                         </span>
-                        <span className="text-[10px] uppercase tracking-[0.24em] ...">
-                          Manager
-                        </span>
                       </div>
                     </td>
 
@@ -1004,7 +996,7 @@ export function MembersTab({ league }) {
                     </td>
 
                     <td className="px-3 py-2 text-center">
-                      <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full border border-amber-400/50 bg-amber-300/20 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                      <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400 dark:text-amber-300 whitespace-nowrap overflow-hidden text-ellipsis">
                         {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
                       </span>
                     </td>
