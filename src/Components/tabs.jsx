@@ -1903,6 +1903,32 @@ export function H2HTab({ league }) {
   const [hover, setHover] = React.useState({ row: null, col: null });
   const clearHover = () => setHover({ row: null, col: null });
 
+  const Chip = ({ children, className = "" }) => (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-[0.22em] uppercase
+        bg-gradient-to-r from-amber-300/70 via-amber-200/50 to-amber-100/70 text-amber-700
+        dark:from-amber-500/30 dark:via-amber-400/20 dark:to-amber-500/30 dark:text-amber-200
+        border border-amber-400/40 shadow-[0_6px_18px_-12px_rgba(251,191,36,0.8)] backdrop-blur-sm ${className}`}
+    >
+      {children}
+    </span>
+  );
+
+  const SoftButton = ({ children, onClick, active = false, className = "" }) => (
+    <button
+      onClick={onClick}
+      className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[10px] font-semibold tracking-[0.28em] uppercase transition-all duration-200 ease-out
+        ${active
+          ? "bg-gradient-to-r from-white/95 via-amber-100/80 to-white/95 text-amber-900 border border-amber-400/60 shadow-[0_24px_55px_-24px_rgba(251,191,36,0.75)]"
+          : "text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-zinc-900/60 border border-white/60 dark:border-white/10 hover:border-amber-300/60 hover:text-amber-400"
+        }
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 backdrop-blur ${className}`}
+      type="button"
+    >
+      <span className="tracking-[0.32em]">{children}</span>
+    </button>
+  );
+
   // Build list of games per (owner A, owner B) from the filtered games
   const pairGames = React.useMemo(() => {
     const m = new Map(); // key: "A__B" -> array of games from A's perspective
@@ -2017,50 +2043,69 @@ export function H2HTab({ league }) {
       <Card
         title="Head-to-Head"
         right={
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-zinc-500">Scope:</div>
-            <select
-              className="px-2 py-1 rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs"
-              value={seg}
-              onChange={(e) => setSeg(e.target.value)}
-            >
-              <option value="REG">Regular season</option>
-              <option value="PO">Playoffs</option>
-              <option value="ALL">All games</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip>Scope</Chip>
+            <div className="flex items-center gap-1">
+              {[
+                { key: "REG", label: "Regular" },
+                { key: "PO", label: "Playoffs" },
+                { key: "ALL", label: "All games" },
+              ].map(({ key, label }) => (
+                <SoftButton
+                  key={key}
+                  active={seg === key}
+                  onClick={() => setSeg(key)}
+                  className="min-w-[92px] justify-center"
+                >
+                  {label}
+                </SoftButton>
+              ))}
+            </div>
           </div>
         }
       >
-        <div className="text-xs text-zinc-500 mb-2">
-          {segLabel[seg]} • ties ignored.
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/90 dark:text-slate-400/90 mb-3">
+          <Chip>{segLabel[seg]}</Chip>
+          <span className="uppercase tracking-[0.22em] text-[10px] text-slate-400 dark:text-slate-500">
+            Ties ignored
+          </span>
         </div>
 
         {/* Matrix */}
-        <div className="overflow-auto" onMouseLeave={clearHover}>
-          <table className="min-w-[700px] w-full text-sm">
-            <thead>
-              <tr>
-                <th className="px-3 py-2 text-left">Owner</th>
-                {owners.map((b) => (
-                  <th
-                    key={b}
-                    className={`px-3 py-2 text-center ${
-                      hover.col === b ? "bg-zinc-100 dark:bg-zinc-800" : ""
-                    }`}
-                    onMouseEnter={() => setHover((h) => ({ ...h, col: b }))}
-                    onMouseLeave={clearHover}
-                  >
-                    {b}
-                  </th>
+        <div
+          className="relative overflow-hidden rounded-2xl border border-white/25 dark:border-white/10 bg-white/75 dark:bg-zinc-950/50 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl"
+          onMouseLeave={clearHover}
+        >
+          <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
+          <div className="relative overflow-auto">
+            <table className="min-w-[700px] w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="px-3 py-2 text-left">Owner</th>
+                  {owners.map((b) => (
+                    <th
+                      key={b}
+                      className={`px-3 py-2 text-center transition-all duration-150 ${
+                        hover.col === b
+                          ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white"
+                          : ""
+                      }`}
+                      onMouseEnter={() => setHover((h) => ({ ...h, col: b }))}
+                      onMouseLeave={clearHover}
+                    >
+                      {b}
+                    </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-              {owners.map((a) => (
-                <tr key={a}>
-                  <td
-                    className={`px-3 py-2 font-medium ${
-                      hover.row === a ? "bg-zinc-100 dark:bg-zinc-800" : ""
+              <tbody className="divide-y divide-white/40 dark:divide-white/10">
+                {owners.map((a) => (
+                  <tr key={a}>
+                    <td
+                      className={`px-3 py-2 font-medium transition-all duration-150 ${
+                        hover.row === a
+                        ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white"
+                        : ""
                     }`}
                     onMouseEnter={() => setHover((h) => ({ ...h, row: a }))}
                     onMouseLeave={clearHover}
@@ -2075,12 +2120,12 @@ export function H2HTab({ league }) {
                     return (
                       <td
                         key={b}
-                        className={`px-3 py-2 text-center transition-colors ${
+                        className={`px-3 py-2 text-center transition-all duration-150 ease-out ${
                           isHilited
-                            ? "bg-zinc-100 dark:bg-zinc-800"
+                            ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
                             : hasGames
-                            ? "hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-                            : ""
+                            ? "hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-[0_16px_40px_-30px_rgba(59,130,246,0.75)] cursor-pointer"
+                            : "text-slate-400 dark:text-slate-600"
                         }`}
                         onMouseEnter={() => setHover({ row: a, col: b })}
                         onMouseLeave={clearHover}
@@ -2095,8 +2140,9 @@ export function H2HTab({ league }) {
                   })}
                 </tr>
               ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       </Card>
       {/* Matchup detail modal */}
@@ -2118,32 +2164,34 @@ export function H2HTab({ league }) {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
-                className="absolute inset-0 bg-black/50"
+                className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
                 onClick={() => setDetailPair(null)}
               />
-              <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900">
-                  <div className="text-base font-semibold">
-                    {detailPair.a} vs {detailPair.b} — {segLabel[seg]} •{" "}
-                    {totals.w}-{totals.l}
+              <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+                <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(59,130,246,0.22),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.18),transparent_60%)]" />
+                <div className="relative">
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 border-b border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+                    <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700 dark:text-slate-100">
+                      {detailPair.a} vs {detailPair.b}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-300">
+                      <Chip>{segLabel[seg]}</Chip>
+                      <span className="tabular-nums text-slate-600 dark:text-slate-200">
+                        {totals.w}-{totals.l}
+                      </span>
+                      <SoftButton onClick={() => setDetailPair(null)}>Close</SoftButton>
+                    </div>
                   </div>
-                  <button
-                    className="btn btn-xs"
-                    onClick={() => setDetailPair(null)}
-                  >
-                    Close
-                  </button>
-                </div>
 
-                <div
-                  className="p-3 overflow-y-auto"
-                  style={{ maxHeight: "calc(85vh - 48px)" }}
-                >
-                  {list.length ? (
-                    <table className="w-full text-sm">
-                      <thead className="text-xs uppercase opacity-60">
-                        <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                          <th className="text-left px-2 py-1 w-[52px]">W/L</th>
+                  <div
+                    className="p-4 overflow-y-auto text-sm text-slate-700 dark:text-slate-200"
+                    style={{ maxHeight: "calc(85vh - 64px)" }}
+                  >
+                    {list.length ? (
+                      <table className="w-full text-sm">
+                        <thead className="text-xs uppercase opacity-60">
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                            <th className="text-left px-2 py-1 w-[52px]">W/L</th>
                           <th className="text-left px-2 py-1">Owner</th>
                           <th className="text-right px-2 py-1 w-[90px]">
                             {detailPair.a} Pts
@@ -2163,14 +2211,14 @@ export function H2HTab({ league }) {
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {list.map((g, i) => (
-                          <tr
-                            key={i}
-                            className="[&:hover]:bg-zinc-50 dark:[&:hover]:bg-zinc-800/40"
-                          >
-                            <td className="px-2 py-1 font-semibold">
-                              <span
+                        <tbody className="divide-y divide-white/30 dark:divide-white/10">
+                          {list.map((g, i) => (
+                            <tr
+                              key={i}
+                              className="transition-colors duration-150 ease-out hover:bg-white/70 dark:hover:bg-white/10"
+                            >
+                              <td className="px-2 py-1 font-semibold">
+                                <span
                                 className={
                                   g.res === "W"
                                     ? "text-green-600 dark:text-green-400"
@@ -2214,39 +2262,75 @@ export function H2HTab({ league }) {
                             </td>
                           </tr>
                         ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="text-sm opacity-70 px-2 py-3">
-                      No games found.
-                    </div>
-                  )}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="text-sm opacity-70 px-2 py-3">
+                        No games found.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
           );
         })()}
 
       {/* Best / Worst opponents */}
       <Card title="Best / Worst Opponents">
-        <div className="text-xs text-zinc-500 mb-2">
-          {segLabel[seg]} • ties ignored.
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/90 dark:text-slate-400/90 mb-4">
+          <Chip>{segLabel[seg]}</Chip>
+          <span className="uppercase tracking-[0.22em] text-[10px] text-slate-400 dark:text-slate-500">
+            Lifetime records • ties ignored
+          </span>
         </div>
-        <div className="grid sm:grid-cols-2 gap-3 text-sm">
+        <div className="grid gap-4 sm:grid-cols-2">
           {owners.map((o) => {
             const bw = bestWorst[o] || {};
             const fmt = (x) =>
               x?.opp
                 ? `${x.opp} (${x.w}-${x.l}, ${(x.pct * 100).toFixed(1)}%)`
                 : "—";
+            const OutcomeBadge = ({ tone, children }) => (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.28em]
+                  border backdrop-blur-sm
+                  ${tone === "good"
+                    ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/40"
+                    : "bg-rose-500/15 text-rose-200 border-rose-400/40"}
+                `}
+              >
+                {children}
+              </span>
+            );
+
             return (
               <div
                 key={o}
-                className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700"
+                className="group relative overflow-hidden rounded-2xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.9)] backdrop-blur-xl p-4"
               >
-                <div className="font-medium mb-1">{o}</div>
-                <div>Best: {fmt(bw.best)}</div>
-                <div>Worst: {fmt(bw.worst)}</div>
+                <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.2),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(139,92,246,0.14),transparent_60%)]" />
+                <div className="relative space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                      {o}
+                    </span>
+                    <span className="text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                      {segLabel[seg]}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[12px] text-slate-600 dark:text-slate-300">
+                    <OutcomeBadge tone="good">Best</OutcomeBadge>
+                    <span className="font-medium text-slate-700 dark:text-slate-100">
+                      {fmt(bw.best)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[12px] text-slate-600 dark:text-slate-300">
+                    <OutcomeBadge tone="bad">Worst</OutcomeBadge>
+                    <span className="font-medium text-slate-700 dark:text-slate-100">
+                      {fmt(bw.worst)}
+                    </span>
+                  </div>
+                </div>
               </div>
             );
           })}
