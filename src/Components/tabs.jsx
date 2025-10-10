@@ -766,8 +766,8 @@ export function SetupTab({
                 )}
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Upload a square image (PNG, JPG, WEBP, or SVG). It will appear in
-                the circle next to your league name.
+                Upload a square image (PNG, JPG, WEBP, or SVG). It will appear
+                in the circle next to your league name.
               </p>
             </div>
           </div>
@@ -7847,7 +7847,7 @@ export function RosterTab({
               {name}
             </div>
             {label ? (
-              <span className="inline-flex items-center rounded-full border border-white/60 dark:border-white/15 bg-gradient-to-r from-sky-200/85 via-indigo-200/75 to-sky-100/80 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-700 dark:text-slate-100 shadow-[0_10px_24px_-16px_rgba(59,130,246,0.8)]">
+              <span className="inline-flex items-center rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-300/45 via-amber-200/35 to-amber-100/30 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.32em] text-amber-800 dark:text-amber-100 shadow-[0_10px_24px_-16px_rgba(251,191,36,0.8)]">
                 {label}
               </span>
             ) : null}
@@ -7883,7 +7883,7 @@ export function RosterTab({
               </th>
               {weeks.map((w) => (
                 <th key={w} className="text-center font-semibold">
-                  <span className="inline-flex items-center justify-center rounded-full border border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-600 dark:text-slate-200 shadow-[0_14px_35px_-26px_rgba(59,130,246,0.65)]">
+                  <span className="inline-flex items-center justify-center rounded-full border border-amber-300/60 bg-gradient-to-br from-amber-300/40 via-amber-200/35 to-amber-100/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-amber-800 dark:text-amber-100 shadow-[0_14px_35px_-26px_rgba(251,191,36,0.7)]">
                     {`W${w}`}
                   </span>
                 </th>
@@ -7910,34 +7910,35 @@ export function RosterTab({
                     key={`band-${w}`}
                     className="align-top text-center font-normal"
                   >
-                    <div className="mx-auto w-full max-w-[140px] space-y-1 rounded-xl border border-white/55 dark:border-white/10 bg-white/75 dark:bg-zinc-900/65 px-3 py-2 text-[9px] uppercase tracking-[0.34em] text-slate-500 dark:text-slate-300 shadow-[0_20px_48px_-34px_rgba(59,130,246,0.75)]">
-                      <div className="text-slate-500 dark:text-slate-300">
-                        Actual
+                    <div className="mx-auto w-full max-w-[180px] space-y-1.5 rounded-xl border border-amber-300/60 bg-white/75 dark:bg-zinc-900/65 px-3 py-2 text-[9px] uppercase tracking-[0.34em] text-amber-700 dark:text-amber-200 shadow-[0_20px_48px_-34px_rgba(251,191,36,0.75)]">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span>Actual:</span>
+                        <span className="tabular-nums text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+                          {__fmtPts(t.actual)}
+                        </span>
                       </div>
-                      <div className="tabular-nums text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        {__fmtPts(t.actual)}
-                      </div>
+
                       {showProj ? (
-                        <>
-                          <div className="text-slate-500 dark:text-slate-300">
-                            Projected
-                          </div>
-                          <div className="tabular-nums text-xs font-semibold text-sky-600 dark:text-sky-300">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span>Projected:</span>
+                          <span className="tabular-nums text-[12px] font-semibold text-amber-700 dark:text-amber-200">
                             {__fmtPts(t.projected)}
-                          </div>
-                        </>
+                          </span>
+                        </div>
                       ) : null}
-                      <div className="text-slate-500 dark:text-slate-300">
-                        Potential
+
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span>Potential:</span>
+                        <span className="tabular-nums text-[12px] font-semibold text-amber-700 dark:text-amber-200">
+                          {__fmtPts(t.potential)}
+                        </span>
                       </div>
-                      <div className="tabular-nums text-xs font-semibold text-indigo-600 dark:text-indigo-300">
-                        {__fmtPts(t.potential)}
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-300">
-                        Left
-                      </div>
-                      <div className="tabular-nums text-xs font-semibold text-rose-500 dark:text-rose-300">
-                        {__fmtPts(t.left)}
+
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span>Left:</span>
+                        <span className="tabular-nums text-[12px] font-semibold text-rose-500 dark:text-rose-300">
+                          {__fmtPts(t.left)}
+                        </span>
                       </div>
                     </div>
                   </th>
