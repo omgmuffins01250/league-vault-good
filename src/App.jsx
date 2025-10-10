@@ -1,14 +1,8 @@
 // App.jsx
 import React, { useEffect, useState } from "react";
-import {
-  SidebarButton,
-  Footer,
-} from "/project/workspace/src/Components/ui.jsx";
-import { FP_ADP_BY_YEAR } from "/project/workspace/src/Data/adpData.jsx";
-import {
-  primeOwnerMaps,
-  ownerMapFor,
-} from "/project/workspace/src/ownerMaps.jsx";
+import { SidebarButton, Footer } from "./Components/ui.jsx";
+import { FP_ADP_BY_YEAR } from "./Data/adpData.jsx";
+import { primeOwnerMaps, ownerMapFor } from "./ownerMaps.jsx";
 
 import {
   UploadBox,
@@ -27,8 +21,8 @@ import {
   ScenarioTab,
   LuckIndexTab,
   DEFAULT_LEAGUE_ICONS,
-} from "/project/workspace/src/Components/tabs.jsx";
-import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
+} from "./Components/tabs.jsx";
+import { buildFromRows } from "./Utils/buildFromRows.jsx";
 const LS_KEY = "FL_STORE_v1";
 const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {

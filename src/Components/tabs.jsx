@@ -3,19 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import {
-  buildFromRows,
-  norm,
-} from "/project/workspace/src/Utils/buildFromRows.jsx";
-import { Card, TableBox } from "/project/workspace/src/Components/ui.jsx";
-import ManagerMergeControl from "/project/workspace/src/Components/ManagerMergeControl.jsx";
-import {
-  ownerName,
-  canonicalizeOwner,
-  primeOwnerMaps,
-} from "/project/workspace/src/ownerMaps.jsx";
-// near the top of App.jsx (or tabs.jsx)
-import "/project/workspace/src/Data/finishData.jsx";
+import { buildFromRows, norm } from "../Utils/buildFromRows.jsx";
+import { Card, TableBox } from "./ui.jsx";
+import ManagerMergeControl from "./ManagerMergeControl.jsx";
+import { ownerName, canonicalizeOwner, primeOwnerMaps } from "../ownerMaps.jsx";
+import "../Data/finishData.jsx";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -2583,6 +2575,8 @@ export function PlacementsTab({
       <span className="tracking-[0.32em]">{children}</span>
     </button>
   );
+  const amberActionClasses =
+    "px-2 py-1 text-[10px] text-amber-900 dark:text-amber-100 bg-gradient-to-r from-amber-300/90 via-amber-200/80 to-yellow-200/75 border border-amber-400/70 shadow-[0_24px_55px_-32px_rgba(245,158,11,0.65)] hover:shadow-[0_28px_65px_-30px_rgba(245,158,11,0.72)] focus-visible:ring-amber-300/70 dark:focus-visible:ring-amber-400/70";
 
   const hiddenManagersSet = React.useMemo(() => {
     const list = Array.isArray(league?.hiddenManagers)
@@ -3867,7 +3861,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
           <div className="flex items-center gap-2">
             {/* collapse/expand */}
             <SoftButton
-              className="px-2 py-1 text-[10px]"
+              className={amberActionClasses}
               onClick={() => setInputsOpen((o) => !o)}
               title={inputsOpen ? "Collapse inputs" : "Expand inputs"}
             >
@@ -3886,7 +3880,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
             ) : null}
 
             <SoftButton
-              className="px-2 py-1 text-[10px]"
+              className={`${amberActionClasses} ${
+                inputsOpen ? "" : "saturate-75"
+              }`}
               onClick={() => setPayoutTiers((p) => Math.min(10, p + 1))}
               disabled={!inputsOpen}
               title={!inputsOpen ? "Expand to edit tiers" : "Add payout tier"}
@@ -3894,7 +3890,9 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
               + Add payout tier
             </SoftButton>
             <SoftButton
-              className="px-2 py-1 text-[10px] text-cyan-800 dark:text-cyan-100 bg-gradient-to-r from-cyan-200/80 via-sky-200/70 to-emerald-200/60 border-cyan-300/70 hover:shadow-[0_26px_60px_-32px_rgba(14,165,233,0.55)]"
+              className={`${amberActionClasses} ${
+                inputsOpen ? "" : "saturate-75"
+              }`}
               onClick={() => setShowWeekly(true)}
               disabled={!inputsOpen}
               title={
@@ -4138,7 +4136,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
       <div className="overflow-x-auto">
         <div className="relative min-w-full overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-0 opacity-75 bg-[radial-gradient(120%_145%_at_0%_0%,rgba(250,204,21,0.16),transparent_55%),radial-gradient(125%_150%_at_100%_100%,rgba(251,191,36,0.14),transparent_60%)]" />
+            <div className="absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.14),transparent_60%)]" />
             <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
           </div>
           <div className="relative">
@@ -4270,7 +4268,7 @@ export function MoneyTab({ league, moneyInputs, setMoneyInputs }) {
                       idx % 2 === 0
                         ? "bg-white/70 dark:bg-white/[0.04]"
                         : "bg-white/45 dark:bg-white/[0.025]"
-                    } hover:bg-amber-100/60 dark:hover:bg-amber-400/10`}
+                    } hover:bg-white/80 dark:hover:bg-white/10`}
                   >
                     <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
                       {r.owner}
