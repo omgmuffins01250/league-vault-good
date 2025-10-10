@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import ApitonHome from "./ApitonHome.jsx";
 import App from "./App.jsx";
+import ProfilePage from "./ProfilePage.jsx";
 import ProtectedRoute from "./ProtectedRoute.jsx";
 
 export default function RootRoutes() {
@@ -12,6 +13,14 @@ export default function RootRoutes() {
         element={
           <ProtectedRoute>
             <App />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

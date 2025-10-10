@@ -19,10 +19,18 @@ import Footer from "./landing/components/Footer.jsx";
 export default function ApitonHome() {
   const nav = useNavigate();
   const loc = useLocation();
+  const isSignedIn = auth.isSignedIn();
+  const currentUser = auth.currentUser();
+  const userInitial = currentUser ? currentUser.charAt(0).toUpperCase() : "?";
 
   const handleSignIn = () => {
     auth.signIn("mike@example.com");
     nav(loc.state?.from || "/app");
+  };
+
+  const handleSignOut = () => {
+    auth.signOut();
+    nav(0);
   };
 
   return (
@@ -32,30 +40,62 @@ export default function ApitonHome() {
         <div className="flex-1">
           <span className="btn btn-ghost text-xl">LeagueVault</span>
         </div>
-        <nav className="flex-none gap-2">
+        <nav className="flex-none flex items-center gap-2">
           <a className="btn btn-ghost" href="#features">Features</a>
           <a className="btn btn-ghost" href="#pricing">Pricing</a>
           <a className="btn btn-ghost" href="#faq">FAQ</a>
           <a className="btn btn-ghost" href="#contact">Contact</a>
-          {auth.isSignedIn() ? (
-            <>
-              <span className="opacity-70 hidden sm:inline">{auth.currentUser()}</span>
-              <button
-                className="btn btn-ghost"
-                onClick={() => {
-                  auth.signOut();
-                  nav(0);
-                }}
-              >
-                Sign out
-              </button>
-              <Link className="btn btn-primary" to="/app">Enter App</Link>
-            </>
-          ) : (
-            <button className="btn btn-primary" onClick={handleSignIn}>
-              Sign in
-            </button>
+          {isSignedIn && (
+            <Link className="btn btn-primary" to="/app">
+              Enter App
+            </Link>
           )}
+          <div className="dropdown dropdown-end">
+            <div
+              tabIndex={0}
+              role="button"
+              className="btn btn-ghost btn-circle avatar"
+            >
+              <div className="w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <span className="font-semibold">{userInitial}</span>
+              </div>
+            </div>
+            <ul
+              tabIndex={0}
+              className="menu menu-sm dropdown-content mt-3 z-[1] p-3 shadow bg-base-100 rounded-box w-60"
+            >
+              {isSignedIn ? (
+                <>
+                  <li className="menu-title">
+                    <span className="uppercase text-xs">Signed in as</span>
+                  </li>
+                  <li>
+                    <span className="text-sm font-medium break-all">
+                      {currentUser}
+                    </span>
+                  </li>
+                  <li>
+                    <Link to="/profile">View profile</Link>
+                  </li>
+                  <li>
+                    <button onClick={handleSignOut}>Sign out</button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <button onClick={handleSignIn}>Sign in</button>
+                  </li>
+                  <li className="opacity-70 text-sm">
+                    Sign in to manage your account and access the app.
+                  </li>
+                  <li className="disabled opacity-50">
+                    <span>Profile (sign in required)</span>
+                  </li>
+                </>
+              )}
+            </ul>
+          </div>
         </nav>
       </header>
 
