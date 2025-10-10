@@ -2461,8 +2461,6 @@ export function PlacementsTab({
       <span className="tracking-[0.32em]">{children}</span>
     </button>
   );
-  const amberActionClasses =
-    "px-2 py-1 text-[10px] text-amber-900 dark:text-amber-100 bg-gradient-to-r from-amber-300/90 via-amber-200/80 to-yellow-200/75 border border-amber-400/70 shadow-[0_24px_55px_-32px_rgba(245,158,11,0.65)] hover:shadow-[0_28px_65px_-30px_rgba(245,158,11,0.72)] focus-visible:ring-amber-300/70 dark:focus-visible:ring-amber-400/70";
 
   const hiddenManagersSet = React.useMemo(() => {
     const list = Array.isArray(league?.hiddenManagers)
@@ -3749,7 +3747,7 @@ export function MoneyTab({ league, moneyInputs = {}, setMoneyInputs }) {
           <div className="flex items-center gap-2">
             {/* collapse/expand */}
             <SoftButton
-              className={amberActionClasses}
+              className="px-2 py-1 text-[10px]"
               onClick={() => setInputsOpen((o) => !o)}
               title={inputsOpen ? "Collapse inputs" : "Expand inputs"}
             >
@@ -3768,9 +3766,7 @@ export function MoneyTab({ league, moneyInputs = {}, setMoneyInputs }) {
             ) : null}
 
             <SoftButton
-              className={`${amberActionClasses} ${
-                inputsOpen ? "" : "saturate-75"
-              }`}
+              className="px-2 py-1 text-[10px]"
               onClick={() => setPayoutTiers((p) => Math.min(10, p + 1))}
               disabled={!inputsOpen}
               title={!inputsOpen ? "Expand to edit tiers" : "Add payout tier"}
@@ -3778,9 +3774,7 @@ export function MoneyTab({ league, moneyInputs = {}, setMoneyInputs }) {
               + Add payout tier
             </SoftButton>
             <SoftButton
-              className={`${amberActionClasses} ${
-                inputsOpen ? "" : "saturate-75"
-              }`}
+              className="px-2 py-1 text-[10px] text-cyan-800 dark:text-cyan-100 bg-gradient-to-r from-cyan-200/80 via-sky-200/70 to-emerald-200/60 border-cyan-300/70 hover:shadow-[0_26px_60px_-32px_rgba(14,165,233,0.55)]"
               onClick={() => setShowWeekly(true)}
               disabled={!inputsOpen}
               title={
