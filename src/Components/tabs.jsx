@@ -303,34 +303,8 @@ const SETUP_SLOT_LABEL = {
   29: "Taxi",
 };
 const SETUP_SLOT_ORDER = [
-  0,
-  2,
-  3,
-  4,
-  23,
-  7,
-  6,
-  16,
-  17,
-  15,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14,
-  18,
-  19,
-  22,
-  20,
-  21,
-  24,
-  25,
-  26,
-  27,
-  28,
-  29,
+  0, 2, 3, 4, 23, 7, 6, 16, 17, 15, 8, 9, 10, 11, 12, 13, 14, 18, 19, 22, 20,
+  21, 24, 25, 26, 27, 28, 29,
 ];
 const ALWAYS_UPPER = new Set(["PPR", "FAAB", "IDP"]);
 function pickFirst(...vals) {
@@ -595,9 +569,10 @@ export function SetupTab({
     if (faabInfo.usesFaab) return "—";
     return "—";
   }, [faabInfo]);
-  const draftMeta = useMemo(() => resolveDraftMeta(latestSeason || {}), [
-    latestSeason,
-  ]);
+  const draftMeta = useMemo(
+    () => resolveDraftMeta(latestSeason || {}),
+    [latestSeason]
+  );
   const draftTypeLabel = useMemo(() => {
     const label = humanizeToken(draftMeta.draftType);
     return label || "—";
@@ -624,9 +599,10 @@ export function SetupTab({
     if (hasPositiveCount(fromMap)) return fromMap;
     return {};
   }, [latestSeason, latestYear, lineupSource]);
-  const rosterSlots = useMemo(() => buildRosterSlots(lineupCounts), [
-    lineupCounts,
-  ]);
+  const rosterSlots = useMemo(
+    () => buildRosterSlots(lineupCounts),
+    [lineupCounts]
+  );
   const extraGeneralInfos = useMemo(
     () => [
       { label: "Waiver Type", value: waiverLabel || "—" },
@@ -920,7 +896,9 @@ export function CareerTab({ league }) {
             {right}
           </div>
         </div>
-        <div className="relative z-10 p-5 md:p-6 text-sm text-slate-700 dark:text-slate-200">{children}</div>
+        <div className="relative z-10 p-5 md:p-6 text-sm text-slate-700 dark:text-slate-200">
+          {children}
+        </div>
       </div>
     );
   };
@@ -1274,14 +1252,22 @@ export function CareerTab({ league }) {
                 Years <Chip className="ml-1">{selectedYears.size || 0}</Chip>
               </SoftButton>
               {showYearPicker && (
-                <div className="absolute right-0 z-30 mt-3 w-60 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
+                <div
+                  className="absolute right-0 z-30 mt-3 w-60 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
                   bg-gradient-to-br from-white/95 via-white/85 to-white/75 dark:from-zinc-950/95 dark:via-zinc-950/80 dark:to-black/70
-                  shadow-[0_24px_50px_-28px_rgba(59,130,246,0.55)] backdrop-blur-xl p-3">
+                  shadow-[0_24px_50px_-28px_rgba(59,130,246,0.55)] backdrop-blur-xl p-3"
+                >
                   <div className="flex items-center justify-between mb-3">
-                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={selectAllYears}>
+                    <SoftButton
+                      className="!px-2.5 !py-1 text-[10px]"
+                      onClick={selectAllYears}
+                    >
                       Select all
                     </SoftButton>
-                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={clearYears}>
+                    <SoftButton
+                      className="!px-2.5 !py-1 text-[10px]"
+                      onClick={clearYears}
+                    >
                       Clear
                     </SoftButton>
                   </div>
@@ -1312,14 +1298,22 @@ export function CareerTab({ league }) {
                 Members <Chip className="ml-1">{selectedNames.size}</Chip>
               </SoftButton>
               {showMemberPicker && (
-                <div className="absolute right-0 z-30 mt-3 w-72 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
+                <div
+                  className="absolute right-0 z-30 mt-3 w-72 max-h-72 overflow-auto rounded-2xl border border-white/20 dark:border-white/10
                   bg-gradient-to-br from-white/95 via-white/85 to-white/75 dark:from-zinc-950/95 dark:via-zinc-950/80 dark:to-black/70
-                  shadow-[0_24px_50px_-28px_rgba(168,85,247,0.55)] backdrop-blur-xl p-3">
+                  shadow-[0_24px_50px_-28px_rgba(168,85,247,0.55)] backdrop-blur-xl p-3"
+                >
                   <div className="flex items-center justify-between mb-3">
-                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={selectAllNames}>
+                    <SoftButton
+                      className="!px-2.5 !py-1 text-[10px]"
+                      onClick={selectAllNames}
+                    >
                       Select all
                     </SoftButton>
-                    <SoftButton className="!px-2.5 !py-1 text-[10px]" onClick={clearNames}>
+                    <SoftButton
+                      className="!px-2.5 !py-1 text-[10px]"
+                      onClick={clearNames}
+                    >
                       Clear
                     </SoftButton>
                   </div>
@@ -1541,9 +1535,15 @@ export function CareerTab({ league }) {
                     <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
                       {r.name}
                     </td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.games}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.wins}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.losses}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.games}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.wins}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.losses}
+                    </td>
                     <td className="px-4 py-3 text-center tabular-nums">
                       {(r.winPct * 100).toFixed(1)}%
                     </td>
@@ -1582,9 +1582,13 @@ export function CareerTab({ league }) {
                 <tr>
                   <th className="px-4 py-3 text-left">Member</th>
                   <th className="px-4 py-3 text-center">Rank: Avg PF</th>
-                  <th className="px-4 py-3 text-center">Rank: PA (lower better)</th>
+                  <th className="px-4 py-3 text-center">
+                    Rank: PA (lower better)
+                  </th>
                   <th className="px-4 py-3 text-center">Rank: Win %</th>
-                  <th className="px-4 py-3 text-center">Rank: Placement (avg)</th>
+                  <th className="px-4 py-3 text-center">
+                    Rank: Placement (avg)
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/40 dark:divide-white/5">
@@ -1600,10 +1604,18 @@ export function CareerTab({ league }) {
                     <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
                       {r.name}
                     </td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.avgPF}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.pa}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.winPct}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{r.place}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.avgPF}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.pa}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.winPct}
+                    </td>
+                    <td className="px-4 py-3 text-center tabular-nums">
+                      {r.place}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1914,13 +1926,19 @@ export function H2HTab({ league }) {
     </span>
   );
 
-  const SoftButton = ({ children, onClick, active = false, className = "" }) => (
+  const SoftButton = ({
+    children,
+    onClick,
+    active = false,
+    className = "",
+  }) => (
     <button
       onClick={onClick}
       className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[10px] font-semibold tracking-[0.28em] uppercase transition-all duration-200 ease-out
-        ${active
-          ? "bg-gradient-to-r from-white/95 via-amber-100/80 to-white/95 text-amber-900 border border-amber-400/60 shadow-[0_24px_55px_-24px_rgba(251,191,36,0.75)]"
-          : "text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-zinc-900/60 border border-white/60 dark:border-white/10 hover:border-amber-300/60 hover:text-amber-400"
+        ${
+          active
+            ? "bg-gradient-to-r from-white/95 via-amber-100/80 to-white/95 text-amber-900 border border-amber-400/60 shadow-[0_24px_55px_-24px_rgba(251,191,36,0.75)]"
+            : "text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-zinc-900/60 border border-white/60 dark:border-white/10 hover:border-amber-300/60 hover:text-amber-400"
         }
         focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 backdrop-blur ${className}`}
       type="button"
@@ -2095,51 +2113,51 @@ export function H2HTab({ league }) {
                     >
                       {b}
                     </th>
-                ))}
-              </tr>
-            </thead>
+                  ))}
+                </tr>
+              </thead>
               <tbody className="divide-y divide-white/40 dark:divide-white/10">
                 {owners.map((a) => (
                   <tr key={a}>
                     <td
                       className={`px-3 py-2 font-medium transition-all duration-150 ${
                         hover.row === a
-                        ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white"
-                        : ""
-                    }`}
-                    onMouseEnter={() => setHover((h) => ({ ...h, row: a }))}
-                    onMouseLeave={clearHover}
-                  >
-                    {a}
-                  </td>
-                  {owners.map((b) => {
-                    const key = `${a}__${b}`;
-                    const hasGames =
-                      a !== b && (pairGames.get(key)?.length || 0) > 0;
-                    const isHilited = hover.row === a || hover.col === b;
-                    return (
-                      <td
-                        key={b}
-                        className={`px-3 py-2 text-center transition-all duration-150 ease-out ${
-                          isHilited
-                            ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-                            : hasGames
-                            ? "hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-[0_16px_40px_-30px_rgba(59,130,246,0.75)] cursor-pointer"
-                            : "text-slate-400 dark:text-slate-600"
-                        }`}
-                        onMouseEnter={() => setHover({ row: a, col: b })}
-                        onMouseLeave={clearHover}
-                        onClick={() => {
-                          if (hasGames) setDetailPair({ a, b });
-                        }}
-                        title={hasGames ? `View ${a} vs ${b}` : ""}
-                      >
-                        {a === b ? "—" : matrix[a][b]}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                          ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white"
+                          : ""
+                      }`}
+                      onMouseEnter={() => setHover((h) => ({ ...h, row: a }))}
+                      onMouseLeave={clearHover}
+                    >
+                      {a}
+                    </td>
+                    {owners.map((b) => {
+                      const key = `${a}__${b}`;
+                      const hasGames =
+                        a !== b && (pairGames.get(key)?.length || 0) > 0;
+                      const isHilited = hover.row === a || hover.col === b;
+                      return (
+                        <td
+                          key={b}
+                          className={`px-3 py-2 text-center transition-all duration-150 ease-out ${
+                            isHilited
+                              ? "bg-white/80 dark:bg-white/10 text-slate-900 dark:text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+                              : hasGames
+                              ? "hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-[0_16px_40px_-30px_rgba(59,130,246,0.75)] cursor-pointer"
+                              : "text-slate-400 dark:text-slate-600"
+                          }`}
+                          onMouseEnter={() => setHover({ row: a, col: b })}
+                          onMouseLeave={clearHover}
+                          onClick={() => {
+                            if (hasGames) setDetailPair({ a, b });
+                          }}
+                          title={hasGames ? `View ${a} vs ${b}` : ""}
+                        >
+                          {a === b ? "—" : matrix[a][b]}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -2179,7 +2197,9 @@ export function H2HTab({ league }) {
                       <span className="tabular-nums text-slate-600 dark:text-slate-200">
                         {totals.w}-{totals.l}
                       </span>
-                      <SoftButton onClick={() => setDetailPair(null)}>Close</SoftButton>
+                      <SoftButton onClick={() => setDetailPair(null)}>
+                        Close
+                      </SoftButton>
                     </div>
                   </div>
 
@@ -2191,26 +2211,30 @@ export function H2HTab({ league }) {
                       <table className="w-full text-sm">
                         <thead className="text-xs uppercase opacity-60">
                           <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                            <th className="text-left px-2 py-1 w-[52px]">W/L</th>
-                          <th className="text-left px-2 py-1">Owner</th>
-                          <th className="text-right px-2 py-1 w-[90px]">
-                            {detailPair.a} Pts
-                          </th>
-                          <th className="text-center px-2 py-1 w-[40px]">vs</th>
-                          <th className="text-left px-2 py-1">
-                            Opponent (W/L)
-                          </th>
-                          <th className="text-right px-2 py-1 w-[90px]">
-                            {detailPair.b} Pts
-                          </th>
-                          <th className="text-right px-2 py-1 w-[64px]">
-                            Week
-                          </th>
-                          <th className="text-right px-2 py-1 w-[64px]">
-                            Year
-                          </th>
-                        </tr>
-                      </thead>
+                            <th className="text-left px-2 py-1 w-[52px]">
+                              W/L
+                            </th>
+                            <th className="text-left px-2 py-1">Owner</th>
+                            <th className="text-right px-2 py-1 w-[90px]">
+                              {detailPair.a} Pts
+                            </th>
+                            <th className="text-center px-2 py-1 w-[40px]">
+                              vs
+                            </th>
+                            <th className="text-left px-2 py-1">
+                              Opponent (W/L)
+                            </th>
+                            <th className="text-right px-2 py-1 w-[90px]">
+                              {detailPair.b} Pts
+                            </th>
+                            <th className="text-right px-2 py-1 w-[64px]">
+                              Week
+                            </th>
+                            <th className="text-right px-2 py-1 w-[64px]">
+                              Year
+                            </th>
+                          </tr>
+                        </thead>
                         <tbody className="divide-y divide-white/30 dark:divide-white/10">
                           {list.map((g, i) => (
                             <tr
@@ -2219,49 +2243,48 @@ export function H2HTab({ league }) {
                             >
                               <td className="px-2 py-1 font-semibold">
                                 <span
-                                className={
-                                  g.res === "W"
-                                    ? "text-green-600 dark:text-green-400"
-                                    : "text-red-600 dark:text-red-400"
-                                }
-                              >
-                                {g.res}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1">{g.a}</td>
-                            <td className="px-2 py-1 text-right tabular-nums">
-                              {fmtPts(g.aPts)}
-                            </td>
-                            <td className="px-2 py-1 text-center">v</td>
-                            <td className="px-2 py-1">
-                              <span
-                                className={
-                                  g.res === "W"
-                                    ? "mr-1 font-semibold text-red-600 dark:text-red-400"
-                                    : "mr-1 font-semibold text-green-600 dark:text-green-400"
-                                }
-                                title={
-                                  g.res === "W"
-                                    ? "Opponent loss"
-                                    : "Opponent win"
-                                }
-                              >
-                                {g.res === "W" ? "L" : "W"}
-                              </span>
-                              {g.b}
-                            </td>
-                            <td className="px-2 py-1 text-right tabular-nums">
-                              {fmtPts(g.bPts)}
-                            </td>
-
-                            <td className="px-2 py-1 text-right">
-                              {g.week ?? "—"}
-                            </td>
-                            <td className="px-2 py-1 text-right">
-                              {g.year ?? "—"}
-                            </td>
-                          </tr>
-                        ))}
+                                  className={
+                                    g.res === "W"
+                                      ? "text-green-600 dark:text-green-400"
+                                      : "text-red-600 dark:text-red-400"
+                                  }
+                                >
+                                  {g.res}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1">{g.a}</td>
+                              <td className="px-2 py-1 text-right tabular-nums">
+                                {fmtPts(g.aPts)}
+                              </td>
+                              <td className="px-2 py-1 text-center">v</td>
+                              <td className="px-2 py-1">
+                                <span
+                                  className={
+                                    g.res === "W"
+                                      ? "mr-1 font-semibold text-red-600 dark:text-red-400"
+                                      : "mr-1 font-semibold text-green-600 dark:text-green-400"
+                                  }
+                                  title={
+                                    g.res === "W"
+                                      ? "Opponent loss"
+                                      : "Opponent win"
+                                  }
+                                >
+                                  {g.res === "W" ? "L" : "W"}
+                                </span>
+                                {g.b}
+                              </td>
+                              <td className="px-2 py-1 text-right tabular-nums">
+                                {fmtPts(g.bPts)}
+                              </td>
+                              <td className="px-2 py-1 text-right">
+                                {g.week ?? "—"}
+                              </td>
+                              <td className="px-2 py-1 text-right">
+                                {g.year ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     ) : (
@@ -2272,6 +2295,7 @@ export function H2HTab({ league }) {
                   </div>
                 </div>
               </div>
+            </div> // <<< this is the missing closing </div> for the outer overlay container
           );
         })()}
 
@@ -2294,9 +2318,11 @@ export function H2HTab({ league }) {
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.28em]
                   border backdrop-blur-sm
-                  ${tone === "good"
-                    ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/40"
-                    : "bg-rose-500/15 text-rose-200 border-rose-400/40"}
+                  ${
+                    tone === "good"
+                      ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/40"
+                      : "bg-rose-500/15 text-rose-200 border-rose-400/40"
+                  }
                 `}
               >
                 {children}
