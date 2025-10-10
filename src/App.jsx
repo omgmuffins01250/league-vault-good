@@ -239,7 +239,8 @@ function buildRowsLight(seasons) {
       const dn = m?.displayName || "";
       const fn = m?.firstName || "";
       const ln = m?.lastName || "";
-      const best = dn || [fn, ln].filter(Boolean).join(" ").trim() || "Unknown";
+      const full = [fn, ln].filter(Boolean).join(" ").trim();
+      const best = full || dn || "Unknown";
       if (m?.id != null) memberMap.set(m.id, best);
     });
     const teamMap = new Map();
@@ -1796,7 +1797,8 @@ export default function App() {
             const dn = m?.displayName || "";
             const fn = m?.firstName || "";
             const ln = m?.lastName || "";
-            const best = dn || `${fn} ${ln}`.trim() || "Unknown";
+            const full = [fn, ln].filter(Boolean).join(" ").trim();
+            const best = full || dn || "Unknown";
             if (m?.id != null) members.set(m.id, best);
           });
           const ownerByTeam = new Map();

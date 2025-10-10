@@ -49,7 +49,8 @@ export function extractEspnActivity(seasons = []) {
       const dn = m?.displayName || "";
       const fn = m?.firstName || "";
       const ln = m?.lastName || "";
-      const best = dn || [fn, ln].filter(Boolean).join(" ").trim() || "";
+      const full = [fn, ln].filter(Boolean).join(" ").trim();
+      const best = full || dn || "";
       if (m?.id) memberName.set(m.id, best);
     });
     if (!activity[yr]) activity[yr] = {};
@@ -7141,7 +7142,8 @@ function __managerMapForSeason(season, providedByYear = {}) {
       const dn = m?.displayName || "";
       const fn = m?.firstName || "";
       const ln = m?.lastName || "";
-      const best = dn || [fn, ln].filter(Boolean).join(" ").trim() || "Unknown";
+      const full = [fn, ln].filter(Boolean).join(" ").trim();
+      const best = full || dn || "Unknown";
       if (m?.id != null) nameByMemberId[m.id] = best;
     });
     const out = {};
@@ -13941,7 +13943,8 @@ function __ownerNameForTeam(seasonObj, teamId) {
     const dn = (m?.displayName || "").trim();
     const fn = (m?.firstName || "").trim();
     const ln = (m?.lastName || "").trim();
-    return dn || [fn, ln].filter(Boolean).join(" ").trim() || `Team ${teamId}`;
+    const full = [fn, ln].filter(Boolean).join(" ").trim();
+    return full || dn || `Team ${teamId}`;
   } catch {
     return `Team ${teamId}`;
   }
