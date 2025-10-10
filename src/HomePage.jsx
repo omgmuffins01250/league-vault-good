@@ -15,16 +15,16 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-base-100 text-base-content">
+    <div className="min-h-screen bg-slate-50 text-gray-900">
       {/* NAV */}
-      <header className="navbar bg-base-200 shadow">
+      <header className="navbar bg-white shadow">
         <div className="flex-1">
           <span className="btn btn-ghost normal-case text-xl">LeagueVault</span>
         </div>
         <div className="flex-none gap-2">
           {auth.isSignedIn() ? (
             <>
-              <span className="opacity-70 hidden sm:inline">
+              <span className="hidden text-gray-600 sm:inline">
                 {auth.currentUser()}
               </span>
               <button
@@ -53,7 +53,7 @@ export default function HomePage() {
         <h1 className="text-5xl font-bold leading-tight">
           Your league’s history, <span className="text-primary">unlocked</span>.
         </h1>
-        <p className="mt-4 text-lg opacity-80">
+        <p className="mt-4 text-lg text-gray-700">
           Upload ESPN data, explore career stats, trades, placements, and
           head-to-head in seconds.
         </p>
