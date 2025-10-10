@@ -996,13 +996,13 @@ export function MembersTab({ league }) {
                     <td className="px-3 py-2 text-center tabular-nums font-semibold ...">
                       {m.joined}
                     </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full border border-amber-400/50 bg-amber-300/20 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-200 whitespace-nowrap overflow-hidden text-ellipsis">
-                        {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
+
+                    <td className="px-3 py-2 text-center tabular-nums">
+                      <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/10 px-2 py-[2px] text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
+                        {m.yearsPlayed}
                       </span>
                     </td>
 
-                    {/* Current team (fallback to most recent season’s saved team_name) */}
                     <td className="px-3 py-2 text-center">
                       <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full border border-amber-400/50 bg-amber-300/20 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-200 whitespace-nowrap overflow-hidden text-ellipsis">
                         {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
