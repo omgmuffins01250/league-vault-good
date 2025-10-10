@@ -267,6 +267,272 @@ function HideManagerControl({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Helpers shared by League Setup UI                                  */
+/* ------------------------------------------------------------------ */
+const SETUP_SLOT_LABEL = {
+  0: "QB",
+  1: "TQB",
+  2: "RB",
+  3: "RB/WR",
+  4: "WR",
+  5: "WR/TE",
+  6: "TE",
+  7: "OP",
+  8: "DL",
+  9: "DE",
+  10: "LB",
+  11: "DL/DT",
+  12: "DB",
+  13: "DB/S",
+  14: "DP",
+  15: "D",
+  16: "D/ST",
+  17: "K",
+  18: "P",
+  19: "HC",
+  20: "Bench",
+  21: "IR",
+  22: "UTIL",
+  23: "FLEX",
+  24: "EDR",
+  25: "Bench (DL)",
+  26: "Bench (LB)",
+  27: "Bench (DB)",
+  28: "Bench (DP)",
+  29: "Taxi",
+};
+const SETUP_SLOT_ORDER = [
+  0,
+  2,
+  3,
+  4,
+  23,
+  7,
+  6,
+  16,
+  17,
+  15,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  18,
+  19,
+  22,
+  20,
+  21,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+];
+const ALWAYS_UPPER = new Set(["PPR", "FAAB", "IDP"]);
+function pickFirst(...vals) {
+  for (const val of vals) {
+    if (val === undefined || val === null) continue;
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed) return trimmed;
+      continue;
+    }
+    return val;
+  }
+  return undefined;
+}
+function humanizeToken(token) {
+  if (token === undefined || token === null) return "";
+  const raw = String(token).trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (upper === "HALF_PPR" || upper === "HALF-PPR" || upper === "HALF PPR")
+    return "Half PPR";
+  if (upper === "H2H_POINTS") return "H2H Points";
+  if (upper === "ROTO") return "Roto";
+  if (ALWAYS_UPPER.has(upper)) return upper;
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function formatCurrency(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  return `$${num.toLocaleString()}`;
+}
+function formatDateTime(value) {
+  if (value === undefined || value === null) return "—";
+  let date = null;
+  if (typeof value === "number") {
+    const ms = value > 1e12 ? value : value * 1000;
+    date = new Date(ms);
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "—";
+    const asNum = Number(trimmed);
+    if (Number.isFinite(asNum)) {
+      const ms = asNum > 1e12 ? asNum : asNum * 1000;
+      date = new Date(ms);
+    } else {
+      date = new Date(trimmed);
+    }
+  }
+  if (!date || Number.isNaN(date.getTime())) return "—";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return date.toLocaleString();
+  }
+}
+function getFromYearMap(map, year) {
+  if (!map || !year) return null;
+  return map[year] || map[String(year)] || null;
+}
+function hasPositiveCount(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  return Object.values(obj).some((v) => Number(v) > 0);
+}
+function buildRosterSlots(counts = {}) {
+  const seen = new Set();
+  const out = [];
+  SETUP_SLOT_ORDER.forEach((slotId) => {
+    const cnt = Number(counts?.[slotId] ?? counts?.[String(slotId)] ?? 0);
+    if (!Number.isFinite(cnt) || cnt <= 0) return;
+    seen.add(String(slotId));
+    const label = SETUP_SLOT_LABEL[slotId] || `Slot ${slotId}`;
+    out.push({ key: `slot-${slotId}`, label, count: cnt });
+  });
+  Object.entries(counts || {}).forEach(([slotId, cnt]) => {
+    if (seen.has(String(slotId))) return;
+    const num = Number(cnt);
+    if (!Number.isFinite(num) || num <= 0) return;
+    const numId = Number(slotId);
+    const label = SETUP_SLOT_LABEL[numId] || `Slot ${slotId}`;
+    out.push({ key: `slot-${slotId}`, label, count: num });
+  });
+  return out;
+}
+function resolveSeasonsSource(league) {
+  if (league?.seasonsByYear && Object.keys(league.seasonsByYear).length)
+    return league.seasonsByYear;
+  if (typeof window !== "undefined") {
+    return (
+      window.__sources?.seasonsByYear ||
+      window.__FL_SOURCES?.seasonsByYear ||
+      {}
+    );
+  }
+  return {};
+}
+function resolveLineupSource(league) {
+  if (league?.lineupSlotsByYear && Object.keys(league.lineupSlotsByYear).length)
+    return league.lineupSlotsByYear;
+  if (typeof window !== "undefined") {
+    return window.__sources?.lineupSlotsByYear || {};
+  }
+  return {};
+}
+function resolveScoringLabel(league, season) {
+  const scoringRaw = pickFirst(
+    season?.scoringSettings?.name,
+    season?.scoringSettings?.scoringType,
+    season?.scoringSettings?.playerRankType,
+    season?.settings?.scoringSettings?.name,
+    season?.settings?.scoringSettings?.scoringType,
+    season?.settings?.scoringSettings?.playerRankType,
+    season?.settings?.playerRankType,
+    league?.meta?.scoring
+  );
+  const label = humanizeToken(scoringRaw);
+  return label || "Standard";
+}
+function resolveFaab(acquisitionSettings) {
+  if (!acquisitionSettings || typeof acquisitionSettings !== "object") {
+    return { usesFaab: null, budget: null, waiverType: null };
+  }
+  const waiverType = pickFirst(
+    acquisitionSettings.acquisitionType,
+    acquisitionSettings.waiverType,
+    acquisitionSettings.waiverProcessType
+  );
+  const usesFaab = pickFirst(
+    acquisitionSettings.isUsingFaab,
+    acquisitionSettings.usingFaab,
+    typeof waiverType === "string"
+      ? waiverType.toUpperCase().includes("FAAB")
+      : undefined
+  );
+  const budget = pickFirst(
+    acquisitionSettings.acquisitionBudget,
+    acquisitionSettings.faabBudget,
+    acquisitionSettings.freeAgentBudget,
+    acquisitionSettings.waiverBudget
+  );
+  return {
+    usesFaab: typeof usesFaab === "boolean" ? usesFaab : !!usesFaab,
+    budget: Number.isFinite(Number(budget)) ? Number(budget) : null,
+    waiverType,
+  };
+}
+function resolveDraftMeta(season) {
+  const draftSettings =
+    season?.settings?.draftSettings || season?.draftSettings || {};
+  const draftDetail = season?.draftDetail || {};
+  const draftType = pickFirst(
+    draftSettings.type,
+    draftDetail.type,
+    season?.draftType
+  );
+  const draftOrderRaw = pickFirst(
+    draftSettings.orderType,
+    draftSettings.draftOrderType,
+    draftDetail.orderType,
+    draftDetail.draftOrderType
+  );
+  const snakeFlag = pickFirst(
+    draftSettings.isSnakeDraft,
+    draftSettings.isSnake,
+    draftDetail.isSnake,
+    draftDetail.isSnakeDraft
+  );
+  const inferredSnake = (() => {
+    if (typeof snakeFlag === "boolean") return snakeFlag;
+    if (typeof draftOrderRaw === "string") {
+      const upper = draftOrderRaw.toUpperCase();
+      if (upper.includes("SNAKE")) return true;
+      if (upper.includes("LINEAR") || upper.includes("FIXED")) return false;
+    }
+    return null;
+  })();
+  const draftDateRaw = pickFirst(
+    draftDetail.draftedDate,
+    draftDetail.draftDate,
+    draftDetail.draftedDateTime,
+    draftDetail.scheduledStartTime,
+    draftDetail.startTime,
+    draftSettings.date,
+    draftSettings.draftDate
+  );
+  return {
+    draftType,
+    draftOrderRaw,
+    isSnake: inferredSnake,
+    draftDateRaw,
+  };
+}
+
 /* SetupTab                                                           */
 /* SetupTab                                                           */
 export function SetupTab({
@@ -279,6 +545,114 @@ export function SetupTab({
 }) {
   if (!derivedAll) return null;
   const league = selectedLeague && derivedAll?.byLeague?.[selectedLeague];
+  const seasonsSource = useMemo(() => resolveSeasonsSource(league), [league]);
+  const lineupSource = useMemo(() => resolveLineupSource(league), [league]);
+  const { latestSeason, latestYear } = useMemo(() => {
+    let bestSeason = null;
+    let bestYear = null;
+    Object.entries(seasonsSource || {}).forEach(([key, season]) => {
+      const byKey = Number(key);
+      const bySeasonId = Number(season?.seasonId);
+      const candidate = Number.isFinite(byKey)
+        ? byKey
+        : Number.isFinite(bySeasonId)
+        ? bySeasonId
+        : null;
+      if (candidate == null) {
+        if (!bestSeason) bestSeason = season;
+        return;
+      }
+      if (bestYear == null || candidate > bestYear) {
+        bestYear = candidate;
+        bestSeason = season;
+      }
+    });
+    return { latestSeason: bestSeason, latestYear: bestYear };
+  }, [seasonsSource]);
+  const scoringDisplay = useMemo(
+    () => resolveScoringLabel(league, latestSeason),
+    [league, latestSeason]
+  );
+  const faabInfo = useMemo(() => {
+    const acquisitionSettings =
+      latestSeason?.settings?.acquisitionSettings ||
+      latestSeason?.acquisitionSettings ||
+      null;
+    return resolveFaab(acquisitionSettings);
+  }, [latestSeason]);
+  const waiverLabel = useMemo(() => {
+    if (faabInfo.usesFaab === true) return "FAAB";
+    if (faabInfo.waiverType) {
+      const upper = String(faabInfo.waiverType).toUpperCase();
+      if (upper.includes("FAAB")) return "FAAB";
+      return humanizeToken(faabInfo.waiverType);
+    }
+    if (faabInfo.usesFaab === false) return "Waivers";
+    return faabInfo.usesFaab ? "FAAB" : "—";
+  }, [faabInfo]);
+  const faabBudgetLabel = useMemo(() => {
+    if (faabInfo.budget != null) return formatCurrency(faabInfo.budget);
+    if (faabInfo.usesFaab) return "—";
+    return "—";
+  }, [faabInfo]);
+  const draftMeta = useMemo(() => resolveDraftMeta(latestSeason || {}), [
+    latestSeason,
+  ]);
+  const draftTypeLabel = useMemo(() => {
+    const label = humanizeToken(draftMeta.draftType);
+    return label || "—";
+  }, [draftMeta.draftType]);
+  const draftOrderLabel = useMemo(() => {
+    if (draftMeta.isSnake === true) return "Snake";
+    if (draftMeta.isSnake === false) return "Linear";
+    const label = humanizeToken(draftMeta.draftOrderRaw);
+    return label || "—";
+  }, [draftMeta.draftOrderRaw, draftMeta.isSnake]);
+  const draftDateLabel = useMemo(
+    () => formatDateTime(draftMeta.draftDateRaw),
+    [draftMeta.draftDateRaw]
+  );
+  const lineupCounts = useMemo(() => {
+    const countsFromSeason =
+      latestSeason?.settings?.rosterSettings?.lineupSlotCounts;
+    if (hasPositiveCount(countsFromSeason)) return countsFromSeason;
+    const fromNested = latestSeason?.rosterSettings?.lineupSlotCounts;
+    if (hasPositiveCount(fromNested)) return fromNested;
+    const directRoster = latestSeason?.rosterSettings;
+    if (hasPositiveCount(directRoster)) return directRoster;
+    const fromMap = getFromYearMap(lineupSource, latestYear);
+    if (hasPositiveCount(fromMap)) return fromMap;
+    return {};
+  }, [latestSeason, latestYear, lineupSource]);
+  const rosterSlots = useMemo(() => buildRosterSlots(lineupCounts), [
+    lineupCounts,
+  ]);
+  const extraGeneralInfos = useMemo(
+    () => [
+      { label: "Waiver Type", value: waiverLabel || "—" },
+      { label: "FAAB Budget", value: faabBudgetLabel || "—" },
+      { label: "Draft Type", value: draftTypeLabel || "—" },
+      { label: "Draft Date", value: draftDateLabel || "—" },
+      { label: "Draft Order", value: draftOrderLabel || "—" },
+    ],
+    [
+      waiverLabel,
+      faabBudgetLabel,
+      draftTypeLabel,
+      draftDateLabel,
+      draftOrderLabel,
+    ]
+  );
+  const hasExtras = useMemo(
+    () =>
+      rosterSlots.length > 0 ||
+      extraGeneralInfos.some((info) => info.value && info.value !== "—"),
+    [rosterSlots, extraGeneralInfos]
+  );
+  const [showMore, setShowMore] = useState(false);
+  useEffect(() => {
+    setShowMore(false);
+  }, [selectedLeague, league]);
   // 👇 ADD THIS EFFECT (keeps ownerMaps in sync with the selected league)
   React.useEffect(() => {
     if (!league) return;
@@ -350,8 +724,49 @@ export function SetupTab({
             <Info label="Start Season" value={league.meta.startSeason} />
             <Info label="Years Running" value={league.meta.yearsRunning} />
             <Info label="Platform" value={league.meta.platform} />
-            <Info label="Scoring" value={league.meta.scoring || "Standard"} />
+            <Info label="Scoring" value={scoringDisplay || "Standard"} />
           </div>
+          {hasExtras && (
+            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setShowMore((prev) => !prev)}
+                  aria-expanded={showMore}
+                >
+                  {showMore ? "Hide details" : "See more details"}
+                </button>
+                <div className="text-lg leading-none text-zinc-400">
+                  {showMore ? "−" : "+"}
+                </div>
+              </div>
+              {showMore && (
+                <div className="mt-4 grid lg:grid-cols-2 gap-4 text-sm">
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {extraGeneralInfos.map((info) => (
+                      <Info
+                        key={info.label}
+                        label={info.label}
+                        value={info.value}
+                      />
+                    ))}
+                  </div>
+                  {rosterSlots.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {rosterSlots.map((slot) => (
+                        <Info
+                          key={slot.key}
+                          label={slot.label}
+                          value={slot.count}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       )}
     </div>
