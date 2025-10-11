@@ -1,7 +1,10 @@
 
-let _cache = {};     // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
+let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
 let _aliasMap = null; // Map<normalized alias, "Owner Name"> (global canonicalizer)
 let _lastKey = "";
+let _seasonCache = [];
+let _manualAliasHistory = {};
+let _manualAliasDatasetKey = "";
 
 // ----------------------- helpers ------------------------------
 const _norm = (s) =>
@@ -95,7 +98,12 @@ function _buildNameKeyToOwner(src, season, canonOwner) {
  * - manualAliases (param)
  * - merge-helpers canonicalizer (if present)
  */
-function _buildAliasMap({ league, selectedLeague, manualAliases }) {
+function _buildAliasMap({
+  league,
+  selectedLeague,
+  manualAliases,
+  espnSeasons,
+}) {
   const map = new Map();
   const add = (alias, target) => {
     const k = _norm(alias);
@@ -111,7 +119,7 @@ function _buildAliasMap({ league, selectedLeague, manualAliases }) {
   candidates.forEach((lg) => (lg?.owners || []).forEach((o) => add(o, o)));
 
   // ESPN members: displayName + first/last + nickname
-  const seasons = _readEspnSeasons();
+  const seasons = Array.isArray(espnSeasons) ? espnSeasons : _readEspnSeasons();
   // prefer the current season's members block if present
   const seasonObj =
     seasons.find((s) => Array.isArray(s?.members) && s.members.length) || null;
@@ -150,6 +158,7 @@ function _buildSeasonMap({
   selectedLeague,
   espnOwnerByTeamByYear,
   canonOwner,
+  espnSeasons,
 }) {
   const s = Number(season);
   const out = {};
@@ -178,7 +187,7 @@ function _buildSeasonMap({
   
 
   // 3) team-name join using teamNamesByOwner (if you maintain it)
-  const seasons = _readEspnSeasons();
+  const seasons = Array.isArray(espnSeasons) ? espnSeasons : _readEspnSeasons();
   const seasonObj = seasons.find((ss) => Number(ss?.seasonId) === s);
 
   const tnameJoin =
@@ -197,38 +206,36 @@ function _buildSeasonMap({
     });
   }
   
+  // 4) map teamId → ownerId (GUID) and name using members + teams
+  if (seasonObj) {
+    // GUID → best real/display name
+    const guidToName = new Map();
+    (seasonObj.members || []).forEach((m) => {
+      const real = [m?.firstName, m?.lastName].filter(Boolean).join(" ").trim();
+      const disp = (m?.displayName || "").toString().trim();
+      const best = real || disp || "Unknown";
+      if (m?.id) guidToName.set(m.id, best);
+    });
 
- // 4) map teamId → ownerId (GUID) and name using members + teams
-if (seasonObj) {
-  // GUID → best real/display name
-  const guidToName = new Map();
-  (seasonObj.members || []).forEach((m) => {
-    const real = [m?.firstName, m?.lastName].filter(Boolean).join(" ").trim();
-    const disp = (m?.displayName || "").toString().trim();
-    const best = real || disp || "Unknown";
-    if (m?.id) guidToName.set(m.id, best);
-  });
+    (seasonObj.teams || []).forEach((t) => {
+      const teamId = t?.id;
+      if (teamId == null) return;
 
-  (seasonObj.teams || []).forEach((t) => {
-    const teamId = t?.id;
-    if (teamId == null) return;
-  
-    const guid = (Array.isArray(t?.owners) && t.owners[0]) || t?.primaryOwner || null;
-    const bestName = guid ? guidToName.get(guid) : null;
-  
-    // Ensure an entry object exists
-    if (!out[teamId]) out[teamId] = { name: null, ownerId: null, teamId: Number(teamId) };
-    if (!out[teamId].teamId) out[teamId].teamId = Number(teamId);
-  
-    // Fill/merge name and ownerId without nuking a better existing name
-    if (guid && !out[teamId].ownerId) out[teamId].ownerId = guid;
-    if (!out[teamId].name) {
-      const fallback = t?.name ? String(t.name) : `Team ${teamId}`;
-      out[teamId].name = canonOwner(bestName || fallback);
-    }
-  });
-  
-}
+      const guid = (Array.isArray(t?.owners) && t.owners[0]) || t?.primaryOwner || null;
+      const bestName = guid ? guidToName.get(guid) : null;
+
+      // Ensure an entry object exists
+      if (!out[teamId]) out[teamId] = { name: null, ownerId: null, teamId: Number(teamId) };
+      if (!out[teamId].teamId) out[teamId].teamId = Number(teamId);
+
+      // Fill/merge name and ownerId without nuking a better existing name
+      if (guid && !out[teamId].ownerId) out[teamId].ownerId = guid;
+      if (!out[teamId].name) {
+        const fallback = t?.name ? String(t.name) : `Team ${teamId}`;
+        out[teamId].name = canonOwner(bestName || fallback);
+      }
+    });
+  }
 
   return out;
 }
@@ -243,7 +250,78 @@ export function primeOwnerMaps({
   selectedLeague,
   espnOwnerByTeamByYear = {},
   manualAliases = {},
+  espnSeasons = null,
 }) {
+  const seasonsInput = Array.isArray(espnSeasons) ? espnSeasons : null;
+  if (seasonsInput && seasonsInput.length) {
+    _seasonCache = seasonsInput.slice();
+  }
+
+  let seasons = _seasonCache.slice();
+  if (!seasons.length) {
+    seasons = _readEspnSeasons();
+    if (Array.isArray(seasons) && seasons.length) {
+      _seasonCache = seasons.slice();
+    } else {
+      seasons = [];
+    }
+  }
+
+  const normalizeOwners = (lg) =>
+    Array.isArray(lg?.owners)
+      ? lg.owners
+          .map((o) => String(o || "").trim())
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b))
+      : [];
+  const ownerSigA = normalizeOwners(league).join("|");
+  const ownerSigB = normalizeOwners(selectedLeague).join("|");
+  const leagueIdSig = String(
+    league?.meta?.id ??
+      league?.meta?.leagueId ??
+      league?.meta?.espnLeagueId ??
+      ""
+  ).trim();
+  const selectedLeagueIdSig = String(
+    selectedLeague?.meta?.id ??
+      selectedLeague?.meta?.leagueId ??
+      selectedLeague?.meta?.espnLeagueId ??
+      ""
+  ).trim();
+  const seasonSig = seasons
+    .map((s) => Number(s?.seasonId) || 0)
+    .filter(Boolean)
+    .sort((a, b) => a - b)
+    .join("|");
+  const propSeasonSig = Object.keys(espnOwnerByTeamByYear || {})
+    .map((k) => Number(k) || 0)
+    .filter(Boolean)
+    .sort((a, b) => a - b)
+    .join("|");
+
+  const datasetKey = JSON.stringify({
+    leagueIdSig,
+    selectedLeagueIdSig,
+    ownerSigA,
+    ownerSigB,
+    seasonSig,
+    propSeasonSig,
+  });
+  if (datasetKey !== _manualAliasDatasetKey) {
+    _manualAliasHistory = {};
+    _manualAliasDatasetKey = datasetKey;
+  }
+
+  const mergedManualAliases = {
+    ..._manualAliasHistory,
+    ...(manualAliases || {}),
+  };
+  _manualAliasHistory = mergedManualAliases;
+  const manualAliasKey = Object.entries(mergedManualAliases)
+    .map(([alias, target]) => `${_norm(alias)}=>${String(target || "").trim()}`)
+    .sort()
+    .join("|");
+
   const canonByMergeLeague = _canonFromMergeHelpers(league || selectedLeague || {});
   const canonOwner = (name) => {
     // 1) merge-helpers canonicalizer (if configured in your app)
@@ -255,17 +333,20 @@ export function primeOwnerMaps({
 
   // Build alias map once per “shape” of the data
   const key = JSON.stringify({
-    ownersA: (league?.owners || []).length,
-    ownersB: (selectedLeague?.owners || []).length,
-    seasonsObj: (_readEspnSeasons() || []).length,
-    propSeasons: Object.keys(espnOwnerByTeamByYear || {}).length,
-    manualAliases: Object.keys(manualAliases || {}).length,
+    datasetKey,
+    seasonsCount: seasons.length,
+    manualAliasKey,
   });
 
   if (key !== _lastKey) {
-    _aliasMap = _buildAliasMap({ league, selectedLeague, manualAliases });
+    _aliasMap = _buildAliasMap({
+      league,
+      selectedLeague,
+      manualAliases: mergedManualAliases,
+      espnSeasons: seasons,
+    });
     const seasonsToBuild = new Set();
-    _readEspnSeasons().forEach((s) => seasonsToBuild.add(Number(s?.seasonId)));
+    seasons.forEach((s) => seasonsToBuild.add(Number(s?.seasonId)));
     Object.keys(espnOwnerByTeamByYear || {}).forEach((s) =>
       seasonsToBuild.add(Number(s))
     );
@@ -278,6 +359,7 @@ export function primeOwnerMaps({
         selectedLeague,
         espnOwnerByTeamByYear,
         canonOwner,
+        espnSeasons: seasons,
       });
     }
 
