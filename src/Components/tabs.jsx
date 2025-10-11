@@ -15123,6 +15123,1587 @@ function __teamNameForSide(side) {
     return "";
   }
 }
+const QUERY_STORAGE_KEY = "lv_query_saved_v1";
+const DEFAULT_METRIC_KEY = "pf_gte";
+const SUBJECT_OPTIONS = [
+  {
+    key: "last_any",
+    label: "When was the last time a manager",
+    type: "last-any",
+    needsManager: false,
+    prompt: () => "When was the last time a manager",
+    question: true,
+  },
+  {
+    key: "last_manager",
+    label: "When was the last time manager X",
+    type: "last-manager",
+    needsManager: true,
+    prompt: ({ manager }) =>
+      manager ? `When was the last time ${manager}` : "When was the last time a manager",
+    question: true,
+  },
+  {
+    key: "first_manager",
+    label: "When was the first time manager X",
+    type: "first-manager",
+    needsManager: true,
+    prompt: ({ manager }) =>
+      manager ? `When was the first time ${manager}` : "When was the first time a manager",
+    question: true,
+  },
+  {
+    key: "last_manager_to",
+    label: "Who was the last manager to",
+    type: "who-last",
+    needsManager: false,
+    prompt: () => "Who was the last manager to",
+    question: true,
+  },
+  {
+    key: "which_have",
+    label: "Which managers have",
+    type: "which-have",
+    needsManager: false,
+    prompt: () => "Which managers have",
+    question: true,
+  },
+  {
+    key: "which_have_not",
+    label: "Which managers haven’t",
+    type: "which-have-not",
+    needsManager: false,
+    prompt: () => "Which managers haven’t",
+    question: true,
+  },
+  {
+    key: "how_many_manager",
+    label: "How many times has manager X",
+    type: "count-manager",
+    needsManager: true,
+    prompt: ({ manager }) =>
+      manager ? `How many times has ${manager}` : "How many times has a manager",
+    question: true,
+  },
+  {
+    key: "most_manager",
+    label: "Which manager has the most",
+    type: "most",
+    needsManager: false,
+    prompt: () => "Which manager has the most",
+    question: true,
+  },
+  {
+    key: "least_manager",
+    label: "Which manager has the least",
+    type: "least",
+    needsManager: false,
+    prompt: () => "Which manager has the least",
+    question: true,
+  },
+];
+
+function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
+  const numberInput = (key, label, placeholder, extra = {}) => ({
+    key,
+    label,
+    type: "number",
+    placeholder,
+    inputMode: "decimal",
+    ...extra,
+  });
+
+  const seasonOptions = (seasons || []).map((s) => ({
+    value: String(s),
+    label: String(s),
+  }));
+  const weekOptions = (weeks || []).map((w) => ({
+    value: String(w),
+    label: `Week ${w}`,
+  }));
+
+  return [
+    {
+      key: "pf_gte",
+      label: "Scored X or above in a game",
+      inputs: [numberInput("value", "Points", "150", { min: 0, step: "0.1" })],
+      defaultValues: { value: "150" },
+      describe: ({ value }) =>
+        value
+          ? `scored ${value}+ points in a game`
+          : "scored at least X points in a game",
+      getPredicate: ({ value }) => {
+        const target = Number(value);
+        if (!Number.isFinite(target)) return null;
+        return (record) => Number.isFinite(record.pf) && record.pf >= target;
+      },
+    },
+    {
+      key: "pf_lte",
+      label: "Scored X or below in a game",
+      inputs: [numberInput("value", "Points", "100", { min: 0, step: "0.1" })],
+      defaultValues: { value: "100" },
+      describe: ({ value }) =>
+        value
+          ? `scored ${value} or fewer points`
+          : "scored X or fewer points",
+      getPredicate: ({ value }) => {
+        const target = Number(value);
+        if (!Number.isFinite(target)) return null;
+        return (record) => Number.isFinite(record.pf) && record.pf <= target;
+      },
+    },
+    {
+      key: "pf_eq",
+      label: "Scored X points in a game",
+      inputs: [numberInput("value", "Points", "150", { min: 0, step: "0.1" })],
+      defaultValues: { value: "150" },
+      describe: ({ value }) =>
+        value
+          ? `finished with exactly ${value} points`
+          : "finished with X points",
+      getPredicate: ({ value }) => {
+        const target = Number(value);
+        if (!Number.isFinite(target)) return null;
+        return (record) =>
+          Number.isFinite(record.pf) && Math.abs(record.pf - target) < 0.05;
+      },
+    },
+    {
+      key: "pa_gte",
+      label: "Allowed X or more points",
+      inputs: [numberInput("value", "Points Allowed", "140", { min: 0, step: "0.1" })],
+      defaultValues: { value: "140" },
+      describe: ({ value }) =>
+        value
+          ? `allowed ${value}+ points`
+          : "allowed at least X points",
+      getPredicate: ({ value }) => {
+        const target = Number(value);
+        if (!Number.isFinite(target)) return null;
+        return (record) => Number.isFinite(record.pa) && record.pa >= target;
+      },
+    },
+    {
+      key: "pa_lte",
+      label: "Allowed X or fewer points",
+      inputs: [numberInput("value", "Points Allowed", "90", { min: 0, step: "0.1" })],
+      defaultValues: { value: "90" },
+      describe: ({ value }) =>
+        value
+          ? `held opponents to ${value} or fewer points`
+          : "allowed X or fewer points",
+      getPredicate: ({ value }) => {
+        const target = Number(value);
+        if (!Number.isFinite(target)) return null;
+        return (record) => Number.isFinite(record.pa) && record.pa <= target;
+      },
+    },
+    {
+      key: "result_win",
+      label: "Won the game",
+      inputs: [],
+      describe: () => "won the matchup",
+      getPredicate: () => (record) => record.result === "W",
+    },
+    {
+      key: "result_loss",
+      label: "Lost the game",
+      inputs: [],
+      describe: () => "lost the matchup",
+      getPredicate: () => (record) => record.result === "L",
+    },
+    {
+      key: "playoff_game",
+      label: "Played in a playoff game",
+      inputs: [],
+      describe: () => "played in a playoff game",
+      getPredicate: () => (record) => record.isPlayoff === true,
+    },
+    {
+      key: "top_week",
+      label: "Had the top-score of the week",
+      inputs: [],
+      describe: () => "had the top score of the week",
+      getPredicate: (_, { weeklyTop }) => {
+        return (record) => {
+          if (!record || record.season == null || record.week == null) return false;
+          const key = `${record.season}__${record.week}`;
+          const entry = weeklyTop.get(key);
+          if (!entry) return false;
+          return entry.owners.includes(record.owner);
+        };
+      },
+    },
+    {
+      key: "low_week",
+      label: "Had the lowest score of the week",
+      inputs: [],
+      describe: () => "had the lowest score of the week",
+      getPredicate: (_, { weeklyLow }) => {
+        return (record) => {
+          if (!record || record.season == null || record.week == null) return false;
+          const key = `${record.season}__${record.week}`;
+          const entry = weeklyLow.get(key);
+          if (!entry) return false;
+          return entry.owners.includes(record.owner);
+        };
+      },
+    },
+    {
+      key: "proj_win_loss",
+      label: "Was projected to win and lost",
+      inputs: [],
+      describe: () => "was projected to win but lost",
+      getPredicate: () =>
+        (record) =>
+          Number.isFinite(record.projFor) &&
+          Number.isFinite(record.projAgainst) &&
+          record.projFor > record.projAgainst &&
+          record.result === "L",
+    },
+    {
+      key: "season_eq",
+      label: "Happened in season N",
+      inputs: [
+        {
+          key: "season",
+          label: "Season",
+          type: "select",
+          placeholder: "Season",
+          options: seasonOptions,
+        },
+      ],
+      describe: ({ season }) =>
+        season ? `in season ${season}` : "in a chosen season",
+      getPredicate: ({ season }) => {
+        const yr = Number(season);
+        if (!Number.isFinite(yr)) return null;
+        return (record) => record.season === yr;
+      },
+    },
+    {
+      key: "week_eq",
+      label: "Happened in week N",
+      inputs: [
+        {
+          key: "week",
+          label: "Week",
+          type: "select",
+          placeholder: "Week",
+          options: weekOptions,
+        },
+      ],
+      describe: ({ week }) =>
+        week ? `in week ${week}` : "in a chosen week",
+      getPredicate: ({ week }) => {
+        const wk = Number(week);
+        if (!Number.isFinite(wk)) return null;
+        return (record) => record.week === wk;
+      },
+    },
+    {
+      key: "vs_manager",
+      label: "Played against manager Y",
+      inputs: [
+        {
+          key: "manager",
+          label: "Opponent",
+          type: "manager",
+          placeholder: "Select manager",
+        },
+      ],
+      describe: ({ manager }) =>
+        manager
+          ? `played against ${nameFor(manager)}`
+          : "played against manager Y",
+      getPredicate: ({ manager }) => {
+        const opp = String(manager || "").trim();
+        if (!opp) return null;
+        return (record) => record.opponent === opp;
+      },
+    },
+    {
+      key: "vs_manager_week",
+      label: "Played against manager Y in week N",
+      inputs: [
+        {
+          key: "manager",
+          label: "Opponent",
+          type: "manager",
+          placeholder: "Select manager",
+        },
+        {
+          key: "week",
+          label: "Week (optional)",
+          type: "select",
+          placeholder: "Week",
+          options: weekOptions,
+          optional: true,
+        },
+      ],
+      describe: ({ manager, week }) => {
+        if (!manager) return "played manager Y in week N";
+        const name = nameFor(manager);
+        return week
+          ? `played ${name} in week ${week}`
+          : `played ${name}`;
+      },
+      getPredicate: ({ manager, week }) => {
+        const opp = String(manager || "").trim();
+        if (!opp) return null;
+        const wk = Number(week);
+        const hasWeek = Number.isFinite(wk);
+        return (record) =>
+          record.opponent === opp && (!hasWeek || record.week === wk);
+      },
+    },
+  ];
+}
+
+export function QueryTab({ league }) {
+  const amberActionClasses =
+    "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-800 " +
+    "bg-gradient-to-r from-amber-200/80 via-amber-100/70 to-amber-200/80 shadow-[0_18px_45px_-30px_rgba(251,191,36,0.85)] " +
+    "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-28px_rgba(251,191,36,0.9)] " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70";
+
+  React.useEffect(() => {
+    if (!league) return;
+    try {
+      const aliases = window.__FL_ALIASES || {};
+      primeOwnerMaps({
+        league,
+        selectedLeague: league,
+        espnOwnerByTeamByYear: league?.ownerByTeamByYear || {},
+        manualAliases: aliases,
+      });
+    } catch (err) {
+      console.warn("QueryTab primeOwnerMaps failed", err);
+    }
+  }, [league]);
+
+  const nextIdRef = React.useRef(1);
+  const [subjectKey, setSubjectKey] = React.useState(SUBJECT_OPTIONS[0].key);
+  const [subjectManager, setSubjectManager] = React.useState("");
+  const [conditions, setConditions] = React.useState(() => [
+    {
+      id: nextIdRef.current++,
+      metricKey: DEFAULT_METRIC_KEY,
+      values: { value: "150" },
+      conj: "AND",
+    },
+  ]);
+  const [lastRun, setLastRun] = React.useState(null);
+  const [savedQueries, setSavedQueries] = React.useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(QUERY_STORAGE_KEY);
+      const parsed = JSON.parse(raw || "[]");
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+    return [];
+  });
+  const [selectedSavedId, setSelectedSavedId] = React.useState("");
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        QUERY_STORAGE_KEY,
+        JSON.stringify(savedQueries || [])
+      );
+    } catch {}
+  }, [savedQueries]);
+
+  const hiddenManagersData = React.useMemo(() => {
+    const arr = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    const canon = arr
+      .map((name) => canonicalizeOwner(name))
+      .filter(Boolean)
+      .sort();
+    return {
+      key: canon.join("|"),
+      set: new Set(canon),
+    };
+  }, [JSON.stringify(league?.hiddenManagers || [])]);
+  const hiddenManagersSet = hiddenManagersData.set;
+
+  const prepared = React.useMemo(() => {
+    const toNumber = (...vals) => {
+      for (const v of vals) {
+        const n = Number(v);
+        if (Number.isFinite(n)) return n;
+      }
+      return null;
+    };
+    const toString = (...vals) => {
+      for (const v of vals) {
+        const s = String(v ?? "").trim();
+        if (s) return s;
+      }
+      return "";
+    };
+
+    const games = Array.isArray(league?.games) ? league.games : [];
+    const seasonsSet = new Set();
+    const weeksSet = new Set();
+    const weeklyTop = new Map();
+    const weeklyLow = new Map();
+    const records = [];
+    const epsilon = 0.0001;
+
+    const addLeader = (map, key, value, owner, preferHigh) => {
+      if (!owner || value == null) return;
+      if (!map.has(key)) {
+        map.set(key, { value, owners: new Set([owner]) });
+        return;
+      }
+      const current = map.get(key);
+      if (
+        (preferHigh && value > current.value + epsilon) ||
+        (!preferHigh && value < current.value - epsilon)
+      ) {
+        current.value = value;
+        current.owners = new Set([owner]);
+      } else if (Math.abs(value - current.value) <= epsilon) {
+        current.owners.add(owner);
+      }
+    };
+
+    for (const g of games) {
+      const season = toNumber(g?.season, g?.seasonId, g?.year, g?.seasonID);
+      const week = toNumber(
+        g?.week,
+        g?.matchupPeriodId,
+        g?.scoringPeriodId,
+        g?.period,
+        g?.matchupPeriod
+      );
+      if (Number.isFinite(season)) seasonsSet.add(season);
+      if (Number.isFinite(week)) weeksSet.add(week);
+
+      const ownerRaw = toString(
+        g?.owner,
+        g?.manager,
+        g?.team,
+        g?.team_name,
+        g?.teamName,
+        g?.ownerName
+      );
+      const opponentRaw = toString(
+        g?.opponent,
+        g?.opp,
+        g?.opponent_name,
+        g?.opponentName,
+        g?.vsOwner,
+        g?.opponentOwner
+      );
+      const owner = ownerRaw ? canonicalizeOwner(ownerRaw) : "";
+      const opponent = opponentRaw ? canonicalizeOwner(opponentRaw) : "";
+      if (
+        (owner && hiddenManagersSet.has(owner)) ||
+        (opponent && hiddenManagersSet.has(opponent))
+      ) {
+        continue;
+      }
+
+      const pf = toNumber(
+        g?.pf,
+        g?.points_for,
+        g?.pointsFor,
+        g?.points,
+        g?.score,
+        g?.totalPoints,
+        g?.owner_points,
+        g?.pts,
+        g?.fpts
+      );
+      const pa = toNumber(
+        g?.pa,
+        g?.points_against,
+        g?.pointsAgainst,
+        g?.opponent_points,
+        g?.oppPts,
+        g?.against,
+        g?.opp_score,
+        g?.oppPoints
+      );
+      const projFor = toNumber(
+        g?.proj_for,
+        g?.projected_for,
+        g?.projectedPointsFor,
+        g?.projFor,
+        g?.projectedScore,
+        g?.projected
+      );
+      const projAgainst = toNumber(
+        g?.proj_against,
+        g?.projected_against,
+        g?.projectedPointsAgainst,
+        g?.oppProjected
+      );
+      const resRaw = toString(
+        g?.res,
+        g?.result,
+        g?.outcome,
+        g?.winLoss,
+        g?.wl,
+        g?.gameResult,
+        g?.record
+      ).toUpperCase();
+      let result = null;
+      if (resRaw.startsWith("W")) result = "W";
+      else if (resRaw.startsWith("L")) result = "L";
+      else if (resRaw.startsWith("T")) result = "T";
+
+      const seasonType = String(g?.seasonType || g?.segment || "").toLowerCase();
+      const isPlayoff =
+        g?.is_playoff === true ||
+        g?.isPlayoff === true ||
+        g?.isPlayoffs === true ||
+        seasonType.includes("playoff") ||
+        seasonType === "po";
+      const finalRank = toNumber(
+        g?.final_rank,
+        g?.finalRank,
+        g?.postseasonFinish,
+        g?.finish,
+        g?.finalStanding
+      );
+
+      const record = {
+        game: g,
+        owner,
+        ownerRaw,
+        opponent,
+        opponentRaw,
+        season: Number.isFinite(season) ? season : null,
+        week: Number.isFinite(week) ? week : null,
+        pf,
+        pa,
+        projFor,
+        projAgainst,
+        result,
+        isPlayoff,
+        finalRank,
+      };
+      if (!owner) continue;
+
+      if (record.season != null && record.week != null && Number.isFinite(pf)) {
+        const key = `${record.season}__${record.week}`;
+        addLeader(weeklyTop, key, pf, owner, true);
+        addLeader(weeklyLow, key, pf, owner, false);
+      }
+
+      records.push(record);
+    }
+
+    weeklyTop.forEach((entry, key) => {
+      weeklyTop.set(key, {
+        value: entry.value,
+        owners: Array.from(entry.owners),
+      });
+    });
+    weeklyLow.forEach((entry, key) => {
+      weeklyLow.set(key, {
+        value: entry.value,
+        owners: Array.from(entry.owners),
+      });
+    });
+
+    return {
+      records,
+      seasons: Array.from(seasonsSet).sort((a, b) => a - b),
+      weeks: Array.from(weeksSet).sort((a, b) => a - b),
+      weeklyTop,
+      weeklyLow,
+    };
+  }, [league?.games, hiddenManagersData.key]);
+
+  const ownerOptionsBase = React.useMemo(() => {
+    const arr = Array.isArray(league?.owners) ? league.owners : [];
+    const map = new Map();
+    arr.forEach((name) => {
+      const canon = canonicalizeOwner(name);
+      if (!canon) return;
+      if (!map.has(canon)) map.set(canon, name);
+    });
+    return map;
+  }, [JSON.stringify(league?.owners || [])]);
+
+  const ownerOptions = React.useMemo(() => {
+    const map = new Map(ownerOptionsBase);
+    (prepared.records || []).forEach((rec) => {
+      if (rec.owner && !map.has(rec.owner)) {
+        map.set(rec.owner, rec.ownerRaw || rec.owner);
+      }
+      if (rec.opponent && !map.has(rec.opponent)) {
+        map.set(rec.opponent, rec.opponentRaw || rec.opponent);
+      }
+    });
+    const list = Array.from(map.entries())
+      .filter(([canon]) => !hiddenManagersSet.has(canon))
+      .map(([canonical, display]) => ({ canonical, display }));
+    list.sort((a, b) => a.display.localeCompare(b.display));
+    return list;
+  }, [ownerOptionsBase, prepared.records, hiddenManagersData.key]);
+
+  const canonicalNameMap = React.useMemo(() => {
+    const map = new Map();
+    ownerOptions.forEach(({ canonical, display }) => {
+      if (!map.has(canonical)) map.set(canonical, display);
+    });
+    return map;
+  }, [ownerOptions]);
+
+  const nameFor = React.useCallback(
+    (canonical) => canonicalNameMap.get(canonical) || canonical || "—",
+    [canonicalNameMap]
+  );
+
+  React.useEffect(() => {
+    const subject = SUBJECT_OPTIONS.find((s) => s.key === subjectKey);
+    if (subject?.needsManager) {
+      if (!subjectManager && ownerOptions.length) {
+        setSubjectManager(ownerOptions[0].canonical);
+      }
+    }
+  }, [subjectKey, subjectManager, ownerOptions]);
+
+  const metricDefinitions = React.useMemo(
+    () =>
+      buildMetricDefinitions({
+        owners: ownerOptions,
+        seasons: prepared.seasons,
+        weeks: prepared.weeks,
+        nameFor,
+      }),
+    [ownerOptions, prepared.seasons, prepared.weeks, nameFor]
+  );
+
+  const metricsByKey = React.useMemo(() => {
+    const map = new Map();
+    metricDefinitions.forEach((m) => map.set(m.key, m));
+    return map;
+  }, [metricDefinitions]);
+
+  const getDefaultValues = React.useCallback((metric) => {
+    const out = {};
+    if (!metric) return out;
+    if (metric.defaultValues) {
+      Object.entries(metric.defaultValues).forEach(([key, val]) => {
+        out[key] = val == null ? "" : String(val);
+      });
+    }
+    (metric.inputs || []).forEach((input) => {
+      if (out[input.key] != null) return;
+      if (input.defaultValue != null) {
+        out[input.key] = String(input.defaultValue);
+      } else {
+        out[input.key] = "";
+      }
+    });
+    return out;
+  }, []);
+
+  const createDefaultCondition = React.useCallback(() => {
+    const metric =
+      metricsByKey.get(DEFAULT_METRIC_KEY) || metricDefinitions[0] || null;
+    const metricKey = metric ? metric.key : DEFAULT_METRIC_KEY;
+    const defaults = getDefaultValues(metric);
+    return {
+      id: nextIdRef.current++,
+      metricKey,
+      values: defaults,
+      conj: "AND",
+    };
+  }, [getDefaultValues, metricDefinitions, metricsByKey]);
+
+  const subject = React.useMemo(
+    () => SUBJECT_OPTIONS.find((s) => s.key === subjectKey) || SUBJECT_OPTIONS[0],
+    [subjectKey]
+  );
+
+  const clauseParts = React.useMemo(() => {
+    const parts = [];
+    let first = true;
+    conditions.forEach((row) => {
+      const metric = metricsByKey.get(row.metricKey);
+      if (!metric) return;
+      const desc = metric.describe
+        ? metric.describe(row.values || {})
+        : (metric.label || "").toLowerCase();
+      if (!desc) return;
+      if (first) {
+        parts.push(desc);
+        first = false;
+      } else {
+        const joiner = (row.conj || "AND") === "OR" ? "or" : "and";
+        parts.push(`${joiner} ${desc}`);
+      }
+    });
+    return parts;
+  }, [conditions, metricsByKey]);
+
+  const sentence = React.useMemo(() => {
+    const managerName = subjectManager ? nameFor(subjectManager) : "a manager";
+    const prompt = subject.prompt({ manager: managerName }) || "";
+    const clauseText = clauseParts.join(" ");
+    let base = prompt.trim();
+    if (clauseText) base = base ? `${base} ${clauseText}` : clauseText;
+    if (!base) return "";
+    if (subject.question && !base.endsWith("?")) base += "?";
+    return base;
+  }, [clauseParts, nameFor, subject, subjectManager]);
+
+  const updateConditionMetric = (id, metricKey) => {
+    const metric = metricsByKey.get(metricKey) || metricDefinitions[0];
+    const defaults = getDefaultValues(metric);
+    setConditions((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              metricKey: metric ? metric.key : metricKey,
+              values: defaults,
+            }
+          : row
+      )
+    );
+  };
+
+  const updateConditionValue = (id, key, value) => {
+    setConditions((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              values: { ...row.values, [key]: value },
+            }
+          : row
+      )
+    );
+  };
+
+  const updateConditionConj = (id, conj) => {
+    setConditions((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              conj: conj === "OR" ? "OR" : "AND",
+            }
+          : row
+      )
+    );
+  };
+
+  const removeCondition = (id) => {
+    setConditions((prev) => {
+      if (prev.length <= 1) return [createDefaultCondition()];
+      return prev.filter((row) => row.id !== id);
+    });
+  };
+
+  const addCondition = () => {
+    setConditions((prev) => [...prev, createDefaultCondition()]);
+  };
+
+  const renderInputs = (row, metric) => {
+    if (!metric) return null;
+    const fieldClass =
+      "mt-1 w-full rounded-xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 " +
+      "px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60";
+    const labelClass =
+      "text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400";
+
+    return (metric.inputs || []).map((input) => {
+      const value = row.values?.[input.key] ?? "";
+      if (input.type === "number") {
+        return (
+          <div key={input.key} className="min-w-[120px]">
+            <label className={labelClass}>{input.label}</label>
+            <input
+              type="number"
+              inputMode={input.inputMode || "decimal"}
+              className={fieldClass}
+              value={value}
+              placeholder={input.placeholder || ""}
+              step={input.step}
+              min={input.min}
+              max={input.max}
+              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+            />
+          </div>
+        );
+      }
+      if (input.type === "select") {
+        return (
+          <div key={input.key} className="min-w-[140px]">
+            <label className={labelClass}>{input.label}</label>
+            <select
+              className={fieldClass}
+              value={value}
+              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+            >
+              <option value="">{input.optional ? "Any" : input.placeholder || "Select"}</option>
+              {(input.options || []).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+      if (input.type === "manager") {
+        return (
+          <div key={input.key} className="min-w-[160px]">
+            <label className={labelClass}>{input.label}</label>
+            <select
+              className={fieldClass}
+              value={value}
+              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+            >
+              <option value="">{input.placeholder || "Select"}</option>
+              {ownerOptions.map((opt) => (
+                <option key={opt.canonical} value={opt.canonical}>
+                  {opt.display}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+      return (
+        <div key={input.key} className="min-w-[160px]">
+          <label className={labelClass}>{input.label}</label>
+          <input
+            type="text"
+            className={fieldClass}
+            value={value}
+            placeholder={input.placeholder || ""}
+            onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+          />
+        </div>
+      );
+    });
+  };
+
+  const loadSavedQuery = (id) => {
+    const entry = savedQueries.find((q) => String(q.id) === String(id));
+    if (!entry) return;
+    setSubjectKey(entry.subjectKey || SUBJECT_OPTIONS[0].key);
+    setSubjectManager(entry.subjectManager || "");
+    setConditions(() => {
+      const rows = Array.isArray(entry.conditions) && entry.conditions.length
+        ? entry.conditions
+        : [
+            {
+              metricKey: DEFAULT_METRIC_KEY,
+              values: { value: "150" },
+              conj: "AND",
+            },
+          ];
+      return rows.map((row) => ({
+        id: nextIdRef.current++,
+        metricKey: row.metricKey || DEFAULT_METRIC_KEY,
+        values: Object.fromEntries(
+          Object.entries(row.values || {}).map(([k, v]) => [k, v == null ? "" : String(v)])
+        ),
+        conj: row.conj === "OR" ? "OR" : "AND",
+      }));
+    });
+    setLastRun(null);
+    setSelectedSavedId("");
+  };
+
+  const deleteSavedQuery = (id) => {
+    const doDelete =
+      typeof window === "undefined" || window.confirm("Delete this saved query?");
+    if (!doDelete) return;
+    setSavedQueries((prev) => prev.filter((q) => String(q.id) !== String(id)));
+    setSelectedSavedId("");
+  };
+
+  const saveCurrentQuery = () => {
+    if (typeof window === "undefined") return;
+    const name = window.prompt("Save query as", "My query");
+    if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const payload = {
+      id: Date.now(),
+      name: trimmed,
+      subjectKey,
+      subjectManager,
+      conditions: conditions.map((row) => ({
+        metricKey: row.metricKey,
+        values: row.values,
+        conj: row.conj,
+      })),
+    };
+    setSavedQueries((prev) => {
+      const filtered = prev.filter((q) => q.name !== trimmed);
+      return [...filtered, payload];
+    });
+  };
+
+  const runQuery = React.useCallback(() => {
+    const managerFilter = subject.needsManager ? subjectManager : "";
+    if (subject.needsManager && !managerFilter) {
+      setLastRun({
+        kind: "error",
+        sentence,
+        message: "Select a manager to run this query.",
+      });
+      return;
+    }
+
+    const context = { weeklyTop: prepared.weeklyTop, weeklyLow: prepared.weeklyLow };
+    const invalid = [];
+    const active = [];
+    conditions.forEach((row, index) => {
+      const metric = metricsByKey.get(row.metricKey);
+      if (!metric) return;
+      const predicateFactory = metric.getPredicate;
+      const predicate =
+        typeof predicateFactory === "function"
+          ? predicateFactory(row.values || {}, context)
+          : null;
+      if (typeof predicate !== "function") {
+        invalid.push(metric.label || row.metricKey);
+        return;
+      }
+      active.push({
+        predicate,
+        conj: index === 0 ? "AND" : row.conj || "AND",
+        metric,
+      });
+    });
+
+    if (invalid.length) {
+      setLastRun({
+        kind: "error",
+        sentence,
+        message: `Please complete the following inputs: ${invalid.join(", ")}`,
+      });
+      return;
+    }
+
+    if (!active.length) {
+      setLastRun({
+        kind: "error",
+        sentence,
+        message: "Add at least one condition before running the query.",
+      });
+      return;
+    }
+
+    const passes = (record) => {
+      let state = null;
+      for (let i = 0; i < active.length; i += 1) {
+        const cond = active[i];
+        const val = !!cond.predicate(record);
+        if (i === 0) state = val;
+        else if ((cond.conj || "AND") === "OR") state = state || val;
+        else state = state && val;
+      }
+      return !!state;
+    };
+
+    const matching = prepared.records.filter((rec) => passes(rec));
+    const relevant = managerFilter
+      ? matching.filter((rec) => rec.owner === managerFilter)
+      : matching;
+
+    const compareDesc = (a, b) => {
+      const seasonA = Number.isFinite(a.season) ? a.season : -Infinity;
+      const seasonB = Number.isFinite(b.season) ? b.season : -Infinity;
+      if (seasonA !== seasonB) return seasonB - seasonA;
+      const weekA = Number.isFinite(a.week) ? a.week : -Infinity;
+      const weekB = Number.isFinite(b.week) ? b.week : -Infinity;
+      if (weekA !== weekB) return weekB - weekA;
+      const pfA = Number.isFinite(a.pf) ? a.pf : -Infinity;
+      const pfB = Number.isFinite(b.pf) ? b.pf : -Infinity;
+      if (pfA !== pfB) return pfB - pfA;
+      return nameFor(a.owner || "").localeCompare(nameFor(b.owner || ""));
+    };
+    const compareAsc = (a, b) => -compareDesc(a, b);
+
+    const aggregate = new Map();
+    matching.forEach((rec) => {
+      if (!rec.owner) return;
+      if (!aggregate.has(rec.owner)) {
+        aggregate.set(rec.owner, {
+          manager: rec.owner,
+          count: 0,
+          latest: null,
+          earliest: null,
+        });
+      }
+      const slot = aggregate.get(rec.owner);
+      slot.count += 1;
+      if (!slot.latest || compareDesc(rec, slot.latest) < 0) slot.latest = rec;
+      if (!slot.earliest || compareDesc(rec, slot.earliest) > 0) slot.earliest = rec;
+    });
+
+    const ranking = ownerOptions.map(({ canonical }) => {
+      const data = aggregate.get(canonical) || {
+        manager: canonical,
+        count: 0,
+        latest: null,
+        earliest: null,
+      };
+      return {
+        canonical,
+        count: data.count,
+        latest: data.latest,
+        earliest: data.earliest,
+      };
+    });
+
+    const buildGameResult = (rows, order, totalMatches, message = null) => ({
+      kind: "games",
+      sentence,
+      clauseParts,
+      order,
+      rows,
+      totalMatches,
+      totalUniverse: matching.length,
+      manager: managerFilter ? nameFor(managerFilter) : null,
+      subjectType: subject.type,
+      message,
+    });
+
+    const managerName = managerFilter ? nameFor(managerFilter) : null;
+
+    switch (subject.type) {
+      case "last-any": {
+        const sorted = [...matching].sort(compareDesc);
+        setLastRun(
+          buildGameResult(
+            sorted.slice(0, 20),
+            "desc",
+            sorted.length,
+            sorted.length ? null : "No matches found for any manager."
+          )
+        );
+        return;
+      }
+      case "last-manager": {
+        const sorted = [...relevant].sort(compareDesc);
+        setLastRun(
+          buildGameResult(
+            sorted.slice(0, 20),
+            "desc",
+            sorted.length,
+            sorted.length ? null : `No matches found for ${managerName || "that manager"}.`
+          )
+        );
+        return;
+      }
+      case "who-last": {
+        const sorted = [...matching].sort(compareDesc);
+        setLastRun({
+          ...buildGameResult(
+            sorted.slice(0, 20),
+            "desc",
+            sorted.length,
+            sorted.length ? null : "No matches found yet."
+          ),
+          highlightOwner: sorted[0]?.owner || null,
+        });
+        return;
+      }
+      case "first-manager": {
+        const sorted = [...relevant].sort(compareAsc);
+        setLastRun(
+          buildGameResult(
+            sorted.slice(0, 20),
+            "asc",
+            sorted.length,
+            sorted.length ? null : `No matches found for ${managerName || "that manager"}.`
+          )
+        );
+        return;
+      }
+      case "count-manager": {
+        setLastRun({
+          kind: "count",
+          sentence,
+          clauseParts,
+          count: relevant.length,
+          manager: managerName,
+          totalUniverse: matching.length,
+        });
+        return;
+      }
+      case "which-have": {
+        const rows = ranking
+          .filter((row) => row.count > 0)
+          .sort((a, b) =>
+            b.count === a.count
+              ? nameFor(a.canonical).localeCompare(nameFor(b.canonical))
+              : b.count - a.count
+          );
+        setLastRun({
+          kind: "list",
+          sentence,
+          clauseParts,
+          rows,
+          mode: "have",
+        });
+        return;
+      }
+      case "which-have-not": {
+        const rows = ranking
+          .filter((row) => row.count === 0)
+          .sort((a, b) =>
+            nameFor(a.canonical).localeCompare(nameFor(b.canonical))
+          );
+        setLastRun({
+          kind: "list",
+          sentence,
+          clauseParts,
+          rows,
+          mode: "have-not",
+        });
+        return;
+      }
+      case "most": {
+        const max = ranking.reduce((acc, row) => Math.max(acc, row.count), 0);
+        if (max === 0) {
+          setLastRun({
+            kind: "error",
+            sentence,
+            message: "No managers have matching results yet.",
+          });
+          return;
+        }
+        const rows = ranking
+          .filter((row) => row.count === max)
+          .sort((a, b) =>
+            nameFor(a.canonical).localeCompare(nameFor(b.canonical))
+          );
+        setLastRun({
+          kind: "ranking",
+          sentence,
+          clauseParts,
+          rows,
+          stat: "most",
+          value: max,
+        });
+        return;
+      }
+      case "least": {
+        if (!ranking.length) {
+          setLastRun({
+            kind: "error",
+            sentence,
+            message: "No managers available to evaluate.",
+          });
+          return;
+        }
+        const min = ranking.reduce((acc, row) => Math.min(acc, row.count), Infinity);
+        const rows = ranking
+          .filter((row) => row.count === min)
+          .sort((a, b) =>
+            nameFor(a.canonical).localeCompare(nameFor(b.canonical))
+          );
+        setLastRun({
+          kind: "ranking",
+          sentence,
+          clauseParts,
+          rows,
+          stat: "least",
+          value: min === Infinity ? 0 : min,
+        });
+        return;
+      }
+      default: {
+        const sorted = [...relevant].sort(compareDesc);
+        setLastRun(
+          buildGameResult(
+            sorted.slice(0, 20),
+            "desc",
+            sorted.length,
+            sorted.length ? null : "No matches found."
+          )
+        );
+      }
+    }
+  }, [
+    clauseParts,
+    conditions,
+    metricsByKey,
+    nameFor,
+    ownerOptions,
+    prepared,
+    sentence,
+    subject,
+    subjectManager,
+  ]);
+
+  const fmtPoints = (n) =>
+    Number.isFinite(n) ? Number(n).toFixed(1) : n == null ? "—" : String(n);
+
+  const renderResults = () => {
+    if (!lastRun) {
+      return (
+        <div className="text-sm text-zinc-500">
+          Build a question and click <span className="font-semibold">Run Query</span> to see results.
+        </div>
+      );
+    }
+    if (lastRun.kind === "error") {
+      return (
+        <div className="rounded-2xl border border-red-200/60 bg-red-50/70 px-4 py-3 text-sm text-red-700 dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200">
+          {lastRun.message || "Unable to evaluate this query."}
+        </div>
+      );
+    }
+    if (lastRun.kind === "count") {
+      return (
+        <div className="flex flex-col items-start gap-3">
+          <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+            Matches found
+          </div>
+          <div className="text-4xl font-semibold text-slate-800 dark:text-white">
+            {lastRun.count}
+          </div>
+          {lastRun.manager ? (
+            <div className="text-sm text-zinc-500 dark:text-zinc-300">
+              for {lastRun.manager}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+    if (lastRun.kind === "list") {
+      const rows = lastRun.rows || [];
+      if (!rows.length) {
+        return (
+          <div className="text-sm text-zinc-500">
+            No managers match these conditions yet.
+          </div>
+        );
+      }
+      return (
+        <TableBox className="bg-white/85 dark:bg-zinc-900/70 border border-white/50 dark:border-white/10 backdrop-blur-xl">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-300">
+              <th className="px-3 py-2 text-left">Manager</th>
+              <th className="px-3 py-2 text-right">Matches</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.canonical} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+                <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {nameFor(row.canonical)}
+                </td>
+                <td className="px-3 py-2 text-right text-sm text-slate-600 dark:text-slate-300">
+                  {row.count}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </TableBox>
+      );
+    }
+    if (lastRun.kind === "ranking") {
+      const rows = lastRun.rows || [];
+      if (!rows.length) {
+        return (
+          <div className="text-sm text-zinc-500">
+            No managers available for this ranking yet.
+          </div>
+        );
+      }
+      return (
+        <TableBox className="bg-white/85 dark:bg-zinc-900/70 border border-white/50 dark:border-white/10 backdrop-blur-xl">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-300">
+              <th className="px-3 py-2 text-left">Manager</th>
+              <th className="px-3 py-2 text-right">
+                {lastRun.stat === "most" ? "Matches" : "Matches"}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.canonical} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+                <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {nameFor(row.canonical)}
+                </td>
+                <td className="px-3 py-2 text-right text-sm text-slate-600 dark:text-slate-300">
+                  {row.count}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </TableBox>
+      );
+    }
+    const rows = lastRun.rows || [];
+    return (
+      <div className="space-y-3">
+        {lastRun.message ? (
+          <div className="text-sm text-zinc-500 dark:text-zinc-300">{lastRun.message}</div>
+        ) : null}
+        <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+          Showing {rows.length} of {lastRun.totalMatches || 0} matches
+        </div>
+        <TableBox className="bg-white/85 dark:bg-zinc-900/70 border border-white/50 dark:border-white/10 backdrop-blur-xl">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-300">
+              <th className="px-3 py-2 text-left">Season</th>
+              <th className="px-3 py-2 text-left">Week</th>
+              <th className="px-3 py-2 text-left">Manager</th>
+              <th className="px-3 py-2 text-left">Opponent</th>
+              <th className="px-3 py-2 text-right">PF</th>
+              <th className="px-3 py-2 text-right">PA</th>
+              <th className="px-3 py-2 text-center">Result</th>
+              <th className="px-3 py-2 text-left">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={`${row.owner}-${row.season}-${row.week}-${idx}`} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+                <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                  {row.season ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                  {row.week ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {nameFor(row.owner)}
+                </td>
+                <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                  {row.opponent ? nameFor(row.opponent) : "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-sm text-slate-700 dark:text-slate-200">
+                  {fmtPoints(row.pf)}
+                </td>
+                <td className="px-3 py-2 text-right text-sm text-slate-700 dark:text-slate-200">
+                  {fmtPoints(row.pa)}
+                </td>
+                <td className="px-3 py-2 text-center text-sm font-semibold">
+                  {row.result || "—"}
+                </td>
+                <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
+                  {[row.isPlayoff ? "Playoff game" : null]
+                    .filter(Boolean)
+                    .join(" • ") || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </TableBox>
+      </div>
+    );
+  };
+
+  const ghostButtonClasses =
+    "inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/70 dark:bg-zinc-900/60 px-3 py-1.5 " +
+    "text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-300 transition-all duration-200 " +
+    "hover:border-amber-300/60 hover:text-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/60";
+
+  return (
+    <div className="space-y-6">
+      <Card
+        title="AI Query Builder"
+        subtitle="Stack conditions to ask natural questions about every season, matchup, and manager."
+      >
+        <div className="space-y-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.85)]">
+            <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(110%_140%_at_0%_0%,rgba(251,191,36,0.15),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(59,130,246,0.16),transparent_60%)]" />
+            <div className="relative space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                Question preview
+              </div>
+              <div className="text-lg font-semibold text-slate-800 dark:text-white">
+                {sentence || "Pick a subject and add conditions to start exploring."}
+              </div>
+              {clauseParts.length ? (
+                <div className="text-xs text-slate-500 dark:text-slate-300">
+                  Conditions: {clauseParts.join(" ")}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {conditions.map((row, idx) => {
+              const metric = metricsByKey.get(row.metricKey) || metricDefinitions[0];
+              return (
+                <div
+                  key={row.id}
+                  className="relative overflow-hidden rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 p-5 shadow-[0_24px_65px_-42px_rgba(15,23,42,0.9)]"
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(110%_140%_at_0%_0%,rgba(148,163,184,0.12),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(251,191,36,0.14),transparent_60%)]" />
+                  {idx > 0 ? (
+                    <div className="absolute -top-4 left-6 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                      <span>Join with</span>
+                      <div className="inline-flex overflow-hidden rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60">
+                        {(["AND", "OR"]).map((op) => (
+                          <button
+                            key={op}
+                            type="button"
+                            onClick={() => updateConditionConj(row.id, op)}
+                            className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.28em] transition ${
+                              row.conj === op
+                                ? "bg-amber-200/70 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
+                                : "text-slate-600 dark:text-slate-300 hover:text-amber-400"
+                            }`}
+                          >
+                            {op}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="relative z-10 flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end">
+                    {idx === 0 ? (
+                      <div className="w-full md:w-60">
+                        <label className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                          Subject
+                        </label>
+                        <select
+                          className="mt-1 w-full rounded-xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                          value={subjectKey}
+                          onChange={(e) => setSubjectKey(e.target.value)}
+                        >
+                          {SUBJECT_OPTIONS.map((option) => (
+                            <option key={option.key} value={option.key}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    {idx === 0 && subject.needsManager ? (
+                      <div className="w-full md:w-56">
+                        <label className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                          Manager
+                        </label>
+                        <select
+                          className="mt-1 w-full rounded-xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                          value={subjectManager}
+                          onChange={(e) => setSubjectManager(e.target.value)}
+                        >
+                          <option value="">Select manager</option>
+                          {ownerOptions.map((opt) => (
+                            <option key={opt.canonical} value={opt.canonical}>
+                              {opt.display}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    <div className="w-full md:w-72">
+                      <label className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                        Metric / action
+                      </label>
+                      <select
+                        className="mt-1 w-full rounded-xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                        value={row.metricKey}
+                        onChange={(e) => updateConditionMetric(row.id, e.target.value)}
+                      >
+                        {metricDefinitions.map((opt) => (
+                          <option key={opt.key} value={opt.key}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-1 flex-wrap gap-3">
+                      {renderInputs(row, metric)}
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => removeCondition(row.id)}
+                        className={ghostButtonClasses}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className={amberActionClasses} onClick={runQuery}>
+              Run query
+            </button>
+            <button type="button" className={amberActionClasses} onClick={addCondition}>
+              + Add condition
+            </button>
+            <button type="button" className={ghostButtonClasses} onClick={saveCurrentQuery}>
+              Save query
+            </button>
+            {savedQueries.length ? (
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                <span>Saved queries</span>
+                <select
+                  className="rounded-full border border-white/50 dark:border-white/10 bg-white/70 dark:bg-zinc-900/60 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                  value={selectedSavedId}
+                  onChange={(e) => setSelectedSavedId(e.target.value)}
+                >
+                  <option value="">Select…</option>
+                  {savedQueries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={ghostButtonClasses}
+                  disabled={!selectedSavedId}
+                  onClick={() => selectedSavedId && loadSavedQuery(selectedSavedId)}
+                >
+                  Load
+                </button>
+                <button
+                  type="button"
+                  className={ghostButtonClasses}
+                  disabled={!selectedSavedId}
+                  onClick={() => selectedSavedId && deleteSavedQuery(selectedSavedId)}
+                >
+                  Delete
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Results">
+        <div className="space-y-4">
+          <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+            {sentence || "Configure a query to see answers."}
+          </div>
+          {renderResults()}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+
 function __projectedPointsForSide(side, seasonId, week) {
   // ESPN often places projected totals on roster entries as appliedStatTotal for the week
   // Sum any numeric appliedStatTotal on rosterForMatchupPeriod/ScoringPeriod entries.
