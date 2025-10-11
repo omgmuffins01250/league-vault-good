@@ -15,6 +15,15 @@ if (typeof window !== "undefined") {
     }
     if (!payload || typeof payload !== "object") return;
     store.dispatch(upsertLeagueFromExtension(payload));
+    try {
+      if (typeof window.FL_HANDLE_EXTENSION_PAYLOAD === "function") {
+        window.FL_HANDLE_EXTENSION_PAYLOAD(payload);
+      } else {
+        window.name = JSON.stringify(payload);
+      }
+    } catch (error) {
+      console.warn("Failed to hand payload to app", error);
+    }
   };
 
   try {
