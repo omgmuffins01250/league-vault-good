@@ -1,4 +1,5 @@
 
+import { parsePayloadString } from "./utils/payloadEncoding";
 let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
 let _aliasMap = null; // Map<normalized alias, "Owner Name"> (global canonicalizer)
 let _lastKey = "";
@@ -60,8 +61,8 @@ function _readEspnSeasons() {
 
   // 3) window.name (your prior approach)
   try {
-    const payload = JSON.parse(
-      (typeof window !== "undefined" ? window.name : "") || "{}"
+    const payload = parsePayloadString(
+      typeof window !== "undefined" ? window.name : ""
     );
     return Array.isArray(payload?.seasons) ? payload.seasons : [];
   } catch {}
