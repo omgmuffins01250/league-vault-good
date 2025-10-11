@@ -12,21 +12,31 @@
     <script>
       (function () {
         try {
-          var s = window.name || "";
-          if (!s || s.length < 8) return;
-          var header = s.slice(0, 8);
-          var body   = s.slice(8);
-          var json   = "";
+          var raw = window.name || "";
+          if (!raw) return;
+          var trimmed = (raw || "").trim();
+          if (!trimmed) return;
 
-          // Works with both RAW and compressed payloads
-          if (header === "__RAW__") {
-            json = body;
-          } else if (header === "__FLZ__" && window.LZString && typeof LZString.decompressFromUTF16 === "function") {
-            json = LZString.decompressFromUTF16(body) || "";
+          var storeValue = trimmed;
+          var header = trimmed.slice(0, 8);
+          if (header.indexOf("__RAW__") === 0) {
+            storeValue = trimmed.slice("__RAW__".length);
+          } else if (header.indexOf("__FLZ__") === 0) {
+            var compressed = trimmed.slice("__FLZ__".length);
+            if (compressed && window.LZString && typeof LZString.decompressFromUTF16 === "function") {
+              try {
+                var json = window.LZString.decompressFromUTF16(compressed) || "";
+                if (json) {
+                  storeValue = json;
+                }
+              } catch (decompressError) {
+                console.warn("FL boot shim decompress failed", decompressError);
+              }
+            }
           }
 
-          if (json) {
-            sessionStorage.setItem("FL_PAYLOAD", json);
+          if (storeValue) {
+            sessionStorage.setItem("FL_PAYLOAD", storeValue);
             window.name = ""; // clear so refreshes don't re-import
           }
         } catch (e) {

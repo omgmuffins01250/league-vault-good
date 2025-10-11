@@ -26,6 +26,7 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
+import { parsePayloadString } from "../utils/payloadEncoding";
 
 /* NEW: ESPN activity extractor                                       */
 /**
@@ -6723,7 +6724,7 @@ export function TradesTab({
       }
 
       // 2) If any alias is actually an ESPN "handle"/displayName, add that member's pretty name as an alias too
-      const payload = JSON.parse(window.name || "{}");
+      const payload = parsePayloadString(window.name) || {};
       const seasons = [
         ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
         ...(Array.isArray(payload?.legacySeasonsLite)
@@ -6808,7 +6809,7 @@ export function TradesTab({
   const leagueOwners = React.useMemo(() => {
     const out = new Set();
     try {
-      const payload = JSON.parse(window.name || "{}");
+      const payload = parsePayloadString(window.name) || {};
       const map = payload?.ownerByTeamByYear || {};
       Object.values(map).forEach((byTeam) => {
         Object.values(byTeam || {}).forEach((owner) => {
@@ -6831,7 +6832,7 @@ export function TradesTab({
     // shape: { [year]: { [Owner Name]: { acquisitions,drops,trades,moveToActive,ir } } }
     const bySeason = {};
     try {
-      const payload = JSON.parse(window.name || "{}");
+      const payload = parsePayloadString(window.name) || {};
       const seasons = [
         ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
         ...(Array.isArray(payload?.legacySeasonsLite)
@@ -7092,7 +7093,7 @@ export function TradesTab({
   const playoffWeeksBySeason = React.useMemo(() => {
     const out = {};
     try {
-      const payload = JSON.parse(window.name || "{}");
+      const payload = parsePayloadString(window.name) || {};
       const allSeasons = [
         ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
         ...(Array.isArray(payload?.legacySeasonsLite)
@@ -8062,7 +8063,7 @@ function __resolveProTeamsForSeason(seasonKey, league) {
   if (__hasAnyEntries(league?.proTeams)) return league.proTeams;
 
   try {
-    const payload = JSON.parse(window.name || "{}");
+    const payload = parsePayloadString(window.name) || {};
     const payloadByYear = pick(payload?.proTeamsByYear);
     if (__hasAnyEntries(payloadByYear)) return payloadByYear;
 
@@ -8297,7 +8298,7 @@ function __managerMapForSeason(season, providedByYear = {}) {
   if (direct && Object.keys(direct).length) return direct;
 
   try {
-    const payload = JSON.parse(window.name || "{}");
+    const payload = parsePayloadString(window.name) || {};
     const seasonObj = (payload?.seasons || []).find(
       (s) => Number(s?.seasonId) === Number(season)
     );
@@ -13639,7 +13640,7 @@ export function LuckIndexTab({
 
     // 3) window.name seasons (fallback)
     try {
-      const payload = JSON.parse(window.name || "{}");
+      const payload = parsePayloadString(window.name) || {};
       const seasons = payload?.seasons || payload?.seasonObjs || [];
       for (const s of seasons) {
         const y = Number(s?.seasonId);

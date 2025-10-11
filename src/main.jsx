@@ -6,6 +6,10 @@ import "./index.css";
 import { AppProvider } from "./contexts/AppContext.jsx";
 import { store } from "./store/store";
 import { upsertLeagueFromExtension } from "./store/leagueSlice";
+import {
+  encodePayloadForWindowName,
+  parsePayloadString,
+} from "./utils/payloadEncoding";
 
 if (typeof window !== "undefined") {
   const existing = window.FL_ADD_LEAGUE;
@@ -19,7 +23,10 @@ if (typeof window !== "undefined") {
       if (typeof window.FL_HANDLE_EXTENSION_PAYLOAD === "function") {
         window.FL_HANDLE_EXTENSION_PAYLOAD(payload);
       } else {
-        window.name = JSON.stringify(payload);
+        const encoded = encodePayloadForWindowName(payload);
+        if (encoded) {
+          window.name = encoded;
+        }
       }
     } catch (error) {
       console.warn("Failed to hand payload to app", error);
@@ -27,11 +34,9 @@ if (typeof window !== "undefined") {
   };
 
   try {
-    if (window.name) {
-      const payload = JSON.parse(window.name);
-      if (payload && typeof payload === "object") {
-        store.dispatch(upsertLeagueFromExtension(payload));
-      }
+    const payload = parsePayloadString(window.name);
+    if (payload && typeof payload === "object") {
+      store.dispatch(upsertLeagueFromExtension(payload));
     }
   } catch (error) {
     console.warn("Failed to import league data from window.name", error);

@@ -23,6 +23,7 @@ import {
   DEFAULT_LEAGUE_ICONS,
 } from "./Components/tabs.jsx";
 import { buildFromRows } from "./Utils/buildFromRows.jsx";
+import { parsePayloadString } from "./utils/payloadEncoding";
 const LS_KEY = "FL_STORE_v1";
 const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {
@@ -2082,14 +2083,18 @@ export default function App() {
     let initialPayload = null;
     try {
       const raw = window.name;
-      if (raw && typeof raw === "string" && raw.trim()) {
-        initialPayload = JSON.parse(raw);
+      const parsed = parsePayloadString(raw);
+      if (parsed && typeof parsed === "object") {
+        initialPayload = parsed;
         window.name = "";
       } else if (typeof sessionStorage !== "undefined") {
         const stored = sessionStorage.getItem("FL_PAYLOAD");
         if (stored) {
           sessionStorage.removeItem("FL_PAYLOAD");
-          initialPayload = JSON.parse(stored);
+          const fromStorage = parsePayloadString(stored) || parsePayloadString(`__RAW__${stored}`);
+          if (fromStorage && typeof fromStorage === "object") {
+            initialPayload = fromStorage;
+          }
         }
       }
     } catch (error) {
