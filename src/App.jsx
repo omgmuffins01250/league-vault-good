@@ -1373,6 +1373,7 @@ export default function App() {
   const [scheduleByYear, setScheduleByYear] = useState({});
   const [isAddLeagueOpen, setIsAddLeagueOpen] = useState(false);
   const [selectedProviderForModal, setSelectedProviderForModal] = useState("");
+
   const currentYear = React.useMemo(() => {
     const yrs = Object.keys(currentWeekBySeason || {})
       .map(Number)
@@ -1598,6 +1599,16 @@ export default function App() {
     });
   }
   // ---------------- BOOTSTRAP --------------------
+  const moneyInputsRef = React.useRef(moneyInputs);
+  useEffect(() => {
+    moneyInputsRef.current = moneyInputs;
+  }, [moneyInputs]);
+
+  const leagueIconRef = React.useRef(leagueIcon);
+  useEffect(() => {
+    leagueIconRef.current = leagueIcon;
+  }, [leagueIcon]);
+
   useEffect(() => {
     const MERGE_KEY = (leagueId) =>
       `fl_merge_map::${String(leagueId || "").trim()}`;
@@ -1658,440 +1669,444 @@ export default function App() {
         console.warn("FL_applyOwnerMergesNow failed:", e);
       }
     };
-    try {
-      const raw = window.name;
-      if (!raw || typeof raw !== "string") {
+
+    const ingestFromExtension = (data) => {
+      if (!data || typeof data !== "object") {
         rebuildFromStore();
         return;
       }
-      const data = JSON.parse(raw);
-      window.__FL_PAYLOAD = data;
-      (function normalizePickupsPayload(p) {
-        let txByYear = {};
-        let weeklyByYear = {};
-        if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
-          txByYear = p.transactionsSlim;
-        }
-        if (
-          p &&
-          p.weeklyPointsByPlayer &&
-          !Array.isArray(p.weeklyPointsByPlayer)
-        ) {
-          weeklyByYear = p.weeklyPointsByPlayer;
-        }
-        if (
-          (!txByYear || !Object.keys(txByYear).length) &&
-          Array.isArray(p?.seasons)
-        ) {
-          p.seasons.forEach((s) => {
-            const y = Number(s?.seasonId);
-            if (!y) return;
-            if (
-              Array.isArray(s?.transactionsSlim) &&
-              s.transactionsSlim.length
-            ) {
-              txByYear[y] = s.transactionsSlim;
-            }
-          });
-        }
-        if (
-          (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
-          Array.isArray(p?.seasons)
-        ) {
-          p.seasons.forEach((s) => {
-            const y = Number(s?.seasonId);
-            if (!y) return;
-            if (
-              s?.weeklyPointsByPlayer &&
-              Object.keys(s.weeklyPointsByPlayer).length
-            ) {
-              weeklyByYear[y] = s.weeklyPointsByPlayer;
-            }
-          });
-        }
-        p.transactionsSlim = txByYear;
-        p.weeklyPointsByPlayer = weeklyByYear;
-        p.transactionsSlimFlat = Object.entries(txByYear).flatMap(([yr, arr]) =>
-          (Array.isArray(arr) ? arr : []).map((r) => ({
-            ...r,
-            seasonId: Number(yr),
-          }))
-        );
-      })(data);
-
-      const seasons = Array.isArray(data.seasons) ? data.seasons : [];
-      if (typeof window !== "undefined") {
-        window.__espnSeasons = seasons;
-      }
-      const seasonsMap = Object.fromEntries(
-        seasons.map((s) => [Number(s.seasonId), s])
-      );
-
-      setSeasonsByYear(seasonsMap);
-      const scheduleMap = Object.fromEntries(
-        (seasons || []).map((s) => [
-          Number(s?.seasonId),
-          Array.isArray(s?.schedule) ? s.schedule : [],
-        ])
-      );
-      setScheduleByYear(scheduleMap);
-
-      // ✅ Prefer what popup already computed from ESPN json.status.currentMatchupPeriod
-      const currentWeekBySeasonMap =
-        data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
-          ? data.currentWeekByYear
-          : {};
-
-      setCurrentWeekBySeason(currentWeekBySeasonMap);
-      const playoffTeamsFromSeasons = {};
-      for (const s of seasons || []) {
-        const yr = Number(s?.seasonId);
-        if (!yr) continue;
-        const cnt =
-          Number(
-            s?.settings?.playoffTeamCount ??
-              s?.settings?.scheduleSettings?.playoffTeamCount ??
-              s?.playoffTeamCount ??
-              0
-          ) || 0;
-        playoffTeamsFromSeasons[yr] = cnt;
-      }
-      setPlayoffTeamsBySeason(playoffTeamsFromSeasons);
-
-      const playoffTeamsBySeasonMap = extractPlayoffTeamsBySeason(seasons);
-      setPlayoffTeamsBySeason(playoffTeamsBySeasonMap);
-      const legacy = Array.isArray(data.legacyRows) ? data.legacyRows : [];
-      const legacyLite = Array.isArray(data.legacySeasonsLite)
-        ? data.legacySeasonsLite
-        : [];
-      if (!seasons.length && !legacy.length) {
-        rebuildFromStore();
-        window.name = "";
-        return;
-      }
-      const light = buildRowsLight(seasons);
-      const combinedRows = [...light.rows, ...light.txRows];
-      let draftMinimal = buildDraftRich(seasons);
-      draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
-      draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
-      draftMinimal = attachPosFromPopup(
-        draftMinimal,
-        data.adpPosByYear || data.adpRichByYear || null
-      );
-      draftMinimal = overlayMissingPosByNameOnly(draftMinimal);
-      draftMinimal = attachPickPosFromDraftOrder(draftMinimal);
-      draftMinimal = attachFinishPosFromLocal(draftMinimal, "PPR"); // optional
-      setDraftByYear(draftMinimal);
-      function buildActivityFromSeasons(seasonsArr = []) {
-        const out = {};
-        seasonsArr.forEach((s) => {
-          const year = Number(s?.seasonId);
-          if (!year) return;
-          const members = new Map();
-          (s?.members || []).forEach((m) => {
-            const dn = m?.displayName || "";
-            const fn = m?.firstName || "";
-            const ln = m?.lastName || "";
-            const full = [fn, ln].filter(Boolean).join(" ").trim();
-            const best = full || dn || "Unknown";
-            if (m?.id != null) members.set(m.id, best);
-          });
-          const ownerByTeam = new Map();
-          (s?.teams || []).forEach((t) => {
-            const ownerId =
-              t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-            if (t?.id != null)
-              ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
-          });
-          const yearMap = (out[year] = out[year] || {});
-          (s?.teams || []).forEach((t) => {
-            const owner = ownerByTeam.get(t?.id) || "Unknown";
-            const tc = t?.transactionCounter || {};
-            const row = yearMap[owner] || {
-              acquisitions: 0,
-              drops: 0,
-              trades: 0,
-              moveToActive: 0,
-              ir: 0,
-            };
-            row.acquisitions += Number(tc.acquisitions || 0);
-            row.drops += Number(tc.drops || 0);
-            row.trades += Number(tc.trades || 0);
-            row.moveToActive += Number(tc.moveToActive || 0);
-            row.ir += Number(tc.moveToIR || 0);
-            yearMap[owner] = row;
-          });
-        });
-        return out;
-      }
-      const activityNewRaw = buildActivityFromSeasons(seasons);
-
-      function buildLegacyActivityFromLite(legacyLiteArr) {
-        const out = {};
-        for (const s of legacyLiteArr || []) {
-          const year = Number(s?.seasonId);
-          if (!year) continue;
-
-          const idToName = {};
-          (s?.members || []).forEach((m) => {
-            const nm =
-              (m?.displayName || "").trim() ||
-              [m?.firstName || "", m?.lastName || ""].join(" ").trim();
-            if (m?.id && nm) idToName[m.id] = nm;
-          });
-
-          (s?.teams || []).forEach((t) => {
-            const owner =
-              idToName[t?.primaryOwner] ||
-              idToName[(t?.owners || [])[0]] ||
-              "Unknown";
-            const tc = t?.transactionCounter || {};
-            out[year] = out[year] || {};
-            const prev = out[year][owner] || {
-              acquisitions: 0,
-              drops: 0,
-              trades: 0,
-              moveToActive: 0,
-              ir: 0,
-            };
-            out[year][owner] = {
-              acquisitions: prev.acquisitions + (tc.acquisitions || 0),
-              drops: prev.drops + (tc.drops || 0),
-              trades: prev.trades + (tc.trades || 0),
-              moveToActive: prev.moveToActive + (tc.moveToActive || 0),
-              ir: prev.ir + (tc.moveToIR || 0),
-            };
-          });
-        }
-        return out;
-      }
-      const activityLegacyBySeason =
-        data.activityLegacyBySeason || buildLegacyActivityFromLite(legacyLite);
-
-      const activityPreMerge = {};
-      const addYear = (yr, map) => {
-        const y = Number(yr);
-        activityPreMerge[y] = activityPreMerge[y] || {};
-        Object.entries(map || {}).forEach(([owner, st]) => {
-          const prev = activityPreMerge[y][owner] || {
-            acquisitions: 0,
-            drops: 0,
-            trades: 0,
-            moveToActive: 0,
-            ir: 0,
-          };
-          activityPreMerge[y][owner] = {
-            acquisitions: prev.acquisitions + (st?.acquisitions || 0),
-            drops: prev.drops + (st?.drops || 0),
-            trades: prev.trades + (st?.trades || 0),
-            moveToActive: prev.moveToActive + (st?.moveToActive || 0),
-            ir: prev.ir + (st?.ir || 0),
-          };
-        });
-      };
-      Object.entries(activityNewRaw || {}).forEach(([yr, m]) => addYear(yr, m));
-      Object.entries(activityLegacyBySeason || {}).forEach(([yr, m]) =>
-        addYear(yr, m)
-      );
-      setActivityBySeason(activityPreMerge);
-      const legacyNorm = coerceLegacyRows(legacy, {
-        seasons,
-        leagueId: data.leagueId,
-        leagueName: data.leagueName,
-      });
-      const combinedPlusLegacy = preferRealMemberNames(
-        [...combinedRows, ...legacyNorm],
-        seasons
-      );
-      const provisional = buildFromRows(combinedPlusLegacy);
-      const candidateName = (
-        data.leagueName ||
-        light.leagueNameGuess ||
-        ""
-      ).trim();
-      const keys0 = provisional.leagues || [];
-      const meta0 = keys0.length
-        ? provisional.byLeague[keys0[0]]?.meta || {}
-        : {};
-      const resolvedLeagueId =
-        String(data.leagueId || meta0.id || "").trim() || `espn_${Date.now()}`;
-      const resolvedLeagueName =
-        candidateName || meta0.name || `League ${resolvedLeagueId}`;
-
-      const savedForLeague =
-        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
-      if (
-        savedForLeague &&
-        Object.keys(savedForLeague).length > 0 &&
-        JSON.stringify(savedForLeague) !== JSON.stringify(moneyInputs)
-      ) {
-        setMoneyInputs(savedForLeague);
-      }
-
-      const rowsLocked = lockLeagueIdentity(
-        combinedPlusLegacy,
-        resolvedLeagueId,
-        resolvedLeagueName
-      );
-      const rawMergeMap = loadMergeMap(resolvedLeagueId);
-      const flatMergeMap = flattenMergeMap(rawMergeMap);
-      if (JSON.stringify(rawMergeMap) !== JSON.stringify(flatMergeMap)) {
-        saveMergeMap(resolvedLeagueId, flatMergeMap);
-      }
-      const rowsAfterMerges = (function apply() {
-        const keys = Object.keys(flatMergeMap || {});
-        if (!keys.length) return rowsLocked;
-        return rowsLocked.map((r) => {
-          const mgr = canonicalize(r.manager, flatMergeMap);
-          const opp = canonicalize(r.opponent, flatMergeMap);
-          return { ...r, manager: mgr, opponent: opp };
-        });
-      })();
-      let rowsFinal = rowsAfterMerges;
-      (() => {
-        const key = (r) =>
-          `${r.season}|${r.week}|${String(
-            r.team_name || ""
-          ).trim()}|${Math.round(Number(r.points_for) || 0)}|${Math.round(
-            Number(r.points_against) || 0
-          )}`;
-        const playoffMap = new Map(
-          (light.rows || []).map((r) => [key(r), r.is_playoff === true])
-        );
-        rowsFinal = (rowsAfterMerges || []).map((r) =>
-          r.is_playoff === true || r.is_playoff === false
-            ? r
-            : { ...r, is_playoff: !!playoffMap.get(key(r)) }
-        );
-      })();
-      const built = buildFromRows(rowsFinal);
-      setDerivedAll(built);
-      const keys = built.leagues || [];
-      const selectedKey =
-        keys.find(
-          (k) =>
-            (built.byLeague[k]?.meta?.name || "").trim() === resolvedLeagueName
-        ) ||
-        keys.find(
-          (k) =>
-            String(built.byLeague[k]?.meta?.id || "").trim() ===
-            resolvedLeagueId
-        ) ||
-        keys[0] ||
-        "";
-      if (selectedKey) setSelectedLeague(selectedKey);
-      const adpSrc = {};
-      Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
-        adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
-          ? "FantasyPros (from extension)"
-          : "—";
-      });
-      const ownerMap =
-        data.ownerByTeamByYear && Object.keys(data.ownerByTeamByYear).length
-          ? data.ownerByTeamByYear
-          : (() => {
-              const tmp = {};
-              for (const s of seasons || []) {
-                const yr = Number(s?.seasonId);
-                if (!yr) continue;
-                const memberName = {};
-                (s?.members || []).forEach((m) => {
-                  const fn = (m?.firstName || "").trim();
-                  const ln = (m?.lastName || "").trim();
-                  const full = [fn, ln].filter(Boolean).join(" ").trim();
-                  const dn = (m?.displayName || "").trim();
-                  const preferred = full || dn || "Unknown";
-                  if (m?.id != null) memberName[m.id] = preferred;
-                });
-                const inner = {};
-                (s?.teams || []).forEach((t) => {
-                  const ownerId =
-                    t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-                  if (t?.id != null)
-                    inner[t.id] = (ownerId && memberName[ownerId]) || "Unknown";
-                });
-                tmp[yr] = inner;
+      try {
+        window.__FL_PAYLOAD = data;
+        (function normalizePickupsPayload(p) {
+          let txByYear = {};
+          let weeklyByYear = {};
+          if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
+            txByYear = p.transactionsSlim;
+          }
+          if (
+            p &&
+            p.weeklyPointsByPlayer &&
+            !Array.isArray(p.weeklyPointsByPlayer)
+          ) {
+            weeklyByYear = p.weeklyPointsByPlayer;
+          }
+          if (
+            (!txByYear || !Object.keys(txByYear).length) &&
+            Array.isArray(p?.seasons)
+          ) {
+            p.seasons.forEach((s) => {
+              const y = Number(s?.seasonId);
+              if (!y) return;
+              if (
+                Array.isArray(s?.transactionsSlim) &&
+                s.transactionsSlim.length
+              ) {
+                txByYear[y] = s.transactionsSlim;
               }
-              return tmp;
-            })();
-      const teamNamesFromData = data.teamNamesByOwner || {};
-      const ownerFullByTeamByYear = (() => {
-        const out = {};
+            });
+          }
+          if (
+            (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
+            Array.isArray(p?.seasons)
+          ) {
+            p.seasons.forEach((s) => {
+              const y = Number(s?.seasonId);
+              if (!y) return;
+              if (
+                s?.weeklyPointsByPlayer &&
+                Object.keys(s.weeklyPointsByPlayer).length
+              ) {
+                weeklyByYear[y] = s.weeklyPointsByPlayer;
+              }
+            });
+          }
+          p.transactionsSlim = txByYear;
+          p.weeklyPointsByPlayer = weeklyByYear;
+          p.transactionsSlimFlat = Object.entries(txByYear).flatMap(
+            ([yr, arr]) =>
+              (Array.isArray(arr) ? arr : []).map((r) => ({
+                ...r,
+                seasonId: Number(yr),
+              }))
+          );
+        })(data);
+
+        const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+        if (typeof window !== "undefined") {
+          window.__espnSeasons = seasons;
+        }
+        const seasonsMap = Object.fromEntries(
+          seasons.map((s) => [Number(s.seasonId), s])
+        );
+
+        setSeasonsByYear(seasonsMap);
+        const scheduleMap = Object.fromEntries(
+          (seasons || []).map((s) => [
+            Number(s?.seasonId),
+            Array.isArray(s?.schedule) ? s.schedule : [],
+          ])
+        );
+        setScheduleByYear(scheduleMap);
+
+        const currentWeekBySeasonMap =
+          data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
+            ? data.currentWeekByYear
+            : {};
+
+        setCurrentWeekBySeason(currentWeekBySeasonMap);
+        const playoffTeamsFromSeasons = {};
         for (const s of seasons || []) {
           const yr = Number(s?.seasonId);
           if (!yr) continue;
-          const fullByMember = {};
-          (s?.members || []).forEach((m) => {
-            const fn = (m?.firstName || "").trim();
-            const ln = (m?.lastName || "").trim();
-            const full = [fn, ln].filter(Boolean).join(" ").trim();
-            const dn = (m?.displayName || "").trim();
-            if (m?.id != null) fullByMember[m.id] = full || dn || "Unknown";
-          });
-          const inner = {};
-          (s?.teams || []).forEach((t) => {
-            const ownerId =
-              t?.primaryOwner ||
-              (Array.isArray(t?.owners) && t.owners[0]) ||
-              null;
-            const tid = Number(t?.id);
-            if (!Number.isFinite(tid)) return;
-            inner[tid] = ownerId ? fullByMember[ownerId] : "Unknown";
-          });
-          out[yr] = inner;
+          const cnt =
+            Number(
+              s?.settings?.playoffTeamCount ??
+                s?.settings?.scheduleSettings?.playoffTeamCount ??
+                s?.playoffTeamCount ??
+                0
+            ) || 0;
+          playoffTeamsFromSeasons[yr] = cnt;
         }
-        return out;
-      })();
-      const rosterMap =
-        data.rostersByYear && Object.keys(data.rostersByYear).length
-          ? data.rostersByYear
-          : buildRostersByYear(seasons);
-      const lineupSlots = data.lineupSlotsByYear || {};
-      const rosterAcq = data.rosterAcqByYear || {};
-      const existingMoney =
-        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
-      const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
+        setPlayoffTeamsBySeason(playoffTeamsFromSeasons);
 
-      upsertLeague({
-        leagueId: resolvedLeagueId,
-        leagueKey: selectedKey,
-        name: resolvedLeagueName,
-        platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
-        scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
-        rows: rowsFinal,
-        draftByYear: draftMinimal,
-        adpSourceByYear: adpSrc,
-        moneyInputs: mergedMoney,
-        activityBySeason: activityPreMerge,
-        espnTransactionsByYear: data.transactionsSlim || {},
-        espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
-        espnOwnerByTeamByYear: ownerMap,
-        espnTeamNamesByOwner: teamNamesFromData,
-        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
-        espnRostersByYear: rosterMap,
-        espnLineupSlotsByYear: lineupSlots,
-        espnRosterAcqByYear: rosterAcq,
-        espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
-        espnCurrentWeekBySeason: currentWeekBySeasonMap,
-        espnScheduleByYear: scheduleMap,
-        leagueIcon,
-      });
+        const playoffTeamsBySeasonMap = extractPlayoffTeamsBySeason(seasons);
+        setPlayoffTeamsBySeason(playoffTeamsBySeasonMap);
+        const legacy = Array.isArray(data.legacyRows) ? data.legacyRows : [];
+        const legacyLite = Array.isArray(data.legacySeasonsLite)
+          ? data.legacySeasonsLite
+          : [];
+        if (!seasons.length && !legacy.length) {
+          rebuildFromStore();
+          window.name = "";
+          return;
+        }
+        const light = buildRowsLight(seasons);
+        const combinedRows = [...light.rows, ...light.txRows];
+        let draftMinimal = buildDraftRich(seasons);
+        draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
+        draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
+        draftMinimal = attachPosFromPopup(
+          draftMinimal,
+          data.adpPosByYear || data.adpRichByYear || null
+        );
+        draftMinimal = overlayMissingPosByNameOnly(draftMinimal);
+        draftMinimal = attachPickPosFromDraftOrder(draftMinimal);
+        draftMinimal = attachFinishPosFromLocal(draftMinimal, "PPR");
+        setDraftByYear(draftMinimal);
+        function buildActivityFromSeasons(seasonsArr = []) {
+          const out = {};
+          seasonsArr.forEach((s) => {
+            const year = Number(s?.seasonId);
+            if (!year) return;
+            const members = new Map();
+            (s?.members || []).forEach((m) => {
+              const dn = m?.displayName || "";
+              const fn = m?.firstName || "";
+              const ln = m?.lastName || "";
+              const full = [fn, ln].filter(Boolean).join(" ").trim();
+              const best = full || dn || "Unknown";
+              if (m?.id != null) members.set(m.id, best);
+            });
+            const ownerByTeam = new Map();
+            (s?.teams || []).forEach((t) => {
+              const ownerId =
+                t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+              if (t?.id != null)
+                ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
+            });
+            const yearMap = (out[year] = out[year] || {});
+            (s?.teams || []).forEach((t) => {
+              const owner = ownerByTeam.get(t?.id) || "Unknown";
+              const tc = t?.transactionCounter || {};
+              const row = yearMap[owner] || {
+                acquisitions: 0,
+                drops: 0,
+                trades: 0,
+                moveToActive: 0,
+                ir: 0,
+              };
+              row.acquisitions += Number(tc.acquisitions || 0);
+              row.drops += Number(tc.drops || 0);
+              row.trades += Number(tc.trades || 0);
+              row.moveToActive += Number(tc.moveToActive || 0);
+              row.ir += Number(tc.moveToIR || 0);
+              yearMap[owner] = row;
+            });
+          });
+          return out;
+        }
+        const activityNewRaw = data.activityBySeason || {};
+        const activityLegacyBySeason = data.legacyActivityBySeason || {};
+        const activityPreMerge = buildActivityFromSeasons(seasons);
+        const addYear = (season, map) => {
+          const yr = Number(season);
+          if (!Number.isFinite(yr)) return;
+          const seasonMap = (activityPreMerge[yr] = activityPreMerge[yr] || {});
+          Object.entries(map || {}).forEach(([owner, stats]) => {
+            if (!owner) return;
+            const prev = seasonMap[owner] || {
+              acquisitions: 0,
+              drops: 0,
+              trades: 0,
+              moveToActive: 0,
+              ir: 0,
+            };
+            const st = stats || {};
+            activityPreMerge[yr][owner] = {
+              acquisitions: prev.acquisitions + (st?.acquisitions || 0),
+              drops: prev.drops + (st?.drops || 0),
+              trades: prev.trades + (st?.trades || 0),
+              moveToActive: prev.moveToActive + (st?.moveToActive || 0),
+              ir: prev.ir + (st?.ir || 0),
+            };
+          });
+        };
+        Object.entries(activityNewRaw || {}).forEach(([yr, m]) =>
+          addYear(yr, m)
+        );
+        Object.entries(activityLegacyBySeason || {}).forEach(([yr, m]) =>
+          addYear(yr, m)
+        );
+        setActivityBySeason(activityPreMerge);
+        const legacyNorm = coerceLegacyRows(legacy, {
+          seasons,
+          leagueId: data.leagueId,
+          leagueName: data.leagueName,
+        });
+        const combinedPlusLegacy = preferRealMemberNames(
+          [...combinedRows, ...legacyNorm],
+          seasons
+        );
+        const provisional = buildFromRows(combinedPlusLegacy);
+        const candidateName = (
+          data.leagueName ||
+          light.leagueNameGuess ||
+          ""
+        ).trim();
+        const keys0 = provisional.leagues || [];
+        const meta0 = keys0.length
+          ? provisional.byLeague[keys0[0]]?.meta || {}
+          : {};
+        const resolvedLeagueId =
+          String(data.leagueId || meta0.id || "").trim() ||
+          `espn_${Date.now()}`;
+        const resolvedLeagueName =
+          candidateName || meta0.name || `League ${resolvedLeagueId}`;
 
-      setOwnerByTeamByYear(ownerMap);
-      setTeamNamesByOwner(teamNamesFromData);
-      setRostersByYear(rosterMap);
-      setLineupSlotsByYear(lineupSlots);
-      setRosterAcqByYear(rosterAcq);
-      console.debug("Loaded from popup:", {
-        lineupSlotsByYear: Object.keys(lineupSlots || {}).length,
-        rosterAcqByYear: Object.keys(rosterAcq || {}).length,
-        rostersByYear: Object.keys(rosterMap || {}).length,
-      });
-      rebuildFromStore();
-    } catch (e) {
-      console.warn("Bootstrap failed; falling back to stored leagues:", e);
+        const savedForLeague =
+          readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        if (
+          savedForLeague &&
+          Object.keys(savedForLeague).length > 0 &&
+          JSON.stringify(savedForLeague) !==
+            JSON.stringify(moneyInputsRef.current)
+        ) {
+          setMoneyInputs(savedForLeague);
+        }
+
+        const rowsLocked = lockLeagueIdentity(
+          combinedPlusLegacy,
+          resolvedLeagueId,
+          resolvedLeagueName
+        );
+        const rawMergeMap = loadMergeMap(resolvedLeagueId);
+        const flatMergeMap = flattenMergeMap(rawMergeMap);
+        if (JSON.stringify(rawMergeMap) !== JSON.stringify(flatMergeMap)) {
+          saveMergeMap(resolvedLeagueId, flatMergeMap);
+        }
+        const rowsAfterMerges = (function apply() {
+          const keys = Object.keys(flatMergeMap || {});
+          if (!keys.length) return rowsLocked;
+          return rowsLocked.map((r) => {
+            const mgr = canonicalize(r.manager, flatMergeMap);
+            const opp = canonicalize(r.opponent, flatMergeMap);
+            return { ...r, manager: mgr, opponent: opp };
+          });
+        })();
+        let rowsFinal = rowsAfterMerges;
+        (() => {
+          const key = (r) =>
+            `${r.season}|${r.week}|${String(
+              r.team_name || ""
+            ).trim()}|${Math.round(Number(r.points_for) || 0)}|${Math.round(
+              Number(r.points_against) || 0
+            )}`;
+          const playoffMap = new Map(
+            (light.rows || []).map((r) => [key(r), r.is_playoff === true])
+          );
+          rowsFinal = (rowsAfterMerges || []).map((r) =>
+            r.is_playoff === true || r.is_playoff === false
+              ? r
+              : { ...r, is_playoff: !!playoffMap.get(key(r)) }
+          );
+        })();
+        const built = buildFromRows(rowsFinal);
+        setDerivedAll(built);
+        const keys = built.leagues || [];
+        const selectedKey =
+          keys.find(
+            (k) =>
+              (built.byLeague[k]?.meta?.name || "").trim() ===
+              resolvedLeagueName
+          ) ||
+          keys.find(
+            (k) =>
+              String(built.byLeague[k]?.meta?.id || "").trim() ===
+              resolvedLeagueId
+          ) ||
+          keys[0] ||
+          "";
+        if (selectedKey) setSelectedLeague(selectedKey);
+        const adpSrc = {};
+        Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
+          adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
+            ? "FantasyPros (from extension)"
+            : "—";
+        });
+        const ownerMap =
+          data.ownerByTeamByYear && Object.keys(data.ownerByTeamByYear).length
+            ? data.ownerByTeamByYear
+            : (() => {
+                const tmp = {};
+                for (const s of seasons || []) {
+                  const yr = Number(s?.seasonId);
+                  if (!yr) continue;
+                  const memberName = {};
+                  (s?.members || []).forEach((m) => {
+                    const fn = (m?.firstName || "").trim();
+                    const ln = (m?.lastName || "").trim();
+                    const full = [fn, ln].filter(Boolean).join(" ").trim();
+                    const dn = (m?.displayName || "").trim();
+                    const preferred = full || dn || "Unknown";
+                    if (m?.id != null) memberName[m.id] = preferred;
+                  });
+                  const inner = {};
+                  (s?.teams || []).forEach((t) => {
+                    const ownerId =
+                      t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+                    if (t?.id != null)
+                      inner[t.id] = (ownerId && memberName[ownerId]) || "Unknown";
+                  });
+                  tmp[yr] = inner;
+                }
+                return tmp;
+              })();
+        const teamNamesFromData = data.teamNamesByOwner || {};
+        const ownerFullByTeamByYear = (() => {
+          const out = {};
+          for (const s of seasons || []) {
+            const yr = Number(s?.seasonId);
+            if (!yr) continue;
+            const fullByMember = {};
+            (s?.members || []).forEach((m) => {
+              const fn = (m?.firstName || "").trim();
+              const ln = (m?.lastName || "").trim();
+              const full = [fn, ln].filter(Boolean).join(" ").trim();
+              const dn = (m?.displayName || "").trim();
+              if (m?.id != null) fullByMember[m.id] = full || dn || "Unknown";
+            });
+            const inner = {};
+            (s?.teams || []).forEach((t) => {
+              const ownerId =
+                t?.primaryOwner ||
+                (Array.isArray(t?.owners) && t.owners[0]) ||
+                null;
+              const tid = Number(t?.id);
+              if (!Number.isFinite(tid)) return;
+              inner[tid] = ownerId ? fullByMember[ownerId] : "Unknown";
+            });
+            out[yr] = inner;
+          }
+          return out;
+        })();
+        const rosterMap =
+          data.rostersByYear && Object.keys(data.rostersByYear).length
+            ? data.rostersByYear
+            : buildRostersByYear(seasons);
+        const lineupSlots = data.lineupSlotsByYear || {};
+        const rosterAcq = data.rosterAcqByYear || {};
+        const existingMoney =
+          readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        const mergedMoney = {
+          ...existingMoney,
+          ...(moneyInputsRef.current || {}),
+        };
+
+        upsertLeague({
+          leagueId: resolvedLeagueId,
+          leagueKey: selectedKey,
+          name: resolvedLeagueName,
+          platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
+          scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
+          rows: rowsFinal,
+          draftByYear: draftMinimal,
+          adpSourceByYear: adpSrc,
+          moneyInputs: mergedMoney,
+          activityBySeason: activityPreMerge,
+          espnTransactionsByYear: data.transactionsSlim || {},
+          espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
+          espnOwnerByTeamByYear: ownerMap,
+          espnTeamNamesByOwner: teamNamesFromData,
+          espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+          espnRostersByYear: rosterMap,
+          espnLineupSlotsByYear: lineupSlots,
+          espnRosterAcqByYear: rosterAcq,
+          espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
+          espnCurrentWeekBySeason: currentWeekBySeasonMap,
+          espnScheduleByYear: scheduleMap,
+          leagueIcon: leagueIconRef.current,
+        });
+
+        setOwnerByTeamByYear(ownerMap);
+        setTeamNamesByOwner(teamNamesFromData);
+        setRostersByYear(rosterMap);
+        setLineupSlotsByYear(lineupSlots);
+        setRosterAcqByYear(rosterAcq);
+        console.debug("Loaded from popup:", {
+          lineupSlotsByYear: Object.keys(lineupSlots || {}).length,
+          rosterAcqByYear: Object.keys(rosterAcq || {}).length,
+          rostersByYear: Object.keys(rosterMap || {}).length,
+        });
+        rebuildFromStore();
+      } catch (e) {
+        console.warn(
+          "Bootstrap failed; falling back to stored leagues:",
+          e
+        );
+        rebuildFromStore();
+      }
+    };
+
+    window.FL_HANDLE_EXTENSION_PAYLOAD = ingestFromExtension;
+
+    let initialPayload = null;
+    try {
+      const raw = window.name;
+      if (raw && typeof raw === "string" && raw.trim()) {
+        initialPayload = JSON.parse(raw);
+        window.name = "";
+      } else if (typeof sessionStorage !== "undefined") {
+        const stored = sessionStorage.getItem("FL_PAYLOAD");
+        if (stored) {
+          sessionStorage.removeItem("FL_PAYLOAD");
+          initialPayload = JSON.parse(stored);
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to parse incoming payload", error);
+    }
+
+    if (initialPayload) {
+      ingestFromExtension(initialPayload);
+    } else {
       rebuildFromStore();
     }
+
+    return () => {
+      if (window.FL_HANDLE_EXTENSION_PAYLOAD === ingestFromExtension) {
+        delete window.FL_HANDLE_EXTENSION_PAYLOAD;
+      }
+    };
   }, []);
 
   const league =
