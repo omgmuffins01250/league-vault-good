@@ -2205,7 +2205,8 @@ export default function App() {
 
     // Auto-build alias overrides from ESPN members: displayName/nickname/username => "First Last"
     const manualAliases = {};
-    Object.values(seasonsByYear || {}).forEach((s) => {
+    const espnSeasons = Object.values(seasonsByYear || {});
+    espnSeasons.forEach((s) => {
       (s?.members || []).forEach((m) => {
         const disp = (m?.displayName || "").trim();
         const full = [m?.firstName || "", m?.lastName || ""].join(" ").trim();
@@ -2228,6 +2229,7 @@ export default function App() {
       },
       espnOwnerByTeamByYear: ownerByTeamByYear,
       manualAliases, // 👈 auto-built from ESPN data; no typing needed
+      espnSeasons,
     });
 
     if (typeof window !== "undefined") {
