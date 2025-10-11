@@ -3,7 +3,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
-import { ownerName, canonicalizeOwner, primeOwnerMaps } from "../ownerMaps.jsx";
+import {
+  ownerName,
+  canonicalizeOwner,
+  primeOwnerMaps,
+  ownerMapFor,
+} from "../ownerMaps.jsx";
 // near the top of App.jsx (or tabs.jsx)
 import "../Data/finishData.jsx";
 import {
@@ -3395,19 +3400,108 @@ function __resolveCurrentWeekExclusiveSimple(
   return Math.max(...candidates);
 }
 
-function __collectGamesForSeason(league, season) {
+function __resolveTeamIdForOwner({
+  league,
+  season,
+  ownerByTeamByYear,
+  owner,
+}) {
+  const ownerNameVal = String(owner || "").trim();
+  if (!ownerNameVal) return null;
+  const seasonNum = Number(season);
+  if (!Number.isFinite(seasonNum)) return null;
+  const canonTarget = canonicalizeOwner(ownerNameVal);
+  if (!canonTarget) return null;
+
+  const byYear =
+    ownerByTeamByYear?.[seasonNum] ||
+    ownerByTeamByYear?.[String(seasonNum)] ||
+    {};
+  for (const [teamKey, mappedOwner] of Object.entries(byYear || {})) {
+    const tid = Number(teamKey);
+    if (!Number.isFinite(tid)) continue;
+    if (canonicalizeOwner(mappedOwner) === canonTarget) return tid;
+  }
+
+  try {
+    const fromOwnerMaps = ownerMapFor?.(seasonNum) || {};
+    for (const [teamKey, info] of Object.entries(fromOwnerMaps)) {
+      const tid = Number(teamKey);
+      if (!Number.isFinite(tid)) continue;
+      if (canonicalizeOwner(info?.name) === canonTarget) return tid;
+    }
+  } catch {}
+
+  return null;
+}
+
+function __collectGamesForSeason(league, season, ownerByTeamByYear) {
   const out = [];
   const seasonNum = Number(season);
   if (!Number.isFinite(seasonNum)) return out;
-  const pushGame = ({ week, team1Id, team2Id, score1, score2 }) => {
-    if (!Number.isFinite(week) || week <= 0) return;
-    if (!Number.isFinite(team1Id) || !Number.isFinite(team2Id)) return;
+
+  const seenGames = new Set();
+  const toNumberOrNull = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const resolveTeamId = (ownerNameVal, fallbackId) => {
+    if (Number.isFinite(fallbackId)) return Math.floor(fallbackId);
+    return __resolveTeamIdForOwner({
+      league,
+      season: seasonNum,
+      ownerByTeamByYear,
+      owner: ownerNameVal,
+    });
+  };
+
+  const pushGame = ({
+    week,
+    team1Id,
+    team2Id,
+    score1,
+    score2,
+    owner1,
+    owner2,
+  }) => {
+    const wk = Number(week);
+    if (!Number.isFinite(wk) || wk <= 0) return;
+
+    let ownerName1 = typeof owner1 === "string" ? owner1.trim() : "";
+    let ownerName2 = typeof owner2 === "string" ? owner2.trim() : "";
+
+    let resolvedTeam1Id = resolveTeamId(ownerName1, team1Id);
+    let resolvedTeam2Id = resolveTeamId(ownerName2, team2Id);
+
+    if (!ownerName1 && Number.isFinite(resolvedTeam1Id)) {
+      const resolved = __resolveOwnerName(league, seasonNum, resolvedTeam1Id);
+      ownerName1 = resolved ? String(resolved) : "";
+    }
+    if (!ownerName2 && Number.isFinite(resolvedTeam2Id)) {
+      const resolved = __resolveOwnerName(league, seasonNum, resolvedTeam2Id);
+      ownerName2 = resolved ? String(resolved) : "";
+    }
+
+    ownerName1 = ownerName1.trim();
+    ownerName2 = ownerName2.trim();
+    if (!ownerName1 || !ownerName2) return;
+
+    const canonA = canonicalizeOwner(ownerName1);
+    const canonB = canonicalizeOwner(ownerName2);
+    const keyParts = [canonA, canonB].sort();
+    const key = `${seasonNum}|${Math.floor(wk)}|${keyParts[0]}|${keyParts[1]}`;
+    if (seenGames.has(key)) return;
+    seenGames.add(key);
+
     out.push({
-      week: Math.floor(week),
-      team1Id,
-      team2Id,
-      score1: Number.isFinite(score1) ? score1 : null,
-      score2: Number.isFinite(score2) ? score2 : null,
+      week: Math.floor(wk),
+      team1Id: Number.isFinite(resolvedTeam1Id) ? resolvedTeam1Id : null,
+      team2Id: Number.isFinite(resolvedTeam2Id) ? resolvedTeam2Id : null,
+      score1: toNumberOrNull(score1),
+      score2: toNumberOrNull(score2),
+      owner1: ownerName1,
+      owner2: ownerName2,
     });
   };
 
@@ -3418,43 +3512,44 @@ function __collectGamesForSeason(league, season) {
       const week = Number(
         g?.week ?? g?.matchupPeriodId ?? g?.scoringPeriodId ?? g?.period
       );
-      const t1 = Number(
-        g?.team1?.teamId ??
+      const owner1 = g?.owner ?? g?.team1Owner ?? g?.homeOwner;
+      const owner2 = g?.opp ?? g?.opponent ?? g?.team2Owner ?? g?.awayOwner;
+      pushGame({
+        week,
+        team1Id:
+          g?.team1?.teamId ??
           g?.team1?.team?.id ??
           g?.team1?.id ??
           g?.home?.teamId ??
           g?.home?.team?.id ??
           g?.home?.id ??
           g?.team1Id ??
-          g?.homeTeamId
-      );
-      const t2 = Number(
-        g?.team2?.teamId ??
+          g?.homeTeamId,
+        team2Id:
+          g?.team2?.teamId ??
           g?.team2?.team?.id ??
           g?.team2?.id ??
           g?.away?.teamId ??
           g?.away?.team?.id ??
           g?.away?.id ??
           g?.team2Id ??
-          g?.awayTeamId
-      );
-      const s1 = Number(
-        g?.team1?.score ??
+          g?.awayTeamId,
+        score1:
+          g?.team1?.score ??
           g?.home?.score ??
           g?.team1Score ??
           g?.points_for ??
-          g?.pf
-      );
-      const s2 = Number(
-        g?.team2?.score ??
+          g?.pf,
+        score2:
+          g?.team2?.score ??
           g?.away?.score ??
           g?.team2Score ??
           g?.points_against ??
-          g?.pa
-      );
-      pushGame({ week, team1Id: t1, team2Id: t2, score1: s1, score2: s2 });
+          g?.pa,
+        owner1,
+        owner2,
+      });
     }
-    if (out.length) return out;
   }
 
   const seasonObj =
@@ -3468,8 +3563,6 @@ function __collectGamesForSeason(league, season) {
       );
       const home = m?.home ?? m?.homeTeam ?? {};
       const away = m?.away ?? m?.awayTeam ?? {};
-      const t1 = Number(home?.teamId ?? home?.team?.id ?? home?.id);
-      const t2 = Number(away?.teamId ?? away?.team?.id ?? away?.id);
       const pickScore = (side) => {
         const total = Number(side?.totalPoints);
         if (Number.isFinite(total)) return total;
@@ -3479,13 +3572,16 @@ function __collectGamesForSeason(league, season) {
       };
       pushGame({
         week,
-        team1Id: t1,
-        team2Id: t2,
+        team1Id: home?.teamId ?? home?.team?.id ?? home?.id,
+        team2Id: away?.teamId ?? away?.team?.id ?? away?.id,
         score1: pickScore(home),
         score2: pickScore(away),
+        owner1: home?.ownerName ?? home?.teamName,
+        owner2: away?.ownerName ?? away?.teamName,
       });
     }
   }
+
   return out;
 }
 
@@ -3539,17 +3635,44 @@ function __computeLuckScoresForSeason({
   games,
   teamWeekTotals,
   hiddenManagers,
+  ownerByTeamByYear,
 }) {
   const diffTotals = {};
   const hidden = hiddenManagers || new Set();
   games.forEach((game) => {
-    const { week, team1Id, team2Id } = game;
-    const owner1 = __resolveOwnerName(league, season, team1Id);
-    const owner2 = __resolveOwnerName(league, season, team2Id);
+    const { week } = game;
+    let owner1 =
+      (typeof game?.owner1 === "string" && game.owner1.trim()) ||
+      __resolveOwnerName(league, season, game?.team1Id);
+    let owner2 =
+      (typeof game?.owner2 === "string" && game.owner2.trim()) ||
+      __resolveOwnerName(league, season, game?.team2Id);
+    owner1 = owner1 ? owner1.trim() : "";
+    owner2 = owner2 ? owner2.trim() : "";
     if (!owner1 || !owner2) return;
     if (hidden.has(owner1) || hidden.has(owner2)) return;
-    const oppTotals1 = teamWeekTotals?.[team2Id]?.[week];
-    const oppTotals2 = teamWeekTotals?.[team1Id]?.[week];
+    const team1Id = Number.isFinite(game?.team1Id)
+      ? game.team1Id
+      : __resolveTeamIdForOwner({
+          league,
+          season,
+          ownerByTeamByYear,
+          owner: owner1,
+        });
+    const team2Id = Number.isFinite(game?.team2Id)
+      ? game.team2Id
+      : __resolveTeamIdForOwner({
+          league,
+          season,
+          ownerByTeamByYear,
+          owner: owner2,
+        });
+    const oppTotals1 = Number.isFinite(team2Id)
+      ? teamWeekTotals?.[team2Id]?.[week]
+      : null;
+    const oppTotals2 = Number.isFinite(team1Id)
+      ? teamWeekTotals?.[team1Id]?.[week]
+      : null;
     const diff1 = (oppTotals1?.proj ?? 0) - (oppTotals1?.actual ?? 0);
     const diff2 = (oppTotals2?.proj ?? 0) - (oppTotals2?.actual ?? 0);
     diffTotals[owner1] = (diffTotals[owner1] || 0) + diff1;
@@ -3585,16 +3708,40 @@ function __computeSeasonWins({
 }) {
   const wins = {};
   const hidden = hiddenManagers || new Set();
+  const isHidden = (name) => {
+    if (!name) return false;
+    return hidden.has(name) || hidden.has(canonicalizeOwner(name));
+  };
+  const toNumberOrNull = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
   games.forEach((game) => {
     const { week, team1Id, team2Id, score1, score2 } = game;
-    const owner1 = __resolveOwnerName(league, season, team1Id);
-    const owner2 = __resolveOwnerName(league, season, team2Id);
+    let owner1 =
+      (typeof game?.owner1 === "string" && game.owner1.trim()) ||
+      __resolveOwnerName(league, season, team1Id);
+    let owner2 =
+      (typeof game?.owner2 === "string" && game.owner2.trim()) ||
+      __resolveOwnerName(league, season, team2Id);
+    owner1 = owner1 ? owner1.trim() : "";
+    owner2 = owner2 ? owner2.trim() : "";
     if (!owner1 || !owner2) return;
-    if (hidden.has(owner1) || hidden.has(owner2)) return;
-    const totals1 = teamWeekTotals?.[team1Id]?.[week] || {};
-    const totals2 = teamWeekTotals?.[team2Id]?.[week] || {};
-    const actual1 = Number.isFinite(totals1.actual) ? totals1.actual : score1;
-    const actual2 = Number.isFinite(totals2.actual) ? totals2.actual : score2;
+    if (isHidden(owner1) || isHidden(owner2)) return;
+    const totals1 =
+      Number.isFinite(team1Id) && Number.isFinite(week)
+        ? teamWeekTotals?.[team1Id]?.[week] || {}
+        : {};
+    const totals2 =
+      Number.isFinite(team2Id) && Number.isFinite(week)
+        ? teamWeekTotals?.[team2Id]?.[week] || {}
+        : {};
+    const actual1 = Number.isFinite(totals1.actual)
+      ? totals1.actual
+      : toNumberOrNull(score1);
+    const actual2 = Number.isFinite(totals2.actual)
+      ? totals2.actual
+      : toNumberOrNull(score2);
     if (!Number.isFinite(actual1) || !Number.isFinite(actual2)) return;
     if (actual1 > actual2) wins[owner1] = (wins[owner1] || 0) + 1;
     else if (actual2 > actual1) wins[owner2] = (wins[owner2] || 0) + 1;
@@ -3787,15 +3934,24 @@ export function YearlyRecapTab({
   const selectedPlacement = topThree.find((p) => p.owner === selectedOwner) ||
     null;
 
+  const canonicalSelectedOwner = React.useMemo(() => {
+    return selectedOwner ? canonicalizeOwner(selectedOwner) : "";
+  }, [selectedOwner]);
+
   const teamIdsForOwner = React.useMemo(() => {
     if (!selectedOwner || !Number.isFinite(latestSeason)) return [];
     const map = ownerByTeamByYear?.[latestSeason] ||
       ownerByTeamByYear?.[String(latestSeason)] || {};
     return Object.entries(map)
-      .filter(([, owner]) => owner === selectedOwner)
+      .filter(([, owner]) => canonicalizeOwner(owner) === canonicalSelectedOwner)
       .map(([teamId]) => Number(teamId))
       .filter(Number.isFinite);
-  }, [selectedOwner, ownerByTeamByYear, latestSeason]);
+  }, [
+    selectedOwner,
+    canonicalSelectedOwner,
+    ownerByTeamByYear,
+    latestSeason,
+  ]);
 
   const seasonTeamTotals = React.useMemo(
     () =>
@@ -3816,8 +3972,8 @@ export function YearlyRecapTab({
   );
 
   const gamesThisSeason = React.useMemo(
-    () => __collectGamesForSeason(league, latestSeason),
-    [league, latestSeason]
+    () => __collectGamesForSeason(league, latestSeason, ownerByTeamByYear),
+    [league, latestSeason, ownerByTeamByYear]
   );
 
   const winsBySeason = React.useMemo(() => {
@@ -3830,7 +3986,11 @@ export function YearlyRecapTab({
         currentWeekByYear,
         season: seasonVal,
       });
-      const seasonGames = __collectGamesForSeason(league, seasonVal);
+      const seasonGames = __collectGamesForSeason(
+        league,
+        seasonVal,
+        ownerByTeamByYear
+      );
       const wins = __computeSeasonWins({
         league,
         season: seasonVal,
@@ -3848,6 +4008,7 @@ export function YearlyRecapTab({
     league,
     currentWeekByYear,
     hiddenManagersSet,
+    ownerByTeamByYear,
   ]);
 
   const selectedTeamId = React.useMemo(() => {
@@ -3921,6 +4082,7 @@ export function YearlyRecapTab({
         games: gamesThisSeason,
         teamWeekTotals: seasonTeamTotals,
         hiddenManagers: hiddenManagersSet,
+        ownerByTeamByYear,
       }),
     [
       league,
@@ -3928,6 +4090,7 @@ export function YearlyRecapTab({
       gamesThisSeason,
       seasonTeamTotals,
       hiddenManagersSet,
+      ownerByTeamByYear,
     ]
   );
 
