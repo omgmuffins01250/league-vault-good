@@ -259,7 +259,9 @@ function ensureUniqueLeagueId(preferredId, leagueName, store) {
 
   if (normalizedName) {
     const matchByName = Object.entries(byId).find(([, rec]) => {
-      const recName = String(rec?.name || "").trim().toLowerCase();
+      const recName = String(rec?.name || "")
+        .trim()
+        .toLowerCase();
       return recName === normalizedName;
     });
     if (matchByName) {
@@ -2291,11 +2293,7 @@ export default function App() {
         : {};
       const storeBeforeImport = readStore();
       const idCandidate = String(
-        data.leagueId ||
-          meta0.id ||
-          meta0.leagueId ||
-          meta0.espnLeagueId ||
-          ""
+        data.leagueId || meta0.id || meta0.leagueId || meta0.espnLeagueId || ""
       ).trim();
       const nameCandidate =
         candidateName ||
@@ -2306,8 +2304,7 @@ export default function App() {
         nameCandidate,
         storeBeforeImport
       );
-      const resolvedLeagueName =
-        nameCandidate || `League ${resolvedLeagueId}`;
+      const resolvedLeagueName = nameCandidate || `League ${resolvedLeagueId}`;
       // Make the just-imported league the active one in UI state
       setSelectedLeagueId(resolvedLeagueId);
       const savedForLeague =
