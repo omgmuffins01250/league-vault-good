@@ -127,10 +127,30 @@ function makeDefaultLeagueIcon() {
           "[FL][probe] FL_ADD_LEAGUE()",
           payload && Object.keys(payload)
         );
+
+        // Always keep an in-memory copy
         window.__FL_HANDOFF = payload;
+
+        // If the app exposes a live handler, use it and avoid a reload.
+        try {
+          if (typeof window.FL_HANDLE_EXTENSION_PAYLOAD === "function") {
+            window.FL_HANDLE_EXTENSION_PAYLOAD(payload);
+            console.log(
+              "[FL][probe] dispatched to FL_HANDLE_EXTENSION_PAYLOAD (no reload)"
+            );
+            return;
+          }
+        } catch (err) {
+          console.warn(
+            "[FL][probe] FL_HANDLE_EXTENSION_PAYLOAD error:",
+            err?.name,
+            err?.message
+          );
+        }
+
+        // Fallback: persist a copy so the bootstrap can pick it up after reload.
         const json = JSON.stringify(payload);
         const channels = [];
-
         try {
           sessionStorage.setItem("FL_HANDOFF_RAW", json);
           channels.push("sessionStorage");
@@ -141,7 +161,6 @@ function makeDefaultLeagueIcon() {
             err?.message
           );
         }
-
         try {
           window.name = json;
           channels.push("window.name");
@@ -239,55 +258,69 @@ function _emptyStore() {
   return { leaguesById: {}, lastSelectedLeagueId: "" };
 }
 
-function ensureUniqueLeagueId(preferredId, leagueName, store) {
+function ensureUniqueLeagueId(
+  preferredId,
+  leagueName,
+  store,
+  platform = "ESPN"
+) {
   const byId = (store && store.leaguesById) || {};
   const normalizedName = String(leagueName || "")
     .trim()
     .toLowerCase();
+  const normalizedPlat = String(platform || "ESPN")
+    .trim()
+    .toUpperCase();
   const preferred = String(preferredId || "").trim();
 
+  // Helper to test identity (strictly same league)
+  const isSameLeague = (rec) => {
+    if (!rec) return false;
+    const recName = String(rec.name || "")
+      .trim()
+      .toLowerCase();
+    const recPlat = String(rec.platform || "ESPN")
+      .trim()
+      .toUpperCase();
+    // If we don't have a normalizedName, treat as NOT the same league (force unique ID)
+    if (!normalizedName) return false;
+    return recName === normalizedName && recPlat === normalizedPlat;
+  };
+
+  // 1) If a preferred ID is supplied
   if (preferred) {
     const existing = byId[preferred];
     if (!existing) return preferred;
-    const existingName = String(existing.name || "")
-      .trim()
-      .toLowerCase();
-    if (!normalizedName || existingName === normalizedName) {
-      return preferred;
-    }
+
+    // Reuse only if it truly matches the same logical league
+    if (isSameLeague(existing)) return preferred;
+
+    // Otherwise create a unique variant off the preferred ID
+    let idx = 2;
+    while (byId[`${preferred}__${idx}`]) idx += 1;
+    return `${preferred}__${idx}`;
   }
 
+  // 2) No preferred ID. If a league with the same name+platform exists, reuse its ID
   if (normalizedName) {
-    const matchByName = Object.entries(byId).find(([, rec]) => {
-      const recName = String(rec?.name || "")
-        .trim()
-        .toLowerCase();
-      return recName === normalizedName;
-    });
-    if (matchByName) {
-      return matchByName[0];
-    }
+    const match = Object.entries(byId).find(([, rec]) => isSameLeague(rec));
+    if (match) return match[0];
   }
 
-  const base =
-    preferred ||
+  // 3) Build a base from name (or timestamp) and ensure uniqueness
+  const baseName =
     normalizedName.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
     `league_${Date.now()}`;
 
+  let base = baseName;
   if (!byId[base]) return base;
 
-  let idx = 2;
-  while (byId[`${base}__${idx}`]) {
-    const existing = byId[`${base}__${idx}`];
-    const existingName = String(existing?.name || "")
-      .trim()
-      .toLowerCase();
-    if (normalizedName && existingName === normalizedName) {
-      return `${base}__${idx}`;
-    }
-    idx += 1;
-  }
+  // If the 'base' entry actually is the same league, reuse it
+  if (isSameLeague(byId[base])) return base;
 
+  // Otherwise suffix until unique
+  let idx = 2;
+  while (byId[`${base}__${idx}`]) idx += 1;
   return `${base}__${idx}`;
 }
 
@@ -311,7 +344,6 @@ function readStore() {
     !!o && !!o.leaguesById && Object.keys(o.leaguesById).length > 0;
 
   try {
-    // 1) Respect explicit backend marker if present
     const hint = (
       sessionStorage.getItem(BK_KEY) ||
       localStorage.getItem(BK_KEY) ||
@@ -320,25 +352,41 @@ function readStore() {
 
     const localObj = parseOrNull(localStorage.getItem(LS_KEY));
     const sessObj = parseOrNull(sessionStorage.getItem(LS_KEY));
+    const memObj =
+      (typeof window !== "undefined" && window.__FL_VOLATILE_STORE__) || null;
 
+    // Prefer the richest non-empty source: memory > session > local, unless an explicit hint forces a backend.
     if (hint === "session") {
-      if (sessObj) return shape(sessObj);
-      if (nonEmpty(localObj)) return shape(localObj);
-    } else if (hint === "local") {
-      if (localObj) return shape(localObj);
-      if (nonEmpty(sessObj)) return shape(sessObj);
-    } else {
-      // 2) No hint — choose the non-empty one; if both empty, prefer session
       if (nonEmpty(sessObj)) return shape(sessObj);
       if (nonEmpty(localObj)) return shape(localObj);
-      // fall through to empty-but-valid one
+      if (nonEmpty(memObj)) return shape(memObj);
       if (sessObj) return shape(sessObj);
       if (localObj) return shape(localObj);
+      if (memObj) return shape(memObj);
+      return _emptyStore();
     }
 
-    // 3) Last resort: volatile in-memory
-    const mem = window.__FL_VOLATILE_STORE__;
-    return mem && typeof mem === "object" ? shape(mem) : _emptyStore();
+    if (hint === "local") {
+      if (nonEmpty(localObj)) return shape(localObj);
+      if (nonEmpty(sessObj)) return shape(sessObj);
+      if (nonEmpty(memObj)) return shape(memObj);
+      if (localObj) return shape(localObj);
+      if (sessObj) return shape(sessObj);
+      if (memObj) return shape(memObj);
+      return _emptyStore();
+    }
+
+    // No hint — choose the one that actually contains data
+    if (nonEmpty(memObj)) return shape(memObj);
+    if (nonEmpty(sessObj)) return shape(sessObj);
+    if (nonEmpty(localObj)) return shape(localObj);
+
+    // fall back to any present (even if empty), preferring session, then local, then memory
+    if (sessObj) return shape(sessObj);
+    if (localObj) return shape(localObj);
+    if (memObj) return shape(memObj);
+
+    return _emptyStore();
   } catch (e) {
     console.warn("[FL][storage] readStore failed:", e?.name, e?.message);
     const mem = window.__FL_VOLATILE_STORE__;
@@ -424,7 +472,6 @@ function upsertLeague({
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
   leagueIcon,
-  leagueFingerprint,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -480,8 +527,6 @@ function upsertLeague({
             type: "preset",
             value: DEFAULT_LEAGUE_ICON_GLYPH,
           },
-    leagueFingerprint:
-      leagueFingerprint || prev.leagueFingerprint || prev.fingerprint || "",
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -1912,7 +1957,7 @@ export default function App() {
     setMoneyInputs((prev) => {
       const next =
         typeof update === "function" ? update(prev) ?? {} : update || {};
-      const { leagueId, leagueName, platform, scoring, fingerprint } =
+      const { leagueId, leagueName, platform, scoring } =
         getCurrentLeagueIdentity();
       upsertLeague({
         leagueId,
@@ -1935,7 +1980,6 @@ export default function App() {
         espnScheduleByYear: scheduleByYear,
         hiddenManagers: Array.from(hiddenManagers),
         leagueIcon,
-        leagueFingerprint: fingerprint,
       });
       return next;
     });
@@ -2001,8 +2045,548 @@ export default function App() {
         console.warn("FL_applyOwnerMergesNow failed:", e);
       }
     };
+
+    // ===========================
+    // NEW: hot-path ingest function
+    // ===========================
+    const bootstrapFromPayload = (data) => {
+      try {
+        if (!data || !Object.keys(data).length) {
+          console.warn("[FL] bootstrapFromPayload: no data");
+          rebuildFromStore();
+          return;
+        }
+
+        window.__FL_PAYLOAD = data;
+        (function normalizePickupsPayload(p) {
+          let txByYear = {};
+          let weeklyByYear = {};
+          if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
+            txByYear = p.transactionsSlim;
+          }
+          if (
+            p &&
+            p.weeklyPointsByPlayer &&
+            !Array.isArray(p.weeklyPointsByPlayer)
+          ) {
+            weeklyByYear = p.weeklyPointsByPlayer;
+          }
+          if (
+            (!txByYear || !Object.keys(txByYear).length) &&
+            Array.isArray(p?.seasons)
+          ) {
+            p.seasons.forEach((s) => {
+              const y = Number(s?.seasonId);
+              if (!y) return;
+              if (
+                Array.isArray(s?.transactionsSlim) &&
+                s.transactionsSlim.length
+              ) {
+                txByYear[y] = s.transactionsSlim;
+              }
+            });
+          }
+          if (
+            (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
+            Array.isArray(p?.seasons)
+          ) {
+            p.seasons.forEach((s) => {
+              const y = Number(s?.seasonId);
+              if (!y) return;
+              if (
+                s?.weeklyPointsByPlayer &&
+                Object.keys(s.weeklyPointsByPlayer).length
+              ) {
+                weeklyByYear[y] = s.weeklyPointsByPlayer;
+              }
+            });
+          }
+          p.transactionsSlim = txByYear;
+          p.weeklyPointsByPlayer = weeklyByYear;
+          p.transactionsSlimFlat = Object.entries(txByYear).flatMap(
+            ([yr, arr]) =>
+              (Array.isArray(arr) ? arr : []).map((r) => ({
+                ...r,
+                seasonId: Number(yr),
+              }))
+          );
+        })(data);
+
+        const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+        if (typeof window !== "undefined") {
+          window.__espnSeasons = seasons;
+        }
+        const seasonsMap = Object.fromEntries(
+          seasons.map((s) => [Number(s.seasonId), s])
+        );
+        console.log("[FL][dbg] payload keys:", Object.keys(data || {}));
+        console.log("[FL][dbg] seasonsLen=", seasons.length);
+        setSeasonsByYear(seasonsMap);
+
+        const scheduleMap = Object.fromEntries(
+          (seasons || []).map((s) => [
+            Number(s?.seasonId),
+            Array.isArray(s?.schedule) ? s.schedule : [],
+          ])
+        );
+        setScheduleByYear(scheduleMap);
+
+        const currentWeekBySeasonMap =
+          data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
+            ? data.currentWeekByYear
+            : {};
+        setCurrentWeekBySeason(currentWeekBySeasonMap);
+
+        const playoffTeamsFromSeasons = {};
+        for (const s of seasons || []) {
+          const yr = Number(s?.seasonId);
+          if (!yr) continue;
+          const cnt =
+            Number(
+              s?.settings?.playoffTeamCount ??
+                s?.settings?.scheduleSettings?.playoffTeamCount ??
+                s?.playoffTeamCount ??
+                0
+            ) || 0;
+          playoffTeamsFromSeasons[yr] = cnt;
+        }
+        setPlayoffTeamsBySeason(playoffTeamsFromSeasons);
+
+        const playoffTeamsBySeasonMap = extractPlayoffTeamsBySeason(seasons);
+        setPlayoffTeamsBySeason(playoffTeamsBySeasonMap);
+
+        const legacy = Array.isArray(data.legacyRows) ? data.legacyRows : [];
+        const legacyLite = Array.isArray(data.legacySeasonsLite)
+          ? data.legacySeasonsLite
+          : [];
+        console.log(
+          "[FL][dbg] legacyRowsLen=",
+          legacy.length,
+          " legacyLiteLen=",
+          legacyLite.length
+        );
+
+        if (!seasons.length && !legacy.length) {
+          rebuildFromStore();
+          try {
+            window.name = "";
+          } catch {}
+          return;
+        }
+
+        const light = buildRowsLight(seasons);
+        const combinedRows = [...light.rows, ...light.txRows];
+        console.log(
+          "[FL][dbg] lightRowsLen=",
+          (light.rows || []).length,
+          " lightTxLen=",
+          (light.txRows || []).length,
+          " combinedRowsLen=",
+          combinedRows.length
+        );
+
+        let draftMinimal = buildDraftRich(seasons);
+        draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
+        draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
+        draftMinimal = attachPosFromPopup(
+          draftMinimal,
+          data.adpPosByYear || data.adpRichByYear || null
+        );
+        draftMinimal = overlayMissingPosByNameOnly(draftMinimal);
+        draftMinimal = attachPickPosFromDraftOrder(draftMinimal);
+        draftMinimal = attachFinishPosFromLocal(draftMinimal, "PPR");
+        setDraftByYear(draftMinimal);
+
+        function buildActivityFromSeasons(seasonsArr = []) {
+          const out = {};
+          seasonsArr.forEach((s) => {
+            const year = Number(s?.seasonId);
+            if (!year) return;
+            const members = new Map();
+            (s?.members || []).forEach((m) => {
+              const dn = m?.displayName || "";
+              const fn = m?.firstName || "";
+              const ln = m?.lastName || "";
+              const best = dn || `${fn} ${ln}`.trim() || "Unknown";
+              if (m?.id != null) members.set(m.id, best);
+            });
+            const ownerByTeam = new Map();
+            (s?.teams || []).forEach((t) => {
+              const ownerId =
+                t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+              if (t?.id != null)
+                ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
+            });
+            const yearMap = (out[year] = out[year] || {});
+            (s?.teams || []).forEach((t) => {
+              const owner = ownerByTeam.get(t?.id) || "Unknown";
+              const tc = t?.transactionCounter || {};
+              const row = yearMap[owner] || {
+                acquisitions: 0,
+                drops: 0,
+                trades: 0,
+                moveToActive: 0,
+                ir: 0,
+              };
+              row.acquisitions += Number(tc.acquisitions || 0);
+              row.drops += Number(tc.drops || 0);
+              row.trades += Number(tc.trades || 0);
+              row.moveToActive += Number(tc.moveToActive || 0);
+              row.ir += Number(tc.moveToIR || 0);
+              yearMap[owner] = row;
+            });
+          });
+          return out;
+        }
+        const activityNewRaw = buildActivityFromSeasons(seasons);
+
+        function buildLegacyActivityFromLite(legacyLiteArr) {
+          const out = {};
+          for (const s of legacyLiteArr || []) {
+            const year = Number(s?.seasonId);
+            if (!year) continue;
+
+            const idToName = {};
+            (s?.members || []).forEach((m) => {
+              const nm =
+                (m?.displayName || "").trim() ||
+                [m?.firstName || "", m?.lastName || ""].join(" ").trim();
+              if (m?.id && nm) idToName[m.id] = nm;
+            });
+
+            (s?.teams || []).forEach((t) => {
+              const owner =
+                idToName[t?.primaryOwner] ||
+                idToName[(t?.owners || [])[0]] ||
+                "Unknown";
+              const tc = t?.transactionCounter || {};
+              out[year] = out[year] || {};
+              const prev = out[year][owner] || {
+                acquisitions: 0,
+                drops: 0,
+                trades: 0,
+                moveToActive: 0,
+                ir: 0,
+              };
+              out[year][owner] = {
+                acquisitions: prev.acquisitions + (tc.acquisitions || 0),
+                drops: prev.drops + (tc.drops || 0),
+                trades: prev.trades + (tc.trades || 0),
+                moveToActive: prev.moveToActive + (tc.moveToActive || 0),
+                ir: prev.ir + (tc.moveToIR || 0),
+              };
+            });
+          }
+          return out;
+        }
+        const activityLegacyBySeason =
+          data.activityLegacyBySeason ||
+          buildLegacyActivityFromLite(legacyLite);
+
+        const activityPreMerge = {};
+        const addYear = (yr, map) => {
+          const y = Number(yr);
+          activityPreMerge[y] = activityPreMerge[y] || {};
+          Object.entries(map || {}).forEach(([owner, st]) => {
+            const prev = activityPreMerge[y][owner] || {
+              acquisitions: 0,
+              drops: 0,
+              trades: 0,
+              moveToActive: 0,
+              ir: 0,
+            };
+            activityPreMerge[y][owner] = {
+              acquisitions: prev.acquisitions + (st?.acquisitions || 0),
+              drops: prev.drops + (st?.drops || 0),
+              trades: prev.trades + (st?.trades || 0),
+              moveToActive: prev.moveToActive + (st?.moveToActive || 0),
+              ir: prev.ir + (st?.ir || 0),
+            };
+          });
+        };
+        Object.entries(activityNewRaw || {}).forEach(([yr, m]) =>
+          addYear(yr, m)
+        );
+        Object.entries(activityLegacyBySeason || {}).forEach(([yr, m]) =>
+          addYear(yr, m)
+        );
+        setActivityBySeason(activityPreMerge);
+
+        const legacyNorm = coerceLegacyRows(legacy, {
+          seasons,
+          leagueId: data.leagueId,
+          leagueName: data.leagueName,
+        });
+        const combinedPlusLegacy = preferRealMemberNames(
+          [...combinedRows, ...legacyNorm],
+          seasons
+        );
+        const provisional = buildFromRows(combinedPlusLegacy);
+        const candidateName = (
+          data.leagueName ||
+          light.leagueNameGuess ||
+          ""
+        ).trim();
+        const keys0 = provisional.leagues || [];
+        const meta0 = keys0.length
+          ? provisional.byLeague[keys0[0]]?.meta || {}
+          : {};
+        const storeBeforeImport = readStore();
+        const idCandidate = String(
+          data.leagueId ||
+            meta0.id ||
+            meta0.leagueId ||
+            meta0.espnLeagueId ||
+            ""
+        ).trim();
+        const nameCandidate =
+          candidateName ||
+          meta0.name ||
+          (idCandidate ? `League ${idCandidate}` : "");
+        const resolvedLeagueId = ensureUniqueLeagueId(
+          idCandidate,
+          nameCandidate,
+          storeBeforeImport
+        );
+        const resolvedLeagueName =
+          nameCandidate || `League ${resolvedLeagueId}`;
+        setSelectedLeagueId(resolvedLeagueId);
+        const savedForLeague =
+          storeBeforeImport.leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        if (
+          savedForLeague &&
+          Object.keys(savedForLeague).length > 0 &&
+          JSON.stringify(savedForLeague) !== JSON.stringify(moneyInputs)
+        ) {
+          setMoneyInputs(savedForLeague);
+        }
+
+        const rowsLocked = lockLeagueIdentity(
+          combinedPlusLegacy,
+          resolvedLeagueId,
+          resolvedLeagueName
+        );
+        const rawMergeMap = loadMergeMap(resolvedLeagueId);
+        const flatMergeMap = flattenMergeMap(rawMergeMap);
+        if (JSON.stringify(rawMergeMap) !== JSON.stringify(flatMergeMap)) {
+          saveMergeMap(resolvedLeagueId, flatMergeMap);
+        }
+        const rowsAfterMerges = (function apply() {
+          const keys = Object.keys(flatMergeMap || {});
+          if (!keys.length) return rowsLocked;
+          return rowsLocked.map((r) => {
+            const mgr = canonicalize(r.manager, flatMergeMap);
+            const opp = canonicalize(r.opponent, flatMergeMap);
+            return { ...r, manager: mgr, opponent: opp };
+          });
+        })();
+        let rowsFinal = rowsAfterMerges;
+        (() => {
+          const key = (r) =>
+            `${r.season}|${r.week}|${String(
+              r.team_name || ""
+            ).trim()}|${Math.round(Number(r.points_for) || 0)}|${Math.round(
+              Number(r.points_against) || 0
+            )}`;
+          const playoffMap = new Map(
+            (light.rows || []).map((r) => [key(r), r.is_playoff === true])
+          );
+          rowsFinal = (rowsAfterMerges || []).map((r) =>
+            r.is_playoff === true || r.is_playoff === false
+              ? r
+              : { ...r, is_playoff: !!playoffMap.get(key(r)) }
+          );
+        })();
+        const built = buildFromRows(rowsFinal);
+        setDerivedAll(built);
+        const keys = built.leagues || [];
+        const selectedKey =
+          keys.find(
+            (k) =>
+              (built.byLeague[k]?.meta?.name || "").trim() ===
+              resolvedLeagueName
+          ) ||
+          keys.find(
+            (k) =>
+              String(built.byLeague[k]?.meta?.id || "").trim() ===
+              resolvedLeagueId
+          ) ||
+          keys[0] ||
+          "";
+        if (selectedKey) setSelectedLeague(selectedKey);
+        console.log(
+          "[FL][dbg] built.leagues=",
+          keys,
+          " selectedKey=",
+          selectedKey
+        );
+        console.log(
+          "[FL][dbg] meta for selected:",
+          built.byLeague?.[selectedKey]?.meta
+        );
+
+        const adpSrc = {};
+        Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
+          adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
+            ? "FantasyPros (from extension)"
+            : "—";
+        });
+        const ownerMap =
+          data.ownerByTeamByYear && Object.keys(data.ownerByTeamByYear).length
+            ? data.ownerByTeamByYear
+            : (() => {
+                const tmp = {};
+                for (const s of seasons || []) {
+                  const yr = Number(s?.seasonId);
+                  if (!yr) continue;
+                  const memberName = {};
+                  (s?.members || []).forEach((m) => {
+                    const fn = (m?.firstName || "").trim();
+                    const ln = (m?.lastName || "").trim();
+                    const full = [fn, ln].filter(Boolean).join(" ").trim();
+                    const dn = (m?.displayName || "").trim();
+                    const preferred = full || dn || "Unknown";
+                    if (m?.id != null) memberName[m.id] = preferred;
+                  });
+                  const inner = {};
+                  (s?.teams || []).forEach((t) => {
+                    const ownerId =
+                      t?.primaryOwner || (t?.owners && t.owners[0]) || null;
+                    if (t?.id != null)
+                      inner[t.id] =
+                        (ownerId && memberName[ownerId]) || "Unknown";
+                  });
+                  tmp[yr] = inner;
+                }
+                return tmp;
+              })();
+        const teamNamesFromData = data.teamNamesByOwner || {};
+        const ownerFullByTeamByYear = (() => {
+          const out = {};
+          for (const s of seasons || []) {
+            const yr = Number(s?.seasonId);
+            if (!yr) continue;
+            const fullByMember = {};
+            (s?.members || []).forEach((m) => {
+              const fn = (m?.firstName || "").trim();
+              const ln = (m?.lastName || "").trim();
+              const full = [fn, ln].filter(Boolean).join(" ").trim();
+              const dn = (m?.displayName || "").trim();
+              if (m?.id != null) fullByMember[m.id] = full || dn || "Unknown";
+            });
+            const inner = {};
+            (s?.teams || []).forEach((t) => {
+              const ownerId =
+                t?.primaryOwner ||
+                (Array.isArray(t?.owners) && t.owners[0]) ||
+                null;
+              const tid = Number(t?.id);
+              if (!Number.isFinite(tid)) return;
+              inner[tid] = ownerId ? fullByMember[ownerId] : "Unknown";
+            });
+            out[yr] = inner;
+          }
+          return out;
+        })();
+        const rosterMap =
+          data.rostersByYear && Object.keys(data.rostersByYear).length
+            ? data.rostersByYear
+            : buildRostersByYear(seasons);
+        const lineupSlots = data.lineupSlotsByYear || {};
+        const rosterAcq = data.rosterAcqByYear || {};
+        const existingMoney =
+          readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
+        console.log("[FL][dbg] upsertLeague →", {
+          id: resolvedLeagueId,
+          name: resolvedLeagueName,
+          rowsFinalLen: rowsFinal.length,
+          seasonsLen: seasons.length,
+        });
+
+        upsertLeague({
+          leagueId: resolvedLeagueId,
+          leagueKey: selectedKey,
+          name: resolvedLeagueName,
+          platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
+          scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
+          rows: rowsFinal,
+          draftByYear: draftMinimal,
+          adpSourceByYear: adpSrc,
+          moneyInputs: mergedMoney,
+          activityBySeason: activityPreMerge,
+          espnTransactionsByYear: data.transactionsSlim || {},
+          espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
+          espnOwnerByTeamByYear: ownerMap,
+          espnTeamNamesByOwner: teamNamesFromData,
+          espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+          espnRostersByYear: rosterMap,
+          espnLineupSlotsByYear: lineupSlots,
+          espnRosterAcqByYear: rosterAcq,
+          espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
+          espnCurrentWeekBySeason: currentWeekBySeasonMap,
+          espnScheduleByYear: scheduleMap,
+          leagueIcon,
+        });
+        setTimeout(() => {
+          const s = readStore();
+          const backend =
+            typeof window.__FL_VOLATILE_STORE__ === "object"
+              ? "memory"
+              : sessionStorage.getItem(LS_KEY)
+              ? "sessionStorage"
+              : "localStorage";
+          console.log("[FL][dbg] store after upsert", {
+            backend,
+            ids: Object.keys(s.leaguesById || {}),
+            last: s.lastSelectedLeagueId,
+            rec: s.leaguesById?.[resolvedLeagueId]
+              ? {
+                  name: s.leaguesById[resolvedLeagueId].name,
+                  rows: (s.leaguesById[resolvedLeagueId].rows || []).length,
+                }
+              : null,
+          });
+        }, 0);
+
+        setOwnerByTeamByYear(ownerMap);
+        setTeamNamesByOwner(teamNamesFromData);
+        setRostersByYear(rosterMap);
+        setLineupSlotsByYear(lineupSlots);
+        setRosterAcqByYear(rosterAcq);
+        console.debug("Loaded from popup:", {
+          lineupSlotsByYear: Object.keys(lineupSlots || {}).length,
+          rosterAcqByYear: Object.keys(rosterAcq || {}).length,
+          rostersByYear: Object.keys(rosterMap || {}).length,
+        });
+
+        try {
+          sessionStorage.removeItem("FL_HANDOFF_RAW");
+        } catch {}
+        try {
+          window.name = "";
+        } catch {}
+
+        rebuildFromStore();
+      } catch (e) {
+        console.warn(
+          "bootstrapFromPayload failed; falling back to stored leagues:",
+          e
+        );
+        rebuildFromStore();
+      }
+    };
+
+    // expose live handler so the popup can add leagues without reloading
+    if (typeof window !== "undefined") {
+      window.FL_HANDLE_EXTENSION_PAYLOAD = (p) => {
+        window.__FL_HANDOFF = p;
+        bootstrapFromPayload(p);
+      };
+    }
+
+    // cold boot path (unchanged: read from handoff channels once)
     try {
-      // Prefer the probe; fall back to sessionStorage; then window.name
       const data =
         window.__FL_HANDOFF ||
         (() => {
@@ -2029,514 +2613,7 @@ export default function App() {
         return;
       }
 
-      window.__FL_PAYLOAD = data;
-      (function normalizePickupsPayload(p) {
-        let txByYear = {};
-        let weeklyByYear = {};
-        if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
-          txByYear = p.transactionsSlim;
-        }
-        if (
-          p &&
-          p.weeklyPointsByPlayer &&
-          !Array.isArray(p.weeklyPointsByPlayer)
-        ) {
-          weeklyByYear = p.weeklyPointsByPlayer;
-        }
-        if (
-          (!txByYear || !Object.keys(txByYear).length) &&
-          Array.isArray(p?.seasons)
-        ) {
-          p.seasons.forEach((s) => {
-            const y = Number(s?.seasonId);
-            if (!y) return;
-            if (
-              Array.isArray(s?.transactionsSlim) &&
-              s.transactionsSlim.length
-            ) {
-              txByYear[y] = s.transactionsSlim;
-            }
-          });
-        }
-        if (
-          (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
-          Array.isArray(p?.seasons)
-        ) {
-          p.seasons.forEach((s) => {
-            const y = Number(s?.seasonId);
-            if (!y) return;
-            if (
-              s?.weeklyPointsByPlayer &&
-              Object.keys(s.weeklyPointsByPlayer).length
-            ) {
-              weeklyByYear[y] = s.weeklyPointsByPlayer;
-            }
-          });
-        }
-        p.transactionsSlim = txByYear;
-        p.weeklyPointsByPlayer = weeklyByYear;
-        p.transactionsSlimFlat = Object.entries(txByYear).flatMap(([yr, arr]) =>
-          (Array.isArray(arr) ? arr : []).map((r) => ({
-            ...r,
-            seasonId: Number(yr),
-          }))
-        );
-      })(data);
-
-      const seasons = Array.isArray(data.seasons) ? data.seasons : [];
-      if (typeof window !== "undefined") {
-        window.__espnSeasons = seasons;
-      }
-      const seasonsMap = Object.fromEntries(
-        seasons.map((s) => [Number(s.seasonId), s])
-      );
-      // DEBUG: what did we actually receive?
-      console.log("[FL][dbg] payload keys:", Object.keys(data || {}));
-      console.log("[FL][dbg] seasonsLen=", seasons.length);
-
-      setSeasonsByYear(seasonsMap);
-      const scheduleMap = Object.fromEntries(
-        (seasons || []).map((s) => [
-          Number(s?.seasonId),
-          Array.isArray(s?.schedule) ? s.schedule : [],
-        ])
-      );
-      setScheduleByYear(scheduleMap);
-
-      // ✅ Prefer what popup already computed from ESPN json.status.currentMatchupPeriod
-      const currentWeekBySeasonMap =
-        data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
-          ? data.currentWeekByYear
-          : {};
-
-      setCurrentWeekBySeason(currentWeekBySeasonMap);
-      const playoffTeamsFromSeasons = {};
-      for (const s of seasons || []) {
-        const yr = Number(s?.seasonId);
-        if (!yr) continue;
-        const cnt =
-          Number(
-            s?.settings?.playoffTeamCount ??
-              s?.settings?.scheduleSettings?.playoffTeamCount ??
-              s?.playoffTeamCount ??
-              0
-          ) || 0;
-        playoffTeamsFromSeasons[yr] = cnt;
-      }
-      setPlayoffTeamsBySeason(playoffTeamsFromSeasons);
-
-      const playoffTeamsBySeasonMap = extractPlayoffTeamsBySeason(seasons);
-      setPlayoffTeamsBySeason(playoffTeamsBySeasonMap);
-      const legacy = Array.isArray(data.legacyRows) ? data.legacyRows : [];
-      const legacyLite = Array.isArray(data.legacySeasonsLite)
-        ? data.legacySeasonsLite
-        : [];
-      console.log(
-        "[FL][dbg] legacyRowsLen=",
-        legacy.length,
-        " legacyLiteLen=",
-        legacyLite.length
-      );
-
-      if (!seasons.length && !legacy.length) {
-        rebuildFromStore();
-        window.name = "";
-        return;
-      }
-      const light = buildRowsLight(seasons);
-      const combinedRows = [...light.rows, ...light.txRows];
-      console.log(
-        "[FL][dbg] lightRowsLen=",
-        (light.rows || []).length,
-        " lightTxLen=",
-        (light.txRows || []).length,
-        " combinedRowsLen=",
-        combinedRows.length
-      );
-
-      let draftMinimal = buildDraftRich(seasons);
-      draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
-      draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
-      draftMinimal = attachPosFromPopup(
-        draftMinimal,
-        data.adpPosByYear || data.adpRichByYear || null
-      );
-      draftMinimal = overlayMissingPosByNameOnly(draftMinimal);
-      draftMinimal = attachPickPosFromDraftOrder(draftMinimal);
-      draftMinimal = attachFinishPosFromLocal(draftMinimal, "PPR"); // optional
-      setDraftByYear(draftMinimal);
-      function buildActivityFromSeasons(seasonsArr = []) {
-        const out = {};
-        seasonsArr.forEach((s) => {
-          const year = Number(s?.seasonId);
-          if (!year) return;
-          const members = new Map();
-          (s?.members || []).forEach((m) => {
-            const dn = m?.displayName || "";
-            const fn = m?.firstName || "";
-            const ln = m?.lastName || "";
-            const best = dn || `${fn} ${ln}`.trim() || "Unknown";
-            if (m?.id != null) members.set(m.id, best);
-          });
-          const ownerByTeam = new Map();
-          (s?.teams || []).forEach((t) => {
-            const ownerId =
-              t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-            if (t?.id != null)
-              ownerByTeam.set(t.id, members.get(ownerId) || "Unknown");
-          });
-          const yearMap = (out[year] = out[year] || {});
-          (s?.teams || []).forEach((t) => {
-            const owner = ownerByTeam.get(t?.id) || "Unknown";
-            const tc = t?.transactionCounter || {};
-            const row = yearMap[owner] || {
-              acquisitions: 0,
-              drops: 0,
-              trades: 0,
-              moveToActive: 0,
-              ir: 0,
-            };
-            row.acquisitions += Number(tc.acquisitions || 0);
-            row.drops += Number(tc.drops || 0);
-            row.trades += Number(tc.trades || 0);
-            row.moveToActive += Number(tc.moveToActive || 0);
-            row.ir += Number(tc.moveToIR || 0);
-            yearMap[owner] = row;
-          });
-        });
-        return out;
-      }
-      const activityNewRaw = buildActivityFromSeasons(seasons);
-
-      function buildLegacyActivityFromLite(legacyLiteArr) {
-        const out = {};
-        for (const s of legacyLiteArr || []) {
-          const year = Number(s?.seasonId);
-          if (!year) continue;
-
-          const idToName = {};
-          (s?.members || []).forEach((m) => {
-            const nm =
-              (m?.displayName || "").trim() ||
-              [m?.firstName || "", m?.lastName || ""].join(" ").trim();
-            if (m?.id && nm) idToName[m.id] = nm;
-          });
-
-          (s?.teams || []).forEach((t) => {
-            const owner =
-              idToName[t?.primaryOwner] ||
-              idToName[(t?.owners || [])[0]] ||
-              "Unknown";
-            const tc = t?.transactionCounter || {};
-            out[year] = out[year] || {};
-            const prev = out[year][owner] || {
-              acquisitions: 0,
-              drops: 0,
-              trades: 0,
-              moveToActive: 0,
-              ir: 0,
-            };
-            out[year][owner] = {
-              acquisitions: prev.acquisitions + (tc.acquisitions || 0),
-              drops: prev.drops + (tc.drops || 0),
-              trades: prev.trades + (tc.trades || 0),
-              moveToActive: prev.moveToActive + (tc.moveToActive || 0),
-              ir: prev.ir + (tc.moveToIR || 0),
-            };
-          });
-        }
-        return out;
-      }
-      const activityLegacyBySeason =
-        data.activityLegacyBySeason || buildLegacyActivityFromLite(legacyLite);
-
-      const activityPreMerge = {};
-      const addYear = (yr, map) => {
-        const y = Number(yr);
-        activityPreMerge[y] = activityPreMerge[y] || {};
-        Object.entries(map || {}).forEach(([owner, st]) => {
-          const prev = activityPreMerge[y][owner] || {
-            acquisitions: 0,
-            drops: 0,
-            trades: 0,
-            moveToActive: 0,
-            ir: 0,
-          };
-          activityPreMerge[y][owner] = {
-            acquisitions: prev.acquisitions + (st?.acquisitions || 0),
-            drops: prev.drops + (st?.drops || 0),
-            trades: prev.trades + (st?.trades || 0),
-            moveToActive: prev.moveToActive + (st?.moveToActive || 0),
-            ir: prev.ir + (st?.ir || 0),
-          };
-        });
-      };
-      Object.entries(activityNewRaw || {}).forEach(([yr, m]) => addYear(yr, m));
-      Object.entries(activityLegacyBySeason || {}).forEach(([yr, m]) =>
-        addYear(yr, m)
-      );
-      setActivityBySeason(activityPreMerge);
-      const legacyNorm = coerceLegacyRows(legacy, {
-        seasons,
-        leagueId: data.leagueId,
-        leagueName: data.leagueName,
-      });
-      const combinedPlusLegacy = preferRealMemberNames(
-        [...combinedRows, ...legacyNorm],
-        seasons
-      );
-      const provisional = buildFromRows(combinedPlusLegacy);
-      const candidateName = (
-        data.leagueName ||
-        light.leagueNameGuess ||
-        ""
-      ).trim();
-      const keys0 = provisional.leagues || [];
-      const meta0 = keys0.length
-        ? provisional.byLeague[keys0[0]]?.meta || {}
-        : {};
-      const storeBeforeImport = readStore();
-      const idCandidate = String(
-        data.leagueId || meta0.id || meta0.leagueId || meta0.espnLeagueId || ""
-      ).trim();
-      const nameCandidate =
-        candidateName ||
-        meta0.name ||
-        (idCandidate ? `League ${idCandidate}` : "");
-      const resolvedLeagueId = ensureUniqueLeagueId(
-        idCandidate,
-        nameCandidate,
-        storeBeforeImport
-      );
-      const resolvedLeagueName = nameCandidate || `League ${resolvedLeagueId}`;
-      // Make the just-imported league the active one in UI state
-      setSelectedLeagueId(resolvedLeagueId);
-      const savedForLeague =
-        storeBeforeImport.leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
-      if (
-        savedForLeague &&
-        Object.keys(savedForLeague).length > 0 &&
-        JSON.stringify(savedForLeague) !== JSON.stringify(moneyInputs)
-      ) {
-        setMoneyInputs(savedForLeague);
-      }
-
-      const rowsLocked = lockLeagueIdentity(
-        combinedPlusLegacy,
-        resolvedLeagueId,
-        resolvedLeagueName
-      );
-      const rawMergeMap = loadMergeMap(resolvedLeagueId);
-      const flatMergeMap = flattenMergeMap(rawMergeMap);
-      if (JSON.stringify(rawMergeMap) !== JSON.stringify(flatMergeMap)) {
-        saveMergeMap(resolvedLeagueId, flatMergeMap);
-      }
-      const rowsAfterMerges = (function apply() {
-        const keys = Object.keys(flatMergeMap || {});
-        if (!keys.length) return rowsLocked;
-        return rowsLocked.map((r) => {
-          const mgr = canonicalize(r.manager, flatMergeMap);
-          const opp = canonicalize(r.opponent, flatMergeMap);
-          return { ...r, manager: mgr, opponent: opp };
-        });
-      })();
-      let rowsFinal = rowsAfterMerges;
-      (() => {
-        const key = (r) =>
-          `${r.season}|${r.week}|${String(
-            r.team_name || ""
-          ).trim()}|${Math.round(Number(r.points_for) || 0)}|${Math.round(
-            Number(r.points_against) || 0
-          )}`;
-        const playoffMap = new Map(
-          (light.rows || []).map((r) => [key(r), r.is_playoff === true])
-        );
-        rowsFinal = (rowsAfterMerges || []).map((r) =>
-          r.is_playoff === true || r.is_playoff === false
-            ? r
-            : { ...r, is_playoff: !!playoffMap.get(key(r)) }
-        );
-      })();
-      const built = buildFromRows(rowsFinal);
-      setDerivedAll(built);
-      const keys = built.leagues || [];
-      const selectedKey =
-        keys.find(
-          (k) =>
-            (built.byLeague[k]?.meta?.name || "").trim() === resolvedLeagueName
-        ) ||
-        keys.find(
-          (k) =>
-            String(built.byLeague[k]?.meta?.id || "").trim() ===
-            resolvedLeagueId
-        ) ||
-        keys[0] ||
-        "";
-      if (selectedKey) setSelectedLeague(selectedKey);
-      console.log(
-        "[FL][dbg] built.leagues=",
-        keys,
-        " selectedKey=",
-        selectedKey
-      );
-      console.log(
-        "[FL][dbg] meta for selected:",
-        built.byLeague?.[selectedKey]?.meta
-      );
-
-      const finalFingerprint = computeLeagueFingerprint(
-        rowsFinal,
-        seasons,
-        {
-          ...(built.byLeague?.[selectedKey]?.meta || meta0),
-          owners: built.byLeague?.[selectedKey]?.owners || [],
-        }
-      );
-
-      const adpSrc = {};
-      Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
-        adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
-          ? "FantasyPros (from extension)"
-          : "—";
-      });
-      const ownerMap =
-        data.ownerByTeamByYear && Object.keys(data.ownerByTeamByYear).length
-          ? data.ownerByTeamByYear
-          : (() => {
-              const tmp = {};
-              for (const s of seasons || []) {
-                const yr = Number(s?.seasonId);
-                if (!yr) continue;
-                const memberName = {};
-                (s?.members || []).forEach((m) => {
-                  const fn = (m?.firstName || "").trim();
-                  const ln = (m?.lastName || "").trim();
-                  const full = [fn, ln].filter(Boolean).join(" ").trim();
-                  const dn = (m?.displayName || "").trim();
-                  const preferred = full || dn || "Unknown";
-                  if (m?.id != null) memberName[m.id] = preferred;
-                });
-                const inner = {};
-                (s?.teams || []).forEach((t) => {
-                  const ownerId =
-                    t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-                  if (t?.id != null)
-                    inner[t.id] = (ownerId && memberName[ownerId]) || "Unknown";
-                });
-                tmp[yr] = inner;
-              }
-              return tmp;
-            })();
-      const teamNamesFromData = data.teamNamesByOwner || {};
-      const ownerFullByTeamByYear = (() => {
-        const out = {};
-        for (const s of seasons || []) {
-          const yr = Number(s?.seasonId);
-          if (!yr) continue;
-          const fullByMember = {};
-          (s?.members || []).forEach((m) => {
-            const fn = (m?.firstName || "").trim();
-            const ln = (m?.lastName || "").trim();
-            const full = [fn, ln].filter(Boolean).join(" ").trim();
-            const dn = (m?.displayName || "").trim();
-            if (m?.id != null) fullByMember[m.id] = full || dn || "Unknown";
-          });
-          const inner = {};
-          (s?.teams || []).forEach((t) => {
-            const ownerId =
-              t?.primaryOwner ||
-              (Array.isArray(t?.owners) && t.owners[0]) ||
-              null;
-            const tid = Number(t?.id);
-            if (!Number.isFinite(tid)) return;
-            inner[tid] = ownerId ? fullByMember[ownerId] : "Unknown";
-          });
-          out[yr] = inner;
-        }
-        return out;
-      })();
-      const rosterMap =
-        data.rostersByYear && Object.keys(data.rostersByYear).length
-          ? data.rostersByYear
-          : buildRostersByYear(seasons);
-      const lineupSlots = data.lineupSlotsByYear || {};
-      const rosterAcq = data.rosterAcqByYear || {};
-      const existingMoney =
-        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
-      const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
-      console.log("[FL][dbg] upsertLeague →", {
-        id: resolvedLeagueId,
-        name: resolvedLeagueName,
-        rowsFinalLen: rowsFinal.length,
-        seasonsLen: seasons.length,
-      });
-
-      upsertLeague({
-        leagueId: resolvedLeagueId,
-        leagueKey: selectedKey,
-        name: resolvedLeagueName,
-        platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
-        scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
-        rows: rowsFinal,
-        draftByYear: draftMinimal,
-        adpSourceByYear: adpSrc,
-        moneyInputs: mergedMoney,
-        activityBySeason: activityPreMerge,
-        espnTransactionsByYear: data.transactionsSlim || {},
-        espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
-        espnOwnerByTeamByYear: ownerMap,
-        espnTeamNamesByOwner: teamNamesFromData,
-        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
-        espnRostersByYear: rosterMap,
-        espnLineupSlotsByYear: lineupSlots,
-        espnRosterAcqByYear: rosterAcq,
-        espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
-        espnCurrentWeekBySeason: currentWeekBySeasonMap,
-        espnScheduleByYear: scheduleMap,
-        leagueIcon,
-        leagueFingerprint: finalFingerprint,
-      });
-      setTimeout(() => {
-        const s = readStore();
-        const backend =
-          typeof window.__FL_VOLATILE_STORE__ === "object"
-            ? "memory"
-            : sessionStorage.getItem(LS_KEY)
-            ? "sessionStorage"
-            : "localStorage";
-        console.log("[FL][dbg] store after upsert", {
-          backend,
-          ids: Object.keys(s.leaguesById || {}),
-          last: s.lastSelectedLeagueId,
-          rec: s.leaguesById?.[resolvedLeagueId]
-            ? {
-                name: s.leaguesById[resolvedLeagueId].name,
-                rows: (s.leaguesById[resolvedLeagueId].rows || []).length,
-              }
-            : null,
-        });
-      }, 0);
-
-      setOwnerByTeamByYear(ownerMap);
-      setTeamNamesByOwner(teamNamesFromData);
-      setRostersByYear(rosterMap);
-      setLineupSlotsByYear(lineupSlots);
-      setRosterAcqByYear(rosterAcq);
-      console.debug("Loaded from popup:", {
-        lineupSlotsByYear: Object.keys(lineupSlots || {}).length,
-        rosterAcqByYear: Object.keys(rosterAcq || {}).length,
-        rostersByYear: Object.keys(rosterMap || {}).length,
-      });
-
-      // ✅ one-time import: kill handoff so old payloads don't reappear later
-      try {
-        sessionStorage.removeItem("FL_HANDOFF_RAW");
-      } catch {}
-      try {
-        window.name = "";
-      } catch {}
-
-      rebuildFromStore();
+      bootstrapFromPayload(data);
     } catch (e) {
       console.warn("Bootstrap failed; falling back to stored leagues:", e);
       rebuildFromStore();
@@ -2701,8 +2778,7 @@ export default function App() {
   }));
 
   function getCurrentLeagueIdentity() {
-    const leagueObj = derivedAll?.byLeague?.[selectedLeague] || {};
-    const meta = leagueObj?.meta || {};
+    const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
     const leagueId =
       String(
         meta.id ??
@@ -2717,19 +2793,7 @@ export default function App() {
     const leagueName = meta.name || "Your Fantasy League";
     const platform = meta.platform || "ESPN";
     const scoring = meta.scoring || "Standard";
-    const fingerprint = computeLeagueFingerprint(
-      rawRows,
-      Object.values(seasonsByYear || {}),
-      { ...meta, owners: leagueObj?.owners || [] }
-    );
-    return {
-      leagueId,
-      leagueName,
-      platform,
-      scoring,
-      meta: { ...meta, owners: leagueObj?.owners || [] },
-      fingerprint,
-    };
+    return { leagueId, leagueName, platform, scoring, meta };
   }
 
   function normalizeLeagueIcon(nextIcon, prevIcon) {
@@ -2771,7 +2835,7 @@ export default function App() {
   function savePlayoffOverrides(nextOverrides) {
     const safe = nextOverrides || {};
     setPlayoffTeamsOverrides(safe);
-    const { leagueId, leagueName, platform, scoring, fingerprint } =
+    const { leagueId, leagueName, platform, scoring } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2796,7 +2860,6 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
-      leagueFingerprint: fingerprint,
     });
   }
 
@@ -2806,27 +2869,8 @@ export default function App() {
     setDerivedAll(built);
     setRawRows(all);
 
-    const { leagueId, leagueName, platform, scoring, fingerprint, meta } =
+    const { leagueId, leagueName, platform, scoring } =
       getCurrentLeagueIdentity();
-    const builtKeys = built.leagues || [];
-    const metaForFingerprint =
-      (built.byLeague?.[selectedLeague] && {
-        ...built.byLeague[selectedLeague]?.meta,
-        owners: built.byLeague[selectedLeague]?.owners || [],
-      }) ||
-      (builtKeys.length && built.byLeague?.[builtKeys[0]]
-        ? {
-            ...built.byLeague[builtKeys[0]]?.meta,
-            owners: built.byLeague[builtKeys[0]]?.owners || [],
-          }
-        : null) ||
-      meta ||
-      {};
-    const updatedFingerprint = computeLeagueFingerprint(
-      all,
-      Object.values(seasonsByYear || {}),
-      metaForFingerprint
-    );
     upsertLeague({
       leagueId,
       leagueKey: selectedLeague,
@@ -2847,14 +2891,13 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
-      leagueFingerprint: updatedFingerprint || fingerprint,
     });
   }
 
   function handleLeagueIconChange(nextIcon) {
     const normalized = normalizeLeagueIcon(nextIcon, leagueIcon);
     setLeagueIcon(normalized);
-    const { leagueId, leagueName, platform, scoring, fingerprint } =
+    const { leagueId, leagueName, platform, scoring } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2877,7 +2920,6 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon: normalized,
-      leagueFingerprint: fingerprint,
     });
   }
   const headerIconIsUpload =
@@ -3100,13 +3142,7 @@ export default function App() {
                   onChangeHiddenManagers={(nextSet) => {
                     const nextArr = Array.from(nextSet || []);
                     setHiddenManagers(new Set(nextArr));
-                    const {
-                      leagueId,
-                      leagueName,
-                      platform,
-                      scoring,
-                      fingerprint,
-                    } =
+                    const { leagueId, leagueName, platform, scoring } =
                       getCurrentLeagueIdentity();
                     upsertLeague({
                       leagueId,
@@ -3131,7 +3167,6 @@ export default function App() {
                       espnScheduleByYear: scheduleByYear,
                       hiddenManagers: nextArr,
                       leagueIcon,
-                      leagueFingerprint: fingerprint,
                     });
                   }}
                   leagueIcon={leagueIcon}
