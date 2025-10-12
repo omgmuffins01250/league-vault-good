@@ -26,7 +26,6 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { parsePayloadString } from "../utils/payloadEncoding";
 
 /* NEW: ESPN activity extractor                                       */
 /**
@@ -3321,7 +3320,14 @@ const __RECAP_SLOT_LABEL = {
   21: "IR",
   23: "FLEX",
 };
-const __RECAP_POS_LABEL = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST" };
+const __RECAP_POS_LABEL = {
+  1: "QB",
+  2: "RB",
+  3: "WR",
+  4: "TE",
+  5: "K",
+  16: "DST",
+};
 const __RECAP_SLOT_ORDER = [0, 2, 3, 4, 6, 7, 23, 16, 17, 21, 20];
 
 const __recapEntrySlotId = (e) =>
@@ -3401,12 +3407,7 @@ function __resolveCurrentWeekExclusiveSimple(
   return Math.max(...candidates);
 }
 
-function __resolveTeamIdForOwner({
-  league,
-  season,
-  ownerByTeamByYear,
-  owner,
-}) {
+function __resolveTeamIdForOwner({ league, season, ownerByTeamByYear, owner }) {
   const ownerNameVal = String(owner || "").trim();
   if (!ownerNameVal) return null;
   const seasonNum = Number(season);
@@ -3596,7 +3597,8 @@ function __buildTeamWeekTotalsForSeason({
   const totals = {};
   const seasonNum = Number(season);
   if (!Number.isFinite(seasonNum)) return totals;
-  const byTeam = rostersByYear?.[seasonNum] || rostersByYear?.[String(seasonNum)] || {};
+  const byTeam =
+    rostersByYear?.[seasonNum] || rostersByYear?.[String(seasonNum)] || {};
   const capExclusive = __resolveCurrentWeekExclusiveSimple(
     league,
     currentWeekByYear,
@@ -3923,7 +3925,13 @@ export function YearlyRecapTab({
       }`,
       detail: `Manager ${champion.owner} ${titleLabel}`,
     };
-  }, [champion, championTeamName, league?.members, league?.placementMap, latestSeason]);
+  }, [
+    champion,
+    championTeamName,
+    league?.members,
+    league?.placementMap,
+    latestSeason,
+  ]);
 
   const [selectedOwner, setSelectedOwner] = React.useState(
     champion?.owner || null
@@ -3932,8 +3940,8 @@ export function YearlyRecapTab({
     setSelectedOwner(champion?.owner || null);
   }, [champion?.owner, latestSeason]);
 
-  const selectedPlacement = topThree.find((p) => p.owner === selectedOwner) ||
-    null;
+  const selectedPlacement =
+    topThree.find((p) => p.owner === selectedOwner) || null;
 
   const canonicalSelectedOwner = React.useMemo(() => {
     return selectedOwner ? canonicalizeOwner(selectedOwner) : "";
@@ -3941,18 +3949,17 @@ export function YearlyRecapTab({
 
   const teamIdsForOwner = React.useMemo(() => {
     if (!selectedOwner || !Number.isFinite(latestSeason)) return [];
-    const map = ownerByTeamByYear?.[latestSeason] ||
-      ownerByTeamByYear?.[String(latestSeason)] || {};
+    const map =
+      ownerByTeamByYear?.[latestSeason] ||
+      ownerByTeamByYear?.[String(latestSeason)] ||
+      {};
     return Object.entries(map)
-      .filter(([, owner]) => canonicalizeOwner(owner) === canonicalSelectedOwner)
+      .filter(
+        ([, owner]) => canonicalizeOwner(owner) === canonicalSelectedOwner
+      )
       .map(([teamId]) => Number(teamId))
       .filter(Number.isFinite);
-  }, [
-    selectedOwner,
-    canonicalSelectedOwner,
-    ownerByTeamByYear,
-    latestSeason,
-  ]);
+  }, [selectedOwner, canonicalSelectedOwner, ownerByTeamByYear, latestSeason]);
 
   const seasonTeamTotals = React.useMemo(
     () =>
@@ -3963,13 +3970,7 @@ export function YearlyRecapTab({
         currentWeekByYear,
         season: latestSeason,
       }),
-    [
-      rostersByYear,
-      lineupSlotsByYear,
-      league,
-      currentWeekByYear,
-      latestSeason,
-    ]
+    [rostersByYear, lineupSlotsByYear, league, currentWeekByYear, latestSeason]
   );
 
   const gamesThisSeason = React.useMemo(
@@ -4135,13 +4136,7 @@ export function YearlyRecapTab({
         teamWeekTotals: seasonTeamTotals,
         hiddenManagers: hiddenManagersSet,
       }),
-    [
-      league,
-      latestSeason,
-      gamesThisSeason,
-      seasonTeamTotals,
-      hiddenManagersSet,
-    ]
+    [league, latestSeason, gamesThisSeason, seasonTeamTotals, hiddenManagersSet]
   );
 
   const mostWins = React.useMemo(() => {
@@ -4153,9 +4148,10 @@ export function YearlyRecapTab({
     return best;
   }, [seasonWins]);
 
-  const previousSeason = completedSeasons.length > 1
-    ? completedSeasons[completedSeasons.length - 2]
-    : null;
+  const previousSeason =
+    completedSeasons.length > 1
+      ? completedSeasons[completedSeasons.length - 2]
+      : null;
 
   const improvement = React.useMemo(() => {
     if (!Number.isFinite(latestSeason) || !Number.isFinite(previousSeason)) {
@@ -4180,12 +4176,7 @@ export function YearlyRecapTab({
       }
     });
     return { mostImproved: best, biggestDrop: worst };
-  }, [
-    latestSeason,
-    previousSeason,
-    winsBySeason,
-    hiddenManagersSet,
-  ]);
+  }, [latestSeason, previousSeason, winsBySeason, hiddenManagersSet]);
 
   if (!Number.isFinite(latestSeason) || !championSummary) {
     return (
@@ -4234,11 +4225,7 @@ export function YearlyRecapTab({
                 }`}
               >
                 <span className="text-4xl" aria-hidden>
-                  {entry.place === 1
-                    ? "🥇"
-                    : entry.place === 2
-                    ? "🥈"
-                    : "🥉"}
+                  {entry.place === 1 ? "🥇" : entry.place === 2 ? "🥈" : "🥉"}
                 </span>
                 <div className="text-xs uppercase tracking-[0.4em] text-slate-600/80 dark:text-slate-800/80">
                   {ordinal(entry.place)}
@@ -4262,9 +4249,7 @@ export function YearlyRecapTab({
         subtitle={
           selectedPlacement
             ? `${selectedPlacement.owner} · Week ${
-                rosterForSelected.week != null
-                  ? rosterForSelected.week
-                  : "—"
+                rosterForSelected.week != null ? rosterForSelected.week : "—"
               }`
             : "Select a finalist to view their roster"
         }
@@ -4272,50 +4257,51 @@ export function YearlyRecapTab({
       >
         {selectedPlacement && rosterForSelected.entries.length ? (
           <div className="grid gap-6 lg:grid-cols-2">
-            {[{ label: "Starters", list: rosterGroups.starters }, { label: "Bench & Other", list: rosterGroups.bench }].map(
-              ({ label, list }) => (
-                <div key={label} className="space-y-3">
-                  <div className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
-                    {label}
-                  </div>
-                  <div className="space-y-2">
-                    {list.length ? (
-                      list.map((entry, idx) => {
-                        const slotId = Number(__recapEntrySlotId(entry));
-                        const slotLabel =
-                          __RECAP_SLOT_LABEL[slotId] || `Slot ${slotId}`;
-                        const posId = __recapEntryPosId(entry);
-                        const posLabel =
-                          posId != null ? __RECAP_POS_LABEL[posId] || "" : "";
-                        return (
-                          <div
-                            key={`${slotLabel}-${idx}`}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-white/40 bg-white/90 px-3 py-2 text-sm shadow-[0_16px_36px_-30px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70"
-                          >
-                            <div>
-                              <div className="font-semibold text-slate-800 dark:text-slate-100">
-                                {entry?.name || "Unknown Player"}
-                              </div>
-                              <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-                                {slotLabel}
-                                {posLabel ? ` • ${posLabel}` : ""}
-                              </div>
+            {[
+              { label: "Starters", list: rosterGroups.starters },
+              { label: "Bench & Other", list: rosterGroups.bench },
+            ].map(({ label, list }) => (
+              <div key={label} className="space-y-3">
+                <div className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                  {label}
+                </div>
+                <div className="space-y-2">
+                  {list.length ? (
+                    list.map((entry, idx) => {
+                      const slotId = Number(__recapEntrySlotId(entry));
+                      const slotLabel =
+                        __RECAP_SLOT_LABEL[slotId] || `Slot ${slotId}`;
+                      const posId = __recapEntryPosId(entry);
+                      const posLabel =
+                        posId != null ? __RECAP_POS_LABEL[posId] || "" : "";
+                      return (
+                        <div
+                          key={`${slotLabel}-${idx}`}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/40 bg-white/90 px-3 py-2 text-sm shadow-[0_16px_36px_-30px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-zinc-900/70"
+                        >
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">
+                              {entry?.name || "Unknown Player"}
                             </div>
-                            <div className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-300">
-                              {__fmtPts(__recapEntryPts(entry))}
+                            <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                              {slotLabel}
+                              {posLabel ? ` • ${posLabel}` : ""}
                             </div>
                           </div>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-white/50 px-4 py-6 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
-                        No data available.
-                      </div>
-                    )}
-                  </div>
+                          <div className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-300">
+                            {__fmtPts(__recapEntryPts(entry))}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/50 px-4 py-6 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                      No data available.
+                    </div>
+                  )}
                 </div>
-              )
-            )}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-white/50 px-4 py-6 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
@@ -4343,7 +4329,9 @@ export function YearlyRecapTab({
                 </div>
               </>
             ) : (
-              <div className="text-sm text-slate-500 dark:text-slate-400">No scoring data.</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                No scoring data.
+              </div>
             )}
           </div>
 
@@ -4361,7 +4349,9 @@ export function YearlyRecapTab({
                 </div>
               </>
             ) : (
-              <div className="text-sm text-slate-500 dark:text-slate-400">No win data.</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                No win data.
+              </div>
             )}
           </div>
 
@@ -4375,7 +4365,9 @@ export function YearlyRecapTab({
                   {improvement.mostImproved.owner}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-300">
-                  +{improvement.mostImproved.delta} win{improvement.mostImproved.delta === 1 ? "" : "s"} vs {previousSeason}
+                  +{improvement.mostImproved.delta} win
+                  {improvement.mostImproved.delta === 1 ? "" : "s"} vs{" "}
+                  {previousSeason}
                 </div>
               </>
             ) : (
@@ -4395,9 +4387,10 @@ export function YearlyRecapTab({
                   {improvement.biggestDrop.owner}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-300">
-                  {improvement.biggestDrop.delta}
-                  {" "}win
-                  {Math.abs(improvement.biggestDrop.delta) === 1 ? "" : "s"} vs {previousSeason}
+                  {improvement.biggestDrop.delta} win
+                  {Math.abs(improvement.biggestDrop.delta) === 1
+                    ? ""
+                    : "s"} vs {previousSeason}
                 </div>
               </>
             ) : (
@@ -4421,7 +4414,9 @@ export function YearlyRecapTab({
                 </div>
               </>
             ) : (
-              <div className="text-sm text-slate-500 dark:text-slate-400">Luck data unavailable.</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Luck data unavailable.
+              </div>
             )}
           </div>
 
@@ -4439,7 +4434,9 @@ export function YearlyRecapTab({
                 </div>
               </>
             ) : (
-              <div className="text-sm text-slate-500 dark:text-slate-400">Luck data unavailable.</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Luck data unavailable.
+              </div>
             )}
           </div>
         </div>
@@ -6724,7 +6721,7 @@ export function TradesTab({
       }
 
       // 2) If any alias is actually an ESPN "handle"/displayName, add that member's pretty name as an alias too
-      const payload = parsePayloadString(window.name) || {};
+      const payload = JSON.parse(window.name || "{}");
       const seasons = [
         ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
         ...(Array.isArray(payload?.legacySeasonsLite)
@@ -15141,7 +15138,9 @@ const SUBJECT_OPTIONS = [
     type: "last-manager",
     needsManager: true,
     prompt: ({ manager }) =>
-      manager ? `When was the last time ${manager}` : "When was the last time a manager",
+      manager
+        ? `When was the last time ${manager}`
+        : "When was the last time a manager",
     question: true,
   },
   {
@@ -15150,7 +15149,9 @@ const SUBJECT_OPTIONS = [
     type: "first-manager",
     needsManager: true,
     prompt: ({ manager }) =>
-      manager ? `When was the first time ${manager}` : "When was the first time a manager",
+      manager
+        ? `When was the first time ${manager}`
+        : "When was the first time a manager",
     question: true,
   },
   {
@@ -15183,7 +15184,9 @@ const SUBJECT_OPTIONS = [
     type: "count-manager",
     needsManager: true,
     prompt: ({ manager }) =>
-      manager ? `How many times has ${manager}` : "How many times has a manager",
+      manager
+        ? `How many times has ${manager}`
+        : "How many times has a manager",
     question: true,
   },
   {
@@ -15245,9 +15248,7 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
       inputs: [numberInput("value", "Points", "100", { min: 0, step: "0.1" })],
       defaultValues: { value: "100" },
       describe: ({ value }) =>
-        value
-          ? `scored ${value} or fewer points`
-          : "scored X or fewer points",
+        value ? `scored ${value} or fewer points` : "scored X or fewer points",
       getPredicate: ({ value }) => {
         const target = Number(value);
         if (!Number.isFinite(target)) return null;
@@ -15273,12 +15274,12 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
     {
       key: "pa_gte",
       label: "Allowed X or more points",
-      inputs: [numberInput("value", "Points Allowed", "140", { min: 0, step: "0.1" })],
+      inputs: [
+        numberInput("value", "Points Allowed", "140", { min: 0, step: "0.1" }),
+      ],
       defaultValues: { value: "140" },
       describe: ({ value }) =>
-        value
-          ? `allowed ${value}+ points`
-          : "allowed at least X points",
+        value ? `allowed ${value}+ points` : "allowed at least X points",
       getPredicate: ({ value }) => {
         const target = Number(value);
         if (!Number.isFinite(target)) return null;
@@ -15288,7 +15289,9 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
     {
       key: "pa_lte",
       label: "Allowed X or fewer points",
-      inputs: [numberInput("value", "Points Allowed", "90", { min: 0, step: "0.1" })],
+      inputs: [
+        numberInput("value", "Points Allowed", "90", { min: 0, step: "0.1" }),
+      ],
       defaultValues: { value: "90" },
       describe: ({ value }) =>
         value
@@ -15328,7 +15331,8 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
       describe: () => "had the top score of the week",
       getPredicate: (_, { weeklyTop }) => {
         return (record) => {
-          if (!record || record.season == null || record.week == null) return false;
+          if (!record || record.season == null || record.week == null)
+            return false;
           const key = `${record.season}__${record.week}`;
           const entry = weeklyTop.get(key);
           if (!entry) return false;
@@ -15343,7 +15347,8 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
       describe: () => "had the lowest score of the week",
       getPredicate: (_, { weeklyLow }) => {
         return (record) => {
-          if (!record || record.season == null || record.week == null) return false;
+          if (!record || record.season == null || record.week == null)
+            return false;
           const key = `${record.season}__${record.week}`;
           const entry = weeklyLow.get(key);
           if (!entry) return false;
@@ -15356,12 +15361,11 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
       label: "Was projected to win and lost",
       inputs: [],
       describe: () => "was projected to win but lost",
-      getPredicate: () =>
-        (record) =>
-          Number.isFinite(record.projFor) &&
-          Number.isFinite(record.projAgainst) &&
-          record.projFor > record.projAgainst &&
-          record.result === "L",
+      getPredicate: () => (record) =>
+        Number.isFinite(record.projFor) &&
+        Number.isFinite(record.projAgainst) &&
+        record.projFor > record.projAgainst &&
+        record.result === "L",
     },
     {
       key: "season_eq",
@@ -15395,8 +15399,7 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
           options: weekOptions,
         },
       ],
-      describe: ({ week }) =>
-        week ? `in week ${week}` : "in a chosen week",
+      describe: ({ week }) => (week ? `in week ${week}` : "in a chosen week"),
       getPredicate: ({ week }) => {
         const wk = Number(week);
         if (!Number.isFinite(wk)) return null;
@@ -15446,9 +15449,7 @@ function buildMetricDefinitions({ owners, seasons, weeks, nameFor }) {
       describe: ({ manager, week }) => {
         if (!manager) return "played manager Y in week N";
         const name = nameFor(manager);
-        return week
-          ? `played ${name} in week ${week}`
-          : `played ${name}`;
+        return week ? `played ${name} in week ${week}` : `played ${name}`;
       },
       getPredicate: ({ manager, week }) => {
         const opp = String(manager || "").trim();
@@ -15660,7 +15661,9 @@ export function QueryTab({ league }) {
       else if (resRaw.startsWith("L")) result = "L";
       else if (resRaw.startsWith("T")) result = "T";
 
-      const seasonType = String(g?.seasonType || g?.segment || "").toLowerCase();
+      const seasonType = String(
+        g?.seasonType || g?.segment || ""
+      ).toLowerCase();
       const isPlayoff =
         g?.is_playoff === true ||
         g?.isPlayoff === true ||
@@ -15824,7 +15827,8 @@ export function QueryTab({ league }) {
   }, [getDefaultValues, metricDefinitions, metricsByKey]);
 
   const subject = React.useMemo(
-    () => SUBJECT_OPTIONS.find((s) => s.key === subjectKey) || SUBJECT_OPTIONS[0],
+    () =>
+      SUBJECT_OPTIONS.find((s) => s.key === subjectKey) || SUBJECT_OPTIONS[0],
     [subjectKey]
   );
 
@@ -15936,7 +15940,9 @@ export function QueryTab({ league }) {
               step={input.step}
               min={input.min}
               max={input.max}
-              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+              onChange={(e) =>
+                updateConditionValue(row.id, input.key, e.target.value)
+              }
             />
           </div>
         );
@@ -15948,9 +15954,13 @@ export function QueryTab({ league }) {
             <select
               className={fieldClass}
               value={value}
-              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+              onChange={(e) =>
+                updateConditionValue(row.id, input.key, e.target.value)
+              }
             >
-              <option value="">{input.optional ? "Any" : input.placeholder || "Select"}</option>
+              <option value="">
+                {input.optional ? "Any" : input.placeholder || "Select"}
+              </option>
               {(input.options || []).map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -15967,7 +15977,9 @@ export function QueryTab({ league }) {
             <select
               className={fieldClass}
               value={value}
-              onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+              onChange={(e) =>
+                updateConditionValue(row.id, input.key, e.target.value)
+              }
             >
               <option value="">{input.placeholder || "Select"}</option>
               {ownerOptions.map((opt) => (
@@ -15987,7 +15999,9 @@ export function QueryTab({ league }) {
             className={fieldClass}
             value={value}
             placeholder={input.placeholder || ""}
-            onChange={(e) => updateConditionValue(row.id, input.key, e.target.value)}
+            onChange={(e) =>
+              updateConditionValue(row.id, input.key, e.target.value)
+            }
           />
         </div>
       );
@@ -16000,20 +16014,24 @@ export function QueryTab({ league }) {
     setSubjectKey(entry.subjectKey || SUBJECT_OPTIONS[0].key);
     setSubjectManager(entry.subjectManager || "");
     setConditions(() => {
-      const rows = Array.isArray(entry.conditions) && entry.conditions.length
-        ? entry.conditions
-        : [
-            {
-              metricKey: DEFAULT_METRIC_KEY,
-              values: { value: "150" },
-              conj: "AND",
-            },
-          ];
+      const rows =
+        Array.isArray(entry.conditions) && entry.conditions.length
+          ? entry.conditions
+          : [
+              {
+                metricKey: DEFAULT_METRIC_KEY,
+                values: { value: "150" },
+                conj: "AND",
+              },
+            ];
       return rows.map((row) => ({
         id: nextIdRef.current++,
         metricKey: row.metricKey || DEFAULT_METRIC_KEY,
         values: Object.fromEntries(
-          Object.entries(row.values || {}).map(([k, v]) => [k, v == null ? "" : String(v)])
+          Object.entries(row.values || {}).map(([k, v]) => [
+            k,
+            v == null ? "" : String(v),
+          ])
         ),
         conj: row.conj === "OR" ? "OR" : "AND",
       }));
@@ -16024,7 +16042,8 @@ export function QueryTab({ league }) {
 
   const deleteSavedQuery = (id) => {
     const doDelete =
-      typeof window === "undefined" || window.confirm("Delete this saved query?");
+      typeof window === "undefined" ||
+      window.confirm("Delete this saved query?");
     if (!doDelete) return;
     setSavedQueries((prev) => prev.filter((q) => String(q.id) !== String(id)));
     setSelectedSavedId("");
@@ -16064,7 +16083,10 @@ export function QueryTab({ league }) {
       return;
     }
 
-    const context = { weeklyTop: prepared.weeklyTop, weeklyLow: prepared.weeklyLow };
+    const context = {
+      weeklyTop: prepared.weeklyTop,
+      weeklyLow: prepared.weeklyLow,
+    };
     const invalid = [];
     const active = [];
     conditions.forEach((row, index) => {
@@ -16149,7 +16171,8 @@ export function QueryTab({ league }) {
       const slot = aggregate.get(rec.owner);
       slot.count += 1;
       if (!slot.latest || compareDesc(rec, slot.latest) < 0) slot.latest = rec;
-      if (!slot.earliest || compareDesc(rec, slot.earliest) > 0) slot.earliest = rec;
+      if (!slot.earliest || compareDesc(rec, slot.earliest) > 0)
+        slot.earliest = rec;
     });
 
     const ranking = ownerOptions.map(({ canonical }) => {
@@ -16202,7 +16225,9 @@ export function QueryTab({ league }) {
             sorted.slice(0, 20),
             "desc",
             sorted.length,
-            sorted.length ? null : `No matches found for ${managerName || "that manager"}.`
+            sorted.length
+              ? null
+              : `No matches found for ${managerName || "that manager"}.`
           )
         );
         return;
@@ -16227,7 +16252,9 @@ export function QueryTab({ league }) {
             sorted.slice(0, 20),
             "asc",
             sorted.length,
-            sorted.length ? null : `No matches found for ${managerName || "that manager"}.`
+            sorted.length
+              ? null
+              : `No matches found for ${managerName || "that manager"}.`
           )
         );
         return;
@@ -16309,7 +16336,10 @@ export function QueryTab({ league }) {
           });
           return;
         }
-        const min = ranking.reduce((acc, row) => Math.min(acc, row.count), Infinity);
+        const min = ranking.reduce(
+          (acc, row) => Math.min(acc, row.count),
+          Infinity
+        );
         const rows = ranking
           .filter((row) => row.count === min)
           .sort((a, b) =>
@@ -16356,7 +16386,8 @@ export function QueryTab({ league }) {
     if (!lastRun) {
       return (
         <div className="text-sm text-zinc-500">
-          Build a question and click <span className="font-semibold">Run Query</span> to see results.
+          Build a question and click{" "}
+          <span className="font-semibold">Run Query</span> to see results.
         </div>
       );
     }
@@ -16403,7 +16434,10 @@ export function QueryTab({ league }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.canonical} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+              <tr
+                key={row.canonical}
+                className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10"
+              >
                 <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                   {nameFor(row.canonical)}
                 </td>
@@ -16437,7 +16471,10 @@ export function QueryTab({ league }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.canonical} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+              <tr
+                key={row.canonical}
+                className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10"
+              >
                 <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                   {nameFor(row.canonical)}
                 </td>
@@ -16454,7 +16491,9 @@ export function QueryTab({ league }) {
     return (
       <div className="space-y-3">
         {lastRun.message ? (
-          <div className="text-sm text-zinc-500 dark:text-zinc-300">{lastRun.message}</div>
+          <div className="text-sm text-zinc-500 dark:text-zinc-300">
+            {lastRun.message}
+          </div>
         ) : null}
         <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
           Showing {rows.length} of {lastRun.totalMatches || 0} matches
@@ -16474,7 +16513,10 @@ export function QueryTab({ league }) {
           </thead>
           <tbody>
             {rows.map((row, idx) => (
-              <tr key={`${row.owner}-${row.season}-${row.week}-${idx}`} className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10">
+              <tr
+                key={`${row.owner}-${row.season}-${row.week}-${idx}`}
+                className="hover:bg-amber-50/60 dark:hover:bg-amber-500/10"
+              >
                 <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
                   {row.season ?? "—"}
                 </td>
@@ -16528,7 +16570,8 @@ export function QueryTab({ league }) {
                 Question preview
               </div>
               <div className="text-lg font-semibold text-slate-800 dark:text-white">
-                {sentence || "Pick a subject and add conditions to start exploring."}
+                {sentence ||
+                  "Pick a subject and add conditions to start exploring."}
               </div>
               {clauseParts.length ? (
                 <div className="text-xs text-slate-500 dark:text-slate-300">
@@ -16540,7 +16583,8 @@ export function QueryTab({ league }) {
 
           <div className="space-y-5">
             {conditions.map((row, idx) => {
-              const metric = metricsByKey.get(row.metricKey) || metricDefinitions[0];
+              const metric =
+                metricsByKey.get(row.metricKey) || metricDefinitions[0];
               return (
                 <div
                   key={row.id}
@@ -16551,7 +16595,7 @@ export function QueryTab({ league }) {
                     <div className="absolute -top-4 left-6 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
                       <span>Join with</span>
                       <div className="inline-flex overflow-hidden rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60">
-                        {(["AND", "OR"]).map((op) => (
+                        {["AND", "OR"].map((op) => (
                           <button
                             key={op}
                             type="button"
@@ -16616,7 +16660,9 @@ export function QueryTab({ league }) {
                       <select
                         className="mt-1 w-full rounded-xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
                         value={row.metricKey}
-                        onChange={(e) => updateConditionMetric(row.id, e.target.value)}
+                        onChange={(e) =>
+                          updateConditionMetric(row.id, e.target.value)
+                        }
                       >
                         {metricDefinitions.map((opt) => (
                           <option key={opt.key} value={opt.key}>
@@ -16646,13 +16692,25 @@ export function QueryTab({ league }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className={amberActionClasses} onClick={runQuery}>
+            <button
+              type="button"
+              className={amberActionClasses}
+              onClick={runQuery}
+            >
               Run query
             </button>
-            <button type="button" className={amberActionClasses} onClick={addCondition}>
+            <button
+              type="button"
+              className={amberActionClasses}
+              onClick={addCondition}
+            >
               + Add condition
             </button>
-            <button type="button" className={ghostButtonClasses} onClick={saveCurrentQuery}>
+            <button
+              type="button"
+              className={ghostButtonClasses}
+              onClick={saveCurrentQuery}
+            >
               Save query
             </button>
             {savedQueries.length ? (
@@ -16674,7 +16732,9 @@ export function QueryTab({ league }) {
                   type="button"
                   className={ghostButtonClasses}
                   disabled={!selectedSavedId}
-                  onClick={() => selectedSavedId && loadSavedQuery(selectedSavedId)}
+                  onClick={() =>
+                    selectedSavedId && loadSavedQuery(selectedSavedId)
+                  }
                 >
                   Load
                 </button>
@@ -16682,7 +16742,9 @@ export function QueryTab({ league }) {
                   type="button"
                   className={ghostButtonClasses}
                   disabled={!selectedSavedId}
-                  onClick={() => selectedSavedId && deleteSavedQuery(selectedSavedId)}
+                  onClick={() =>
+                    selectedSavedId && deleteSavedQuery(selectedSavedId)
+                  }
                 >
                   Delete
                 </button>
@@ -16703,7 +16765,6 @@ export function QueryTab({ league }) {
     </div>
   );
 }
-
 
 function __projectedPointsForSide(side, seasonId, week) {
   // ESPN often places projected totals on roster entries as appliedStatTotal for the week

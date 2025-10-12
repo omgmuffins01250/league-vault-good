@@ -43,7 +43,7 @@ const PROVIDER_INSTRUCTIONS = {
     steps: [
       "Install the LeagueVault Companion extension from the Chrome Web Store and pin it to your browser toolbar.",
       "Log into ESPN Fantasy on the web and open the league home page you want to sync.",
-      "Click the LeagueVault Companion icon, choose \"Sync ESPN League\", and follow the prompts in the extension.",
+      'Click the LeagueVault Companion icon, choose "Sync ESPN League", and follow the prompts in the extension.',
       "When the extension confirms the sync is complete, return to LeagueVault and refresh to load your data.",
     ],
   },
@@ -54,7 +54,7 @@ const PROVIDER_INSTRUCTIONS = {
     steps: [
       "Install the LeagueVault Companion extension from the Chrome Web Store and pin it for quick access.",
       "Sign in to Sleeper on the web and open the league you'd like to track.",
-      "Open the extension, pick \"Sleeper\", and review the coming-soon prompt so you're ready once syncing is live.",
+      'Open the extension, pick "Sleeper", and review the coming-soon prompt so you\'re ready once syncing is live.',
       "After the extension announces Sleeper support is available, run the sync and refresh LeagueVault to view the league.",
     ],
   },
@@ -65,7 +65,7 @@ const PROVIDER_INSTRUCTIONS = {
     steps: [
       "Install and pin the LeagueVault Companion extension from the Chrome Web Store.",
       "Open Yahoo Fantasy in your browser and navigate to the league home page you plan to import.",
-      "Launch the extension, select \"Yahoo\", and follow the on-screen guidance (sync actions will unlock as soon as they're ready).",
+      'Launch the extension, select "Yahoo", and follow the on-screen guidance (sync actions will unlock as soon as they\'re ready).',
       "Once the extension completes a Yahoo sync, refresh LeagueVault to pull in the newly imported league.",
     ],
   },
@@ -1986,7 +1986,8 @@ export default function App() {
                     const ownerId =
                       t?.primaryOwner || (t?.owners && t.owners[0]) || null;
                     if (t?.id != null)
-                      inner[t.id] = (ownerId && memberName[ownerId]) || "Unknown";
+                      inner[t.id] =
+                        (ownerId && memberName[ownerId]) || "Unknown";
                   });
                   tmp[yr] = inner;
                 }
@@ -2070,11 +2071,39 @@ export default function App() {
         });
         rebuildFromStore();
       } catch (e) {
-        console.warn(
-          "Bootstrap failed; falling back to stored leagues:",
-          e
-        );
+        console.warn("Bootstrap failed; falling back to stored leagues:", e);
         rebuildFromStore();
+      }
+    };
+
+    // --- Make this app respond to extension handoff ---
+    window.FL_ADD_LEAGUE = ingestFromExtension; // extension calls this directly
+    window.FL_ADD_LEAGUE_STRING = (s) => {
+      try {
+        const parsed =
+          parsePayloadString(s) || parsePayloadString(`__RAW__${s}`);
+        if (parsed && typeof parsed === "object") ingestFromExtension(parsed);
+      } catch (e) {
+        console.warn("FL_ADD_LEAGUE_STRING parse failed", e);
+      }
+    };
+
+    // --- Also accept postMessage-based payloads (future-proof) ---
+    function onMessage(e) {
+      const m = e?.data;
+      if (m?.type === "FL_PAYLOAD" && m?.payload) {
+        ingestFromExtension(m.payload);
+      } else if (m?.__FL_LEAGUE__ || m?.seasons || m?.legacyRows) {
+        ingestFromExtension(m);
+      }
+    }
+    window.addEventListener("message", onMessage);
+
+    // cleanup properly when App unmounts
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (window.FL_HANDLE_EXTENSION_PAYLOAD === ingestFromExtension) {
+        delete window.FL_HANDLE_EXTENSION_PAYLOAD;
       }
     };
 
@@ -2091,7 +2120,9 @@ export default function App() {
         const stored = sessionStorage.getItem("FL_PAYLOAD");
         if (stored) {
           sessionStorage.removeItem("FL_PAYLOAD");
-          const fromStorage = parsePayloadString(stored) || parsePayloadString(`__RAW__${stored}`);
+          const fromStorage =
+            parsePayloadString(stored) ||
+            parsePayloadString(`__RAW__${stored}`);
           if (fromStorage && typeof fromStorage === "object") {
             initialPayload = fromStorage;
           }
@@ -2427,8 +2458,7 @@ export default function App() {
     setSelectedProviderForModal("");
   };
   const providerDetails =
-    selectedProviderForModal &&
-    PROVIDER_INSTRUCTIONS[selectedProviderForModal]
+    selectedProviderForModal && PROVIDER_INSTRUCTIONS[selectedProviderForModal]
       ? PROVIDER_INSTRUCTIONS[selectedProviderForModal]
       : null;
   const headerIconIsUpload =
@@ -2542,10 +2572,14 @@ export default function App() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="text-lg leading-none">{headerIconGlyph}</span>
+                    <span className="text-lg leading-none">
+                      {headerIconGlyph}
+                    </span>
                   )}
                 </div>
-                <div className="text-lg font-semibold">{displayedLeagueName}</div>
+                <div className="text-lg font-semibold">
+                  {displayedLeagueName}
+                </div>
               </div>
               <div />
             </div>
@@ -2666,7 +2700,10 @@ export default function App() {
                       Manage your league with the companion extension
                     </h2>
                     <p className="text-sm text-base-content/70">
-                      Use the LeagueVault Companion browser extension to refresh stats, pull new seasons, and keep this league in sync. When you need to add another league, open the extension or use the button above to get started.
+                      Use the LeagueVault Companion browser extension to refresh
+                      stats, pull new seasons, and keep this league in sync.
+                      When you need to add another league, open the extension or
+                      use the button above to get started.
                     </p>
                     <button
                       type="button"
@@ -2677,188 +2714,190 @@ export default function App() {
                     </button>
                   </div>
                 )}
-            {derivedAll && (
-              <>
-                {section === "setup" && (
-                  <SetupTab
-                    derivedAll={derivedAll}
-                    selectedLeague={selectedLeague}
-                    setSelectedLeague={setSelectedLeague}
-                    onLegacyCsvMerged={handleLegacyCsvMerged}
-                    hiddenManagers={hiddenManagers} // ← NEW
-                    onChangeHiddenManagers={(nextSet) => {
-                      // ← NEW
-                      const nextArr = Array.from(nextSet || []);
-                      setHiddenManagers(new Set(nextArr));
-                      const { leagueId, leagueName, platform, scoring } =
-                        getCurrentLeagueIdentity();
-                      upsertLeague({
-                        leagueId,
-                        leagueKey: selectedLeague,
-                        name: leagueName,
-                        platform,
-                        scoring,
-                        rows: rawRows,
-                        draftByYear,
-                        adpSourceByYear,
-                        moneyInputs,
-                        activityBySeason,
-                        espnOwnerByTeamByYear: ownerByTeamByYear,
-                        espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
-                        espnTeamNamesByOwner: teamNamesByOwner,
-                        espnRostersByYear: rostersByYear,
-                        espnLineupSlotsByYear: lineupSlotsByYear,
-                        espnRosterAcqByYear: rosterAcqByYear,
-                        espnPlayoffTeamsBySeason: playoffTeamsBySeason,
-                        playoffTeamsOverrides: playoffTeamsOverrides,
-                        espnCurrentWeekBySeason: currentWeekBySeason,
-                        espnScheduleByYear: scheduleByYear,
-                        hiddenManagers: nextArr, // persist
-                        leagueIcon,
-                      });
-                    }}
-                    leagueIcon={leagueIcon}
-                    onLeagueIconChange={handleLeagueIconChange}
-                  />
-                )}
+                {derivedAll && (
+                  <>
+                    {section === "setup" && (
+                      <SetupTab
+                        derivedAll={derivedAll}
+                        selectedLeague={selectedLeague}
+                        setSelectedLeague={setSelectedLeague}
+                        onLegacyCsvMerged={handleLegacyCsvMerged}
+                        hiddenManagers={hiddenManagers} // ← NEW
+                        onChangeHiddenManagers={(nextSet) => {
+                          // ← NEW
+                          const nextArr = Array.from(nextSet || []);
+                          setHiddenManagers(new Set(nextArr));
+                          const { leagueId, leagueName, platform, scoring } =
+                            getCurrentLeagueIdentity();
+                          upsertLeague({
+                            leagueId,
+                            leagueKey: selectedLeague,
+                            name: leagueName,
+                            platform,
+                            scoring,
+                            rows: rawRows,
+                            draftByYear,
+                            adpSourceByYear,
+                            moneyInputs,
+                            activityBySeason,
+                            espnOwnerByTeamByYear: ownerByTeamByYear,
+                            espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+                            espnTeamNamesByOwner: teamNamesByOwner,
+                            espnRostersByYear: rostersByYear,
+                            espnLineupSlotsByYear: lineupSlotsByYear,
+                            espnRosterAcqByYear: rosterAcqByYear,
+                            espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+                            playoffTeamsOverrides: playoffTeamsOverrides,
+                            espnCurrentWeekBySeason: currentWeekBySeason,
+                            espnScheduleByYear: scheduleByYear,
+                            hiddenManagers: nextArr, // persist
+                            leagueIcon,
+                          });
+                        }}
+                        leagueIcon={leagueIcon}
+                        onLeagueIconChange={handleLeagueIconChange}
+                      />
+                    )}
 
-                {leagueWithHidden && section === "members" && (
-                  <MembersTab league={leagueWithHidden} />
-                )}
+                    {leagueWithHidden && section === "members" && (
+                      <MembersTab league={leagueWithHidden} />
+                    )}
 
-                {league && section === "weekly" && (
-                  <WeeklyOutlookTab
-                    league={leagueForWeekly}
-                    playoffTeamsBase={playoffTeamsBySeason}
-                    playoffTeamsOverrides={playoffTeamsOverrides}
-                    seasonThisYear={seasonThisYear}
-                    scheduleThisYear={scheduleThisYearNormalized}
-                  />
-                )}
+                    {league && section === "weekly" && (
+                      <WeeklyOutlookTab
+                        league={leagueForWeekly}
+                        playoffTeamsBase={playoffTeamsBySeason}
+                        playoffTeamsOverrides={playoffTeamsOverrides}
+                        seasonThisYear={seasonThisYear}
+                        scheduleThisYear={scheduleThisYearNormalized}
+                      />
+                    )}
 
-                {leagueWithHidden && section === "career" && (
-                  <CareerTab league={leagueWithHidden} />
-                )}
+                    {leagueWithHidden && section === "career" && (
+                      <CareerTab league={leagueWithHidden} />
+                    )}
 
-                {leagueWithHidden && section === "h2h" && (
-                  <H2HTab league={leagueWithHidden} />
-                )}
-                {leagueWithHidden &&
-                  section === "scenario" && ( // 👈 new
-                    <ScenarioTab league={leagueWithHidden} />
-                  )}
-                {league && section === "placements" && (
-                  <PlacementsTab
-                    league={leagueWithHidden} // ← important
-                    playoffTeamsBase={playoffTeamsBySeason}
-                    playoffTeamsOverrides={playoffTeamsOverrides}
-                    onSavePlayoffOverrides={savePlayoffOverrides}
-                  />
-                )}
-                {leagueWithHidden && section === "yearlyrecap" && (
-                  <YearlyRecapTab
-                    league={leagueWithHidden}
-                    rostersByYear={rostersByYear}
-                    lineupSlotsByYear={lineupSlotsByYear}
-                    ownerByTeamByYear={ownerByTeamByYear}
-                    currentWeekByYear={currentWeekBySeason}
-                  />
-                )}
+                    {leagueWithHidden && section === "h2h" && (
+                      <H2HTab league={leagueWithHidden} />
+                    )}
+                    {leagueWithHidden &&
+                      section === "scenario" && ( // 👈 new
+                        <ScenarioTab league={leagueWithHidden} />
+                      )}
+                    {league && section === "placements" && (
+                      <PlacementsTab
+                        league={leagueWithHidden} // ← important
+                        playoffTeamsBase={playoffTeamsBySeason}
+                        playoffTeamsOverrides={playoffTeamsOverrides}
+                        onSavePlayoffOverrides={savePlayoffOverrides}
+                      />
+                    )}
+                    {leagueWithHidden && section === "yearlyrecap" && (
+                      <YearlyRecapTab
+                        league={leagueWithHidden}
+                        rostersByYear={rostersByYear}
+                        lineupSlotsByYear={lineupSlotsByYear}
+                        ownerByTeamByYear={ownerByTeamByYear}
+                        currentWeekByYear={currentWeekBySeason}
+                      />
+                    )}
 
-                {leagueWithHidden && section === "money" && (
-                  <MoneyTab
-                    league={leagueWithHidden}
-                    moneyInputs={moneyInputs}
-                    setMoneyInputs={handleMoneyInputsChanged}
-                  />
-                )}
-                {leagueWithHidden && section === "records" && (
-                  <RecordsTab
-                    league={leagueWithHidden}
-                    scheduleByYear={scheduleByYear}
-                    ownerByTeamByYear={ownerByTeamByYear}
-                  />
-                )}
-                {leagueWithHidden && section === "luck" && (
-                  <LuckIndexTab
-                    league={leagueWithHidden}
-                    rawRows={rawRows}
-                    rostersByYear={rostersByYear}
-                    currentWeekByYear={currentWeekBySeason}
-                    draftByYear={draftByYear}
-                  />
-                )}
-
-                {leagueWithHidden && section === "playoffprob" && (
-                  <PlayoffProbTab
-                    league={leagueWithHidden}
-                    playoffTeamsBase={playoffTeamsBySeason}
-                    playoffTeamsOverrides={playoffTeamsOverrides}
-                  />
-                )}
-                {/* ✅ Roster route */}
-                {league && section === "roster" && (
-                  <RosterTab
-                    rostersByYear={rostersByYear}
-                    ownerByTeamByYear={ownerByTeamByYear}
-                    lineupSlotsByYear={lineupSlotsByYear}
-                    currentWeekByYear={currentWeekBySeason}
-                    rosterAcqByYear={rosterAcqByYear}
-                    league={leagueWithHidden}
-                    hiddenManagers={leagueWithHidden?.hiddenManagers}
-                  />
-                )}
-                {league &&
-                  section === "trades" &&
-                  (() => {
-                    const store = readStore();
-                    const curId =
-                      selectedLeagueId ||
-                      store.lastSelectedLeagueId ||
-                      Object.keys(store.leaguesById || {})[0] ||
-                      "";
-                    const recForTrades =
-                      (curId &&
-                        store.leaguesById &&
-                        store.leaguesById[curId]) ||
-                      {};
-                    return (
-                      <TradesTab
+                    {leagueWithHidden && section === "money" && (
+                      <MoneyTab
+                        league={leagueWithHidden}
+                        moneyInputs={moneyInputs}
+                        setMoneyInputs={handleMoneyInputsChanged}
+                      />
+                    )}
+                    {leagueWithHidden && section === "records" && (
+                      <RecordsTab
+                        league={leagueWithHidden}
+                        scheduleByYear={scheduleByYear}
+                        ownerByTeamByYear={ownerByTeamByYear}
+                      />
+                    )}
+                    {leagueWithHidden && section === "luck" && (
+                      <LuckIndexTab
                         league={leagueWithHidden}
                         rawRows={rawRows}
-                        selectedLeague={selectedLeague}
-                        activityBySeason={activityBySeason}
-                        espnAddsByYear={
-                          recForTrades.espnTransactionsByYear || {}
-                        }
-                        espnWeeklyPtsByYear={
-                          recForTrades.espnWeeklyPtsByYear || {}
-                        }
-                        espnOwnerByTeamByYear={
-                          recForTrades.espnOwnerByTeamByYear ||
-                          recForTrades.espnOwnerMapByYear ||
-                          {}
-                        }
-                        espnTeamNamesByOwner={
-                          recForTrades.espnTeamNamesByOwner || {}
-                        }
-                        espnRostersByYear={recForTrades.espnRostersByYear || {}}
-                        espnRosterAcqByYear={
-                          recForTrades.espnRosterAcqByYear || {}
-                        }
-                        espnOwnerFullByTeamByYear={
-                          recForTrades.espnOwnerFullByTeamByYear || {}
-                        }
+                        rostersByYear={rostersByYear}
+                        currentWeekByYear={currentWeekBySeason}
+                        draftByYear={draftByYear}
                       />
-                    );
-                  })()}
-                {league && section === "draft" && (
-                  <DraftTab draftByYear={draftByYear} />
+                    )}
+
+                    {leagueWithHidden && section === "playoffprob" && (
+                      <PlayoffProbTab
+                        league={leagueWithHidden}
+                        playoffTeamsBase={playoffTeamsBySeason}
+                        playoffTeamsOverrides={playoffTeamsOverrides}
+                      />
+                    )}
+                    {/* ✅ Roster route */}
+                    {league && section === "roster" && (
+                      <RosterTab
+                        rostersByYear={rostersByYear}
+                        ownerByTeamByYear={ownerByTeamByYear}
+                        lineupSlotsByYear={lineupSlotsByYear}
+                        currentWeekByYear={currentWeekBySeason}
+                        rosterAcqByYear={rosterAcqByYear}
+                        league={leagueWithHidden}
+                        hiddenManagers={leagueWithHidden?.hiddenManagers}
+                      />
+                    )}
+                    {league &&
+                      section === "trades" &&
+                      (() => {
+                        const store = readStore();
+                        const curId =
+                          selectedLeagueId ||
+                          store.lastSelectedLeagueId ||
+                          Object.keys(store.leaguesById || {})[0] ||
+                          "";
+                        const recForTrades =
+                          (curId &&
+                            store.leaguesById &&
+                            store.leaguesById[curId]) ||
+                          {};
+                        return (
+                          <TradesTab
+                            league={leagueWithHidden}
+                            rawRows={rawRows}
+                            selectedLeague={selectedLeague}
+                            activityBySeason={activityBySeason}
+                            espnAddsByYear={
+                              recForTrades.espnTransactionsByYear || {}
+                            }
+                            espnWeeklyPtsByYear={
+                              recForTrades.espnWeeklyPtsByYear || {}
+                            }
+                            espnOwnerByTeamByYear={
+                              recForTrades.espnOwnerByTeamByYear ||
+                              recForTrades.espnOwnerMapByYear ||
+                              {}
+                            }
+                            espnTeamNamesByOwner={
+                              recForTrades.espnTeamNamesByOwner || {}
+                            }
+                            espnRostersByYear={
+                              recForTrades.espnRostersByYear || {}
+                            }
+                            espnRosterAcqByYear={
+                              recForTrades.espnRosterAcqByYear || {}
+                            }
+                            espnOwnerFullByTeamByYear={
+                              recForTrades.espnOwnerFullByTeamByYear || {}
+                            }
+                          />
+                        );
+                      })()}
+                    {league && section === "draft" && (
+                      <DraftTab draftByYear={draftByYear} />
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </main>
-        </div>
+              </main>
+            </div>
           </>
         ) : (
           <div className="px-4 md:px-8 py-12 text-center space-y-4">
@@ -2866,7 +2905,9 @@ export default function App() {
               Bring your first league into LeagueVault
             </h2>
             <p className="max-w-2xl mx-auto text-base-content/70">
-              Install the LeagueVault Companion extension, choose your provider, and run a sync to unlock the full dashboard. You can start the process anytime with the Add league button above.
+              Install the LeagueVault Companion extension, choose your provider,
+              and run a sync to unlock the full dashboard. You can start the
+              process anytime with the Add league button above.
             </p>
             <div>
               <button
@@ -2903,7 +2944,8 @@ export default function App() {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold">Add a league</h2>
               <p className="text-sm text-base-content/70">
-                Choose where your league lives so we can show the right browser-extension instructions.
+                Choose where your league lives so we can show the right
+                browser-extension instructions.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -2944,7 +2986,8 @@ export default function App() {
                 </>
               ) : (
                 <p className="text-sm text-base-content/70">
-                  Select a provider above to see the step-by-step instructions for syncing with the LeagueVault Companion extension.
+                  Select a provider above to see the step-by-step instructions
+                  for syncing with the LeagueVault Companion extension.
                 </p>
               )}
             </div>
