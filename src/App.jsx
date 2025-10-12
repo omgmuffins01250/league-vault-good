@@ -239,101 +239,12 @@ function _emptyStore() {
   return { leaguesById: {}, lastSelectedLeagueId: "" };
 }
 
-function computeLeagueFingerprint(rows, seasons = [], meta = {}) {
-  const seasonSet = new Set();
-  const ownerSet = new Set();
-
-  const addSeason = (val) => {
-    const num = Number(val);
-    if (Number.isFinite(num)) seasonSet.add(num);
-  };
-
-  const pushOwner = (val) => {
-    if (!val && val !== 0) return;
-    const str = String(val).trim().toLowerCase();
-    if (!str) return;
-    ownerSet.add(str);
-  };
-
-  (rows || []).forEach((row) => {
-    if (!row) return;
-    addSeason(row.season ?? row.year ?? row.scoring_period_id);
-    pushOwner(row.manager ?? row.manager_name ?? row.owner ?? row.owner_name);
-    pushOwner(
-      row.opponent ?? row.opponent_manager ?? row.opponent_owner ?? row.opp
-    );
-  });
-
-  (seasons || []).forEach((season) => {
-    if (!season) return;
-    addSeason(
-      season?.seasonId ?? season?.scoringPeriodId ?? season?.season ?? null
-    );
-    (season?.members || []).forEach((member) => {
-      if (!member) return;
-      const full = [member.firstName || "", member.lastName || ""]
-        .join(" ")
-        .trim();
-      const display = String(member.displayName || member.nickname || "")
-        .trim()
-        .toLowerCase();
-      if (full) pushOwner(full);
-      if (display) pushOwner(display);
-    });
-  });
-
-  if (Array.isArray(meta?.owners)) {
-    meta.owners.forEach((owner) => pushOwner(owner));
-  }
-
-  const normalizedSeasons = Array.from(seasonSet)
-    .filter((n) => Number.isFinite(n))
-    .sort((a, b) => a - b)
-    .map(String);
-
-  const normalizedOwners = Array.from(ownerSet)
-    .filter(Boolean)
-    .sort();
-
-  const approxSize =
-    Number(meta?.size || meta?.leagueSize || 0) || normalizedOwners.length;
-
-  if (!normalizedSeasons.length && !normalizedOwners.length && !approxSize) {
-    return "";
-  }
-
-  return JSON.stringify({
-    seasons: normalizedSeasons,
-    owners: normalizedOwners,
-    size: approxSize,
-  });
-}
-
-function ensureUniqueLeagueId(
-  preferredId,
-  leagueName,
-  store,
-  fingerprint
-) {
+function ensureUniqueLeagueId(preferredId, leagueName, store) {
   const byId = (store && store.leaguesById) || {};
   const normalizedName = String(leagueName || "")
     .trim()
     .toLowerCase();
   const preferred = String(preferredId || "").trim();
-  const normalizedFingerprint = fingerprint
-    ? String(fingerprint).trim()
-    : "";
-
-  if (normalizedFingerprint) {
-    const matchByFingerprint = Object.entries(byId).find(([, rec]) => {
-      const recFp = String(rec?.leagueFingerprint || rec?.fingerprint || "")
-        .trim();
-      return recFp && recFp === normalizedFingerprint;
-    });
-    if (matchByFingerprint) {
-      return matchByFingerprint[0];
-    }
-  }
 
   if (preferred) {
     const existing = byId[preferred];
@@ -341,40 +252,25 @@ function ensureUniqueLeagueId(
     const existingName = String(existing.name || "")
       .trim()
       .toLowerCase();
-    const existingFingerprint = String(
-      existing.leagueFingerprint || existing.fingerprint || ""
-    ).trim();
-    const sameName = normalizedName && existingName === normalizedName;
-    const sameFingerprint =
-      normalizedFingerprint &&
-      existingFingerprint &&
-      existingFingerprint === normalizedFingerprint;
-    if (sameName || sameFingerprint) {
+    if (!normalizedName || existingName === normalizedName) {
       return preferred;
     }
   }
 
   if (normalizedName) {
     const matchByName = Object.entries(byId).find(([, rec]) => {
-      const recName = String(rec?.name || "").trim().toLowerCase();
-      if (recName !== normalizedName) return false;
-      const recFp = String(rec?.leagueFingerprint || rec?.fingerprint || "")
-        .trim();
-      if (!normalizedFingerprint) return false;
-      if (!recFp) return false;
-      return recFp === normalizedFingerprint;
+      const recName = String(rec?.name || "")
+        .trim()
+        .toLowerCase();
+      return recName === normalizedName;
     });
     if (matchByName) {
       return matchByName[0];
     }
   }
 
-  const normalizedPreferred = preferred
-    .replace(/[^a-z0-9]+/gi, "_")
-    .replace(/^_+|_+$/g, "");
-
   const base =
-    normalizedPreferred ||
+    preferred ||
     normalizedName.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
     `league_${Date.now()}`;
 
@@ -383,14 +279,10 @@ function ensureUniqueLeagueId(
   let idx = 2;
   while (byId[`${base}__${idx}`]) {
     const existing = byId[`${base}__${idx}`];
-    const existingFingerprint = String(
-      existing?.leagueFingerprint || existing?.fingerprint || ""
-    ).trim();
-    const fingerprintMatches =
-      normalizedFingerprint &&
-      existingFingerprint &&
-      existingFingerprint === normalizedFingerprint;
-    if (fingerprintMatches) {
+    const existingName = String(existing?.name || "")
+      .trim()
+      .toLowerCase();
+    if (normalizedName && existingName === normalizedName) {
       return `${base}__${idx}`;
     }
     idx += 1;
@@ -2403,22 +2295,9 @@ export default function App() {
       const meta0 = keys0.length
         ? provisional.byLeague[keys0[0]]?.meta || {}
         : {};
-      const candidateFingerprint = computeLeagueFingerprint(
-        combinedPlusLegacy,
-        seasons,
-        {
-          ...meta0,
-          owners:
-            (keys0.length && provisional.byLeague?.[keys0[0]]?.owners) || [],
-        }
-      );
       const storeBeforeImport = readStore();
       const idCandidate = String(
-        data.leagueId ||
-          meta0.id ||
-          meta0.leagueId ||
-          meta0.espnLeagueId ||
-          ""
+        data.leagueId || meta0.id || meta0.leagueId || meta0.espnLeagueId || ""
       ).trim();
       const nameCandidate =
         candidateName ||
@@ -2427,11 +2306,9 @@ export default function App() {
       const resolvedLeagueId = ensureUniqueLeagueId(
         idCandidate,
         nameCandidate,
-        storeBeforeImport,
-        candidateFingerprint
+        storeBeforeImport
       );
-      const resolvedLeagueName =
-        nameCandidate || `League ${resolvedLeagueId}`;
+      const resolvedLeagueName = nameCandidate || `League ${resolvedLeagueId}`;
       // Make the just-imported league the active one in UI state
       setSelectedLeagueId(resolvedLeagueId);
       const savedForLeague =
