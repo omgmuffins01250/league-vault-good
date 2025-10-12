@@ -37,21 +37,147 @@ const DEFAULT_LEAGUE_ICON_OBJECT = {
 function makeDefaultLeagueIcon() {
   return { ...DEFAULT_LEAGUE_ICON_OBJECT };
 }
-// Put this near the top-level of App.jsx (inside the module, not inside another function)
-if (typeof window !== "undefined") {
-  // Minimal bridge so the popup's primary path works:
-  window.FL_ADD_LEAGUE = (payload) => {
-    try {
-      // Reuse your existing cold-boot ingestion path:
-      window.name = JSON.stringify(payload);
-      // Reload so your current boot logic ingests it
-      window.location.reload();
-    } catch (e) {
-      console.warn("FL_ADD_LEAGUE failed:", e);
-    }
-  };
-}
+// --- FL hand-off PROBE (debug) ----------------------------------------------
+(function handoffProbe() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.name;
+    console.log(
+      "[FL][probe] window.name typeof=",
+      typeof raw,
+      " length=",
+      raw ? raw.length : 0
+    );
 
+    if (raw && typeof raw === "string" && raw.trim().startsWith("{")) {
+      // Try to persist, but don't die (or loop) if it's too big
+      let stored = false;
+      try {
+        sessionStorage.setItem("FL_HANDOFF_RAW", raw);
+        stored = true;
+      } catch (e) {
+        console.warn(
+          "[FL][probe] FL_HANDOFF_RAW too large; using in-memory only:",
+          e?.name
+        );
+        try {
+          sessionStorage.removeItem("FL_HANDOFF_RAW");
+        } catch {}
+      }
+
+      window.__FL_HANDOFF = JSON.parse(raw);
+
+      // Prevent re-import loops: clear window.name immediately
+      try {
+        window.name = "";
+      } catch {}
+
+      console.log(
+        "[FL][probe] parsed window.name ok; keys=",
+        Object.keys(window.__FL_HANDOFF || {}).slice(0, 10)
+      );
+      document.title = "FL✅ " + document.title;
+    } else {
+      const fromSS = sessionStorage.getItem("FL_HANDOFF_RAW");
+      if (fromSS) {
+        window.__FL_HANDOFF = JSON.parse(fromSS);
+        // also make sure window.name can’t resurrect an old payload
+        try {
+          window.name = "";
+        } catch {}
+        console.log(
+          "[FL][probe] restored payload from sessionStorage; len=",
+          fromSS.length
+        );
+        document.title = "FL♻️ " + document.title;
+      } else {
+        console.log("[FL][probe] no payload in window.name or sessionStorage");
+        document.title = "FL❌ " + document.title;
+      }
+    }
+
+    // postMessage ping/pong so the popup can confirm the app is alive
+    window.addEventListener("message", (e) => {
+      try {
+        console.log(
+          "[FL][probe] postMessage received:",
+          e.origin,
+          e.data && e.data.type
+        );
+        if (e.data && e.data.type === "FL_PING") {
+          e.source &&
+            e.source.postMessage(
+              {
+                type: "FL_PONG",
+                got: !!window.__FL_HANDOFF,
+                nameLen: (window.name || "").length,
+              },
+              "*"
+            );
+        }
+      } catch (err) {
+        console.warn("[FL][probe] message handler error", err);
+      }
+    });
+
+    // keep the function bridge
+    window.FL_ADD_LEAGUE = (payload) => {
+      try {
+        console.log(
+          "[FL][probe] FL_ADD_LEAGUE()",
+          payload && Object.keys(payload)
+        );
+        window.__FL_HANDOFF = payload;
+        sessionStorage.setItem("FL_HANDOFF_RAW", JSON.stringify(payload));
+        window.location.reload();
+      } catch (e) {
+        console.warn("[FL][probe] FL_ADD_LEAGUE failed:", e);
+      }
+    };
+  } catch (e) {
+    console.warn("[FL][probe] failed to run:", e);
+  }
+})();
+// --- Storage probe (add right here) ---
+(function FL_probeStorage() {
+  try {
+    const testKey = "__fl_probe__";
+    const payload = "x".repeat(1024);
+    localStorage.setItem(testKey, payload);
+    const got = localStorage.getItem(testKey);
+    localStorage.removeItem(testKey);
+    window.__FL_STORAGE_OK = got === payload;
+    console.log(
+      "[FL][probe][storage] localStorage ok =",
+      window.__FL_STORAGE_OK
+    );
+  } catch (e) {
+    window.__FL_STORAGE_OK = false;
+    window.__FL_STORAGE_ERR = e;
+    console.warn(
+      "[FL][probe][storage] localStorage failed:",
+      e?.name,
+      e?.message
+    );
+  }
+  try {
+    const t = "__fl_probe_s__";
+    sessionStorage.setItem(t, "1");
+    const sOK = sessionStorage.getItem(t) === "1";
+    sessionStorage.removeItem(t);
+    window.__FL_SESSION_OK = sOK;
+    if (!window.__FL_STORAGE_OK) {
+      console.log("[FL][probe][storage] sessionStorage ok =", sOK);
+    }
+  } catch (e) {
+    window.__FL_SESSION_OK = false;
+    console.warn(
+      "[FL][probe][storage] sessionStorage failed:",
+      e?.name,
+      e?.message
+    );
+  }
+})();
 /*
   Storage shape:
   {
@@ -74,26 +200,118 @@ if (typeof window !== "undefined") {
     lastSelectedLeagueId
   }
 */
+function _emptyStore() {
+  return { leaguesById: {}, lastSelectedLeagueId: "" };
+}
+
 function readStore() {
+  const BK_KEY = `${LS_KEY}::backend`;
+
+  const parseOrNull = (txt) => {
+    if (!txt) return null;
+    try {
+      const o = JSON.parse(txt);
+      return o && typeof o === "object" ? o : null;
+    } catch {
+      return null;
+    }
+  };
+  const shape = (o) => ({
+    leaguesById: (o && o.leaguesById) || {},
+    lastSelectedLeagueId: (o && o.lastSelectedLeagueId) || "",
+  });
+  const nonEmpty = (o) =>
+    !!o && !!o.leaguesById && Object.keys(o.leaguesById).length > 0;
+
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return { leaguesById: {}, lastSelectedLeagueId: "" };
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object")
-      return { leaguesById: {}, lastSelectedLeagueId: "" };
-    return {
-      leaguesById: obj.leaguesById || {},
-      lastSelectedLeagueId: obj.lastSelectedLeagueId || "",
-    };
-  } catch {
-    return { leaguesById: {}, lastSelectedLeagueId: "" };
+    // 1) Respect explicit backend marker if present
+    const hint = (
+      sessionStorage.getItem(BK_KEY) ||
+      localStorage.getItem(BK_KEY) ||
+      ""
+    ).toLowerCase();
+
+    const localObj = parseOrNull(localStorage.getItem(LS_KEY));
+    const sessObj = parseOrNull(sessionStorage.getItem(LS_KEY));
+
+    if (hint === "session") {
+      if (sessObj) return shape(sessObj);
+      if (nonEmpty(localObj)) return shape(localObj);
+    } else if (hint === "local") {
+      if (localObj) return shape(localObj);
+      if (nonEmpty(sessObj)) return shape(sessObj);
+    } else {
+      // 2) No hint — choose the non-empty one; if both empty, prefer session
+      if (nonEmpty(sessObj)) return shape(sessObj);
+      if (nonEmpty(localObj)) return shape(localObj);
+      // fall through to empty-but-valid one
+      if (sessObj) return shape(sessObj);
+      if (localObj) return shape(localObj);
+    }
+
+    // 3) Last resort: volatile in-memory
+    const mem = window.__FL_VOLATILE_STORE__;
+    return mem && typeof mem === "object" ? shape(mem) : _emptyStore();
+  } catch (e) {
+    console.warn("[FL][storage] readStore failed:", e?.name, e?.message);
+    const mem = window.__FL_VOLATILE_STORE__;
+    return mem && typeof mem === "object" ? shape(mem) : _emptyStore();
   }
 }
+
 function writeStore(next) {
+  const json = JSON.stringify(next || _emptyStore());
+  const BK_KEY = `${LS_KEY}::backend`;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(next));
-  } catch {}
+    // Try localStorage
+    localStorage.setItem(LS_KEY, json);
+    const back = localStorage.getItem(LS_KEY);
+    if (!back) throw new Error("localStorage read-back empty");
+
+    // Mark backend + clear session copy so it can't shadow later
+    localStorage.setItem(BK_KEY, "local");
+    sessionStorage.removeItem(LS_KEY);
+    sessionStorage.removeItem(BK_KEY);
+  } catch (e1) {
+    console.warn(
+      "[FL][storage] localStorage.setItem failed:",
+      e1?.name,
+      e1?.message,
+      "len=",
+      json.length
+    );
+
+    // ensure no stale/bad local value can shadow session
+    try {
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(`${LS_KEY}::backend`);
+    } catch {}
+
+    try {
+      // Fallback to sessionStorage
+      sessionStorage.setItem(LS_KEY, json);
+      const back = sessionStorage.getItem(LS_KEY);
+      if (!back) throw new Error("sessionStorage read-back empty");
+      sessionStorage.setItem(BK_KEY, "session");
+
+      // also clear any leftover volatile memory copy
+      if (window.__FL_VOLATILE_STORE__) delete window.__FL_VOLATILE_STORE__;
+      console.log("[FL][storage] fell back to sessionStorage");
+    } catch (e2) {
+      console.warn(
+        "[FL][storage] sessionStorage.setItem failed:",
+        e2?.name,
+        e2?.message,
+        "→ using in-memory only"
+      );
+      window.__FL_VOLATILE_STORE__ = JSON.parse(json);
+      try {
+        sessionStorage.removeItem(BK_KEY);
+      } catch {}
+    }
+  }
 }
+
 function upsertLeague({
   leagueId,
   leagueKey,
@@ -186,7 +404,20 @@ function deleteLeagueById(leagueId) {
     if (store.lastSelectedLeagueId === leagueId) {
       store.lastSelectedLeagueId = Object.keys(store.leaguesById)[0] || "";
     }
-    writeStore(store);
+
+    if (Object.keys(store.leaguesById).length === 0) {
+      // No leagues left — purge storage in both backends to avoid resurrection
+      try {
+        localStorage.removeItem(LS_KEY);
+        localStorage.removeItem(`${LS_KEY}::backend`);
+      } catch {}
+      try {
+        sessionStorage.removeItem(LS_KEY);
+        sessionStorage.removeItem(`${LS_KEY}::backend`);
+      } catch {}
+    } else {
+      writeStore(store);
+    }
   }
   return readStore();
 }
@@ -1324,6 +1555,37 @@ function UserMenu({
     </div>
   );
 }
+// Minimal error boundary to prevent a blank app if a child throws (e.g., hook-order bug)
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, msg: "" };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true, msg: String(err?.message || err) || "Error" };
+  }
+  componentDidCatch(err, info) {
+    console.warn(
+      `[ErrorBoundary:${this.props.name || "Component"}]`,
+      err,
+      info
+    );
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="alert alert-error">
+          <div className="font-semibold">
+            {this.props.name || "Component"} failed to render
+          </div>
+          <div className="text-xs opacity-80">{this.state.msg}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /* --------------------------------- App ------------------------------------ */
 export default function App() {
   const [section, setSection] = useState("setup");
@@ -1396,7 +1658,13 @@ export default function App() {
     const built = buildFromRows(allRows);
     setDerivedAll(built);
 
-    let nextLeagueId = selectedLeagueId || store.lastSelectedLeagueId;
+    // Prefer what the store says (it’s updated by upsertLeague on import / switch)
+    let nextLeagueId = store.lastSelectedLeagueId || selectedLeagueId;
+    // If that ID isn’t present (e.g., got deleted), fall back safely
+    if (nextLeagueId && !store.leaguesById[nextLeagueId]) {
+      const ids = Object.keys(store.leaguesById);
+      nextLeagueId = ids[0] || "";
+    }
     if (!nextLeagueId) {
       const ids = Object.keys(store.leaguesById);
       if (ids.length) nextLeagueId = ids[0];
@@ -1529,6 +1797,12 @@ export default function App() {
     rebuildFromStore();
     setLineupSlotsByYear({});
     setHiddenManagers(new Set());
+    try {
+      sessionStorage.removeItem("FL_HANDOFF_RAW");
+    } catch {}
+    try {
+      window.name = "";
+    } catch {}
   };
 
   const handleFileParsed = (built, rawRowsIn) => {
@@ -1637,12 +1911,33 @@ export default function App() {
       }
     };
     try {
-      const raw = window.name;
-      if (!raw || typeof raw !== "string") {
+      // Prefer the probe; fall back to sessionStorage; then window.name
+      const data =
+        window.__FL_HANDOFF ||
+        (() => {
+          try {
+            const ss = sessionStorage.getItem("FL_HANDOFF_RAW");
+            return ss ? JSON.parse(ss) : null;
+          } catch {
+            return null;
+          }
+        })() ||
+        (() => {
+          try {
+            return JSON.parse(window.name || "{}");
+          } catch {
+            return null;
+          }
+        })();
+
+      if (!data || !Object.keys(data).length) {
+        console.warn(
+          "[FL] No payload detected in __FL_HANDOFF / sessionStorage / window.name"
+        );
         rebuildFromStore();
         return;
       }
-      const data = JSON.parse(raw);
+
       window.__FL_PAYLOAD = data;
       (function normalizePickupsPayload(p) {
         let txByYear = {};
@@ -1704,6 +1999,9 @@ export default function App() {
       const seasonsMap = Object.fromEntries(
         seasons.map((s) => [Number(s.seasonId), s])
       );
+      // DEBUG: what did we actually receive?
+      console.log("[FL][dbg] payload keys:", Object.keys(data || {}));
+      console.log("[FL][dbg] seasonsLen=", seasons.length);
 
       setSeasonsByYear(seasonsMap);
       const scheduleMap = Object.fromEntries(
@@ -1742,6 +2040,13 @@ export default function App() {
       const legacyLite = Array.isArray(data.legacySeasonsLite)
         ? data.legacySeasonsLite
         : [];
+      console.log(
+        "[FL][dbg] legacyRowsLen=",
+        legacy.length,
+        " legacyLiteLen=",
+        legacyLite.length
+      );
+
       if (!seasons.length && !legacy.length) {
         rebuildFromStore();
         window.name = "";
@@ -1749,6 +2054,15 @@ export default function App() {
       }
       const light = buildRowsLight(seasons);
       const combinedRows = [...light.rows, ...light.txRows];
+      console.log(
+        "[FL][dbg] lightRowsLen=",
+        (light.rows || []).length,
+        " lightTxLen=",
+        (light.txRows || []).length,
+        " combinedRowsLen=",
+        combinedRows.length
+      );
+
       let draftMinimal = buildDraftRich(seasons);
       draftMinimal = attachAdpFromPopup(draftMinimal, data.adpByYear || null);
       draftMinimal = overlayMissingAdpByNameOnly(draftMinimal);
@@ -1894,7 +2208,8 @@ export default function App() {
         String(data.leagueId || meta0.id || "").trim() || `espn_${Date.now()}`;
       const resolvedLeagueName =
         candidateName || meta0.name || `League ${resolvedLeagueId}`;
-
+      // Make the just-imported league the active one in UI state
+      setSelectedLeagueId(resolvedLeagueId);
       const savedForLeague =
         readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
       if (
@@ -1957,6 +2272,17 @@ export default function App() {
         keys[0] ||
         "";
       if (selectedKey) setSelectedLeague(selectedKey);
+      console.log(
+        "[FL][dbg] built.leagues=",
+        keys,
+        " selectedKey=",
+        selectedKey
+      );
+      console.log(
+        "[FL][dbg] meta for selected:",
+        built.byLeague?.[selectedKey]?.meta
+      );
+
       const adpSrc = {};
       Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
         adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
@@ -2028,6 +2354,12 @@ export default function App() {
       const existingMoney =
         readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
       const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
+      console.log("[FL][dbg] upsertLeague →", {
+        id: resolvedLeagueId,
+        name: resolvedLeagueName,
+        rowsFinalLen: rowsFinal.length,
+        seasonsLen: seasons.length,
+      });
 
       upsertLeague({
         leagueId: resolvedLeagueId,
@@ -2053,6 +2385,26 @@ export default function App() {
         espnScheduleByYear: scheduleMap,
         leagueIcon,
       });
+      setTimeout(() => {
+        const s = readStore();
+        const backend =
+          typeof window.__FL_VOLATILE_STORE__ === "object"
+            ? "memory"
+            : sessionStorage.getItem(LS_KEY)
+            ? "sessionStorage"
+            : "localStorage";
+        console.log("[FL][dbg] store after upsert", {
+          backend,
+          ids: Object.keys(s.leaguesById || {}),
+          last: s.lastSelectedLeagueId,
+          rec: s.leaguesById?.[resolvedLeagueId]
+            ? {
+                name: s.leaguesById[resolvedLeagueId].name,
+                rows: (s.leaguesById[resolvedLeagueId].rows || []).length,
+              }
+            : null,
+        });
+      }, 0);
 
       setOwnerByTeamByYear(ownerMap);
       setTeamNamesByOwner(teamNamesFromData);
@@ -2064,6 +2416,15 @@ export default function App() {
         rosterAcqByYear: Object.keys(rosterAcq || {}).length,
         rostersByYear: Object.keys(rosterMap || {}).length,
       });
+
+      // ✅ one-time import: kill handoff so old payloads don't reappear later
+      try {
+        sessionStorage.removeItem("FL_HANDOFF_RAW");
+      } catch {}
+      try {
+        window.name = "";
+      } catch {}
+
       rebuildFromStore();
     } catch (e) {
       console.warn("Bootstrap failed; falling back to stored leagues:", e);
@@ -2458,7 +2819,8 @@ export default function App() {
         </div>
       </div>
       {/* PAGE CONTAINER */}
-      <div className="max-w-7xl mx-auto px-3 md:px-5 py-6">
+      <div className="max-w-none px-0 md:px-0 py-3 ml-5">
+        {" "}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
@@ -2476,7 +2838,7 @@ export default function App() {
           </div>
           <div />
         </div>
-        <div className="mt-6 grid lg:grid-cols-[200px_1fr] gap-6">
+        <div className="mt-6 grid lg:grid-cols-[168px_1fr] gap-4">
           {/* SIDEBAR */}
           <aside className="space-y-2">
             <SidebarButton
@@ -2581,45 +2943,48 @@ export default function App() {
           <main className="space-y-6">
             {/* Setup should always render */}
             {section === "setup" && (
-              <SetupTab
-                derivedAll={derivedAll}
-                selectedLeague={selectedLeague}
-                setSelectedLeague={setSelectedLeague}
-                onLegacyCsvMerged={handleLegacyCsvMerged}
-                hiddenManagers={hiddenManagers}
-                onChangeHiddenManagers={(nextSet) => {
-                  const nextArr = Array.from(nextSet || []);
-                  setHiddenManagers(new Set(nextArr));
-                  const { leagueId, leagueName, platform, scoring } =
-                    getCurrentLeagueIdentity();
-                  upsertLeague({
-                    leagueId,
-                    leagueKey: selectedLeague,
-                    name: leagueName,
-                    platform,
-                    scoring,
-                    rows: rawRows,
-                    draftByYear,
-                    adpSourceByYear,
-                    moneyInputs,
-                    activityBySeason,
-                    espnOwnerByTeamByYear: ownerByTeamByYear,
-                    espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
-                    espnTeamNamesByOwner: teamNamesByOwner,
-                    espnRostersByYear: rostersByYear,
-                    espnLineupSlotsByYear: lineupSlotsByYear,
-                    espnRosterAcqByYear: rosterAcqByYear,
-                    espnPlayoffTeamsBySeason: playoffTeamsBySeason,
-                    playoffTeamsOverrides: playoffTeamsOverrides,
-                    espnCurrentWeekBySeason: currentWeekBySeason,
-                    espnScheduleByYear: scheduleByYear,
-                    hiddenManagers: nextArr,
-                    leagueIcon,
-                  });
-                }}
-                leagueIcon={leagueIcon}
-                onLeagueIconChange={handleLeagueIconChange}
-              />
+              <ErrorBoundary name="SetupTab">
+                <SetupTab
+                  // Always provide an object so SetupTab doesn't branch hooks off a null/undefined
+                  derivedAll={derivedAll || { leagues: [], byLeague: {} }}
+                  selectedLeague={selectedLeague}
+                  setSelectedLeague={setSelectedLeague}
+                  onLegacyCsvMerged={handleLegacyCsvMerged}
+                  hiddenManagers={hiddenManagers}
+                  onChangeHiddenManagers={(nextSet) => {
+                    const nextArr = Array.from(nextSet || []);
+                    setHiddenManagers(new Set(nextArr));
+                    const { leagueId, leagueName, platform, scoring } =
+                      getCurrentLeagueIdentity();
+                    upsertLeague({
+                      leagueId,
+                      leagueKey: selectedLeague,
+                      name: leagueName,
+                      platform,
+                      scoring,
+                      rows: rawRows,
+                      draftByYear,
+                      adpSourceByYear,
+                      moneyInputs,
+                      activityBySeason,
+                      espnOwnerByTeamByYear: ownerByTeamByYear,
+                      espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+                      espnTeamNamesByOwner: teamNamesByOwner,
+                      espnRostersByYear: rostersByYear,
+                      espnLineupSlotsByYear: lineupSlotsByYear,
+                      espnRosterAcqByYear: rosterAcqByYear,
+                      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+                      playoffTeamsOverrides: playoffTeamsOverrides,
+                      espnCurrentWeekBySeason: currentWeekBySeason,
+                      espnScheduleByYear: scheduleByYear,
+                      hiddenManagers: nextArr,
+                      leagueIcon,
+                    });
+                  }}
+                  leagueIcon={leagueIcon}
+                  onLeagueIconChange={handleLeagueIconChange}
+                />
+              </ErrorBoundary>
             )}
 
             {/* Everything else waits for derivedAll */}
