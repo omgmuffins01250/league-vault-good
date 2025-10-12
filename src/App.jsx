@@ -128,7 +128,42 @@ function makeDefaultLeagueIcon() {
           payload && Object.keys(payload)
         );
         window.__FL_HANDOFF = payload;
-        sessionStorage.setItem("FL_HANDOFF_RAW", JSON.stringify(payload));
+        const json = JSON.stringify(payload);
+        const channels = [];
+
+        try {
+          sessionStorage.setItem("FL_HANDOFF_RAW", json);
+          channels.push("sessionStorage");
+        } catch (err) {
+          console.warn(
+            "[FL][probe] sessionStorage.setItem failed; falling back:",
+            err?.name,
+            err?.message
+          );
+        }
+
+        try {
+          window.name = json;
+          channels.push("window.name");
+        } catch (err) {
+          console.warn(
+            "[FL][probe] window.name fallback failed:",
+            err?.name,
+            err?.message
+          );
+        }
+
+        if (!channels.length) {
+          console.warn(
+            "[FL][probe] FL_ADD_LEAGUE had no durable handoff channel; aborting reload"
+          );
+          return;
+        }
+
+        console.log(
+          "[FL][probe] FL_ADD_LEAGUE stored via",
+          channels.join(" + ")
+        );
         window.location.reload();
       } catch (e) {
         console.warn("[FL][probe] FL_ADD_LEAGUE failed:", e);
