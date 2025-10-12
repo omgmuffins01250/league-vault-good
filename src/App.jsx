@@ -1,8 +1,14 @@
 // App.jsx
 import React, { useEffect, useState } from "react";
-import { SidebarButton, Footer } from "./Components/ui.jsx";
-import { FP_ADP_BY_YEAR } from "./Data/adpData.jsx";
-import { primeOwnerMaps, ownerMapFor } from "./ownerMaps.jsx";
+import {
+  SidebarButton,
+  Footer,
+} from "/project/workspace/src/Components/ui.jsx";
+import { FP_ADP_BY_YEAR } from "/project/workspace/src/Data/adpData.jsx";
+import {
+  primeOwnerMaps,
+  ownerMapFor,
+} from "/project/workspace/src/ownerMaps.jsx";
 
 import {
   SetupTab,
@@ -20,8 +26,8 @@ import {
   ScenarioTab,
   LuckIndexTab,
   DEFAULT_LEAGUE_ICONS,
-} from "./Components/tabs.jsx";
-import { buildFromRows } from "./Utils/buildFromRows.jsx";
+} from "/project/workspace/src/Components/tabs.jsx";
+import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
 const LS_KEY = "FL_STORE_v1";
 const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {
@@ -32,41 +38,16 @@ function makeDefaultLeagueIcon() {
   return { ...DEFAULT_LEAGUE_ICON_OBJECT };
 }
 // Put this near the top-level of App.jsx (inside the module, not inside another function)
-const FL_HANDOFF_EVENT = "fl:handoff";
 if (typeof window !== "undefined") {
   // Minimal bridge so the popup's primary path works:
   window.FL_ADD_LEAGUE = (payload) => {
     try {
-      // Prefer in-place handoff so we avoid the window.name size limit.
-      window.__FL_HANDOFF_PAYLOAD__ = payload;
-      try {
-        if (typeof window.CustomEvent === "function") {
-          window.dispatchEvent(
-            new CustomEvent(FL_HANDOFF_EVENT, {
-              detail: payload,
-            })
-          );
-        } else if (typeof document !== "undefined" && document.createEvent) {
-          const evt = document.createEvent("CustomEvent");
-          evt.initCustomEvent(FL_HANDOFF_EVENT, false, false, payload);
-          window.dispatchEvent(evt);
-        }
-        return true;
-      } catch (eventErr) {
-        console.warn("FL_ADD_LEAGUE event dispatch failed, falling back to reload:", eventErr);
-      }
-      // If dispatching fails, fall through to legacy window.name path
-      window.__FL_HANDOFF_PAYLOAD__ = undefined;
-    } catch (err) {
-      console.warn("FL_ADD_LEAGUE direct handoff failed, falling back to reload:", err);
-    }
-    try {
+      // Reuse your existing cold-boot ingestion path:
       window.name = JSON.stringify(payload);
+      // Reload so your current boot logic ingests it
       window.location.reload();
-      return true;
-    } catch (reloadErr) {
-      console.warn("FL_ADD_LEAGUE reload fallback failed:", reloadErr);
-      return false;
+    } catch (e) {
+      console.warn("FL_ADD_LEAGUE failed:", e);
     }
   };
 }
@@ -1370,47 +1351,12 @@ export default function App() {
   const [hiddenManagers, setHiddenManagers] = useState(new Set());
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
-  const bootstrappedRef = React.useRef(false);
-  const [pendingPayload, setPendingPayload] = useState(() => {
-    if (typeof window === "undefined") return null;
-    const direct = window.__FL_HANDOFF_PAYLOAD__;
-    if (direct && typeof direct === "object") {
-      window.__FL_HANDOFF_PAYLOAD__ = undefined;
-      return direct;
-    }
-    const raw = window.name;
-    if (!raw || typeof raw !== "string") return null;
-    try {
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (err) {
-      console.warn("Failed to parse initial payload from window.name:", err);
-      return null;
-    }
-  });
   const currentYear = React.useMemo(() => {
     const yrs = Object.keys(currentWeekBySeason || {})
       .map(Number)
       .filter(Number.isFinite);
     return yrs.length ? Math.max(...yrs) : null;
   }, [currentWeekBySeason]);
-  React.useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const handler = (event) => {
-      const detail = event?.detail;
-      const incoming =
-        (detail && typeof detail === "object" ? detail : null) ||
-        (window.__FL_HANDOFF_PAYLOAD__ &&
-        typeof window.__FL_HANDOFF_PAYLOAD__ === "object"
-          ? window.__FL_HANDOFF_PAYLOAD__
-          : null);
-      if (!incoming) return;
-      window.__FL_HANDOFF_PAYLOAD__ = undefined;
-      setPendingPayload((prev) => (prev === incoming ? prev : incoming));
-    };
-    window.addEventListener(FL_HANDOFF_EVENT, handler);
-    return () => window.removeEventListener(FL_HANDOFF_EVENT, handler);
-  }, []);
 
   const scheduleThisYearNormalized = React.useMemo(() => {
     const arr = scheduleByYear?.[currentYear] || [];
@@ -1690,17 +1636,14 @@ export default function App() {
         console.warn("FL_applyOwnerMergesNow failed:", e);
       }
     };
-    const data = pendingPayload;
-    if (!data || typeof data !== "object") {
-      if (!bootstrappedRef.current) {
-        rebuildFromStore();
-        bootstrappedRef.current = true;
-      }
-      return;
-    }
     try {
+      const raw = window.name;
+      if (!raw || typeof raw !== "string") {
+        rebuildFromStore();
+        return;
+      }
+      const data = JSON.parse(raw);
       window.__FL_PAYLOAD = data;
-      window.__FL_HANDOFF_PAYLOAD__ = undefined;
       (function normalizePickupsPayload(p) {
         let txByYear = {};
         let weeklyByYear = {};
@@ -1801,7 +1744,6 @@ export default function App() {
         : [];
       if (!seasons.length && !legacy.length) {
         rebuildFromStore();
-        bootstrappedRef.current = true;
         window.name = "";
         return;
       }
@@ -2123,13 +2065,11 @@ export default function App() {
         rostersByYear: Object.keys(rosterMap || {}).length,
       });
       rebuildFromStore();
-      bootstrappedRef.current = true;
     } catch (e) {
       console.warn("Bootstrap failed; falling back to stored leagues:", e);
       rebuildFromStore();
-      bootstrappedRef.current = true;
     }
-  }, [pendingPayload]);
+  }, []);
 
   const league =
     selectedLeague && derivedAll?.byLeague?.[selectedLeague]
