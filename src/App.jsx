@@ -424,6 +424,7 @@ function upsertLeague({
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
   leagueIcon,
+  leagueFingerprint,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -479,6 +480,8 @@ function upsertLeague({
             type: "preset",
             value: DEFAULT_LEAGUE_ICON_GLYPH,
           },
+    leagueFingerprint:
+      leagueFingerprint || prev.leagueFingerprint || prev.fingerprint || "",
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -1909,7 +1912,7 @@ export default function App() {
     setMoneyInputs((prev) => {
       const next =
         typeof update === "function" ? update(prev) ?? {} : update || {};
-      const { leagueId, leagueName, platform, scoring } =
+      const { leagueId, leagueName, platform, scoring, fingerprint } =
         getCurrentLeagueIdentity();
       upsertLeague({
         leagueId,
@@ -1932,6 +1935,7 @@ export default function App() {
         espnScheduleByYear: scheduleByYear,
         hiddenManagers: Array.from(hiddenManagers),
         leagueIcon,
+        leagueFingerprint: fingerprint,
       });
       return next;
     });
@@ -2380,6 +2384,15 @@ export default function App() {
         built.byLeague?.[selectedKey]?.meta
       );
 
+      const finalFingerprint = computeLeagueFingerprint(
+        rowsFinal,
+        seasons,
+        {
+          ...(built.byLeague?.[selectedKey]?.meta || meta0),
+          owners: built.byLeague?.[selectedKey]?.owners || [],
+        }
+      );
+
       const adpSrc = {};
       Object.entries(draftMinimal || {}).forEach(([yr, arr]) => {
         adpSrc[yr] = (arr || []).some((r) => r?.adp != null)
@@ -2481,6 +2494,7 @@ export default function App() {
         espnCurrentWeekBySeason: currentWeekBySeasonMap,
         espnScheduleByYear: scheduleMap,
         leagueIcon,
+        leagueFingerprint: finalFingerprint,
       });
       setTimeout(() => {
         const s = readStore();
@@ -2687,7 +2701,8 @@ export default function App() {
   }));
 
   function getCurrentLeagueIdentity() {
-    const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
+    const leagueObj = derivedAll?.byLeague?.[selectedLeague] || {};
+    const meta = leagueObj?.meta || {};
     const leagueId =
       String(
         meta.id ??
@@ -2702,7 +2717,19 @@ export default function App() {
     const leagueName = meta.name || "Your Fantasy League";
     const platform = meta.platform || "ESPN";
     const scoring = meta.scoring || "Standard";
-    return { leagueId, leagueName, platform, scoring, meta };
+    const fingerprint = computeLeagueFingerprint(
+      rawRows,
+      Object.values(seasonsByYear || {}),
+      { ...meta, owners: leagueObj?.owners || [] }
+    );
+    return {
+      leagueId,
+      leagueName,
+      platform,
+      scoring,
+      meta: { ...meta, owners: leagueObj?.owners || [] },
+      fingerprint,
+    };
   }
 
   function normalizeLeagueIcon(nextIcon, prevIcon) {
@@ -2744,7 +2771,7 @@ export default function App() {
   function savePlayoffOverrides(nextOverrides) {
     const safe = nextOverrides || {};
     setPlayoffTeamsOverrides(safe);
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2769,6 +2796,7 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
+      leagueFingerprint: fingerprint,
     });
   }
 
@@ -2778,8 +2806,27 @@ export default function App() {
     setDerivedAll(built);
     setRawRows(all);
 
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint, meta } =
       getCurrentLeagueIdentity();
+    const builtKeys = built.leagues || [];
+    const metaForFingerprint =
+      (built.byLeague?.[selectedLeague] && {
+        ...built.byLeague[selectedLeague]?.meta,
+        owners: built.byLeague[selectedLeague]?.owners || [],
+      }) ||
+      (builtKeys.length && built.byLeague?.[builtKeys[0]]
+        ? {
+            ...built.byLeague[builtKeys[0]]?.meta,
+            owners: built.byLeague[builtKeys[0]]?.owners || [],
+          }
+        : null) ||
+      meta ||
+      {};
+    const updatedFingerprint = computeLeagueFingerprint(
+      all,
+      Object.values(seasonsByYear || {}),
+      metaForFingerprint
+    );
     upsertLeague({
       leagueId,
       leagueKey: selectedLeague,
@@ -2800,13 +2847,14 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
+      leagueFingerprint: updatedFingerprint || fingerprint,
     });
   }
 
   function handleLeagueIconChange(nextIcon) {
     const normalized = normalizeLeagueIcon(nextIcon, leagueIcon);
     setLeagueIcon(normalized);
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2829,6 +2877,7 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon: normalized,
+      leagueFingerprint: fingerprint,
     });
   }
   const headerIconIsUpload =
@@ -3051,7 +3100,13 @@ export default function App() {
                   onChangeHiddenManagers={(nextSet) => {
                     const nextArr = Array.from(nextSet || []);
                     setHiddenManagers(new Set(nextArr));
-                    const { leagueId, leagueName, platform, scoring } =
+                    const {
+                      leagueId,
+                      leagueName,
+                      platform,
+                      scoring,
+                      fingerprint,
+                    } =
                       getCurrentLeagueIdentity();
                     upsertLeague({
                       leagueId,
@@ -3076,6 +3131,7 @@ export default function App() {
                       espnScheduleByYear: scheduleByYear,
                       hiddenManagers: nextArr,
                       leagueIcon,
+                      leagueFingerprint: fingerprint,
                     });
                   }}
                   leagueIcon={leagueIcon}
