@@ -239,6 +239,56 @@ function _emptyStore() {
   return { leaguesById: {}, lastSelectedLeagueId: "" };
 }
 
+function ensureUniqueLeagueId(preferredId, leagueName, store) {
+  const byId = (store && store.leaguesById) || {};
+  const normalizedName = String(leagueName || "")
+    .trim()
+    .toLowerCase();
+  const preferred = String(preferredId || "").trim();
+
+  if (preferred) {
+    const existing = byId[preferred];
+    if (!existing) return preferred;
+    const existingName = String(existing.name || "")
+      .trim()
+      .toLowerCase();
+    if (!normalizedName || existingName === normalizedName) {
+      return preferred;
+    }
+  }
+
+  if (normalizedName) {
+    const matchByName = Object.entries(byId).find(([, rec]) => {
+      const recName = String(rec?.name || "").trim().toLowerCase();
+      return recName === normalizedName;
+    });
+    if (matchByName) {
+      return matchByName[0];
+    }
+  }
+
+  const base =
+    preferred ||
+    normalizedName.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
+    `league_${Date.now()}`;
+
+  if (!byId[base]) return base;
+
+  let idx = 2;
+  while (byId[`${base}__${idx}`]) {
+    const existing = byId[`${base}__${idx}`];
+    const existingName = String(existing?.name || "")
+      .trim()
+      .toLowerCase();
+    if (normalizedName && existingName === normalizedName) {
+      return `${base}__${idx}`;
+    }
+    idx += 1;
+  }
+
+  return `${base}__${idx}`;
+}
+
 function readStore() {
   const BK_KEY = `${LS_KEY}::backend`;
 
@@ -2239,14 +2289,29 @@ export default function App() {
       const meta0 = keys0.length
         ? provisional.byLeague[keys0[0]]?.meta || {}
         : {};
-      const resolvedLeagueId =
-        String(data.leagueId || meta0.id || "").trim() || `espn_${Date.now()}`;
+      const storeBeforeImport = readStore();
+      const idCandidate = String(
+        data.leagueId ||
+          meta0.id ||
+          meta0.leagueId ||
+          meta0.espnLeagueId ||
+          ""
+      ).trim();
+      const nameCandidate =
+        candidateName ||
+        meta0.name ||
+        (idCandidate ? `League ${idCandidate}` : "");
+      const resolvedLeagueId = ensureUniqueLeagueId(
+        idCandidate,
+        nameCandidate,
+        storeBeforeImport
+      );
       const resolvedLeagueName =
-        candidateName || meta0.name || `League ${resolvedLeagueId}`;
+        nameCandidate || `League ${resolvedLeagueId}`;
       // Make the just-imported league the active one in UI state
       setSelectedLeagueId(resolvedLeagueId);
       const savedForLeague =
-        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        storeBeforeImport.leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
       if (
         savedForLeague &&
         Object.keys(savedForLeague).length > 0 &&
