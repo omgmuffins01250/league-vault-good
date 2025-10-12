@@ -358,10 +358,11 @@ function ensureUniqueLeagueId(
     const matchByName = Object.entries(byId).find(([, rec]) => {
       const recName = String(rec?.name || "").trim().toLowerCase();
       if (recName !== normalizedName) return false;
-      if (!normalizedFingerprint) return true;
       const recFp = String(rec?.leagueFingerprint || rec?.fingerprint || "")
         .trim();
-      return !recFp || recFp === normalizedFingerprint;
+      if (!normalizedFingerprint) return false;
+      if (!recFp) return false;
+      return recFp === normalizedFingerprint;
     });
     if (matchByName) {
       return matchByName[0];
@@ -382,18 +383,14 @@ function ensureUniqueLeagueId(
   let idx = 2;
   while (byId[`${base}__${idx}`]) {
     const existing = byId[`${base}__${idx}`];
-    const existingName = String(existing?.name || "")
-      .trim()
-      .toLowerCase();
     const existingFingerprint = String(
       existing?.leagueFingerprint || existing?.fingerprint || ""
     ).trim();
-    const nameMatches = normalizedName && existingName === normalizedName;
     const fingerprintMatches =
       normalizedFingerprint &&
       existingFingerprint &&
       existingFingerprint === normalizedFingerprint;
-    if (nameMatches || fingerprintMatches) {
+    if (fingerprintMatches) {
       return `${base}__${idx}`;
     }
     idx += 1;
