@@ -1,5 +1,3 @@
-
-import { parsePayloadString } from "./utils/payloadEncoding";
 let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
 let _aliasMap = null; // Map<normalized alias, "Owner Name"> (global canonicalizer)
 let _lastKey = "";
@@ -11,8 +9,8 @@ let _manualAliasDatasetKey = "";
 const _norm = (s) =>
   String(s || "")
     .toLowerCase()
-    .replace(/[\s._-]+/g, "")     // smash spaces/._- together
-    .replace(/[^a-z0-9]/g, "");   // strip everything else
+    .replace(/[\s._-]+/g, "") // smash spaces/._- together
+    .replace(/[^a-z0-9]/g, ""); // strip everything else
 
 function _canonFromMergeHelpers(leagueLike) {
   const leagueId =
@@ -24,7 +22,8 @@ function _canonFromMergeHelpers(leagueLike) {
   // returns a function(name) -> canonical name OR null
   return (name) => {
     try {
-      const mh = (typeof window !== "undefined" && window.FL_mergeHelpers) || {};
+      const mh =
+        (typeof window !== "undefined" && window.FL_mergeHelpers) || {};
       const map =
         leagueId && typeof mh.loadMergeMap === "function"
           ? mh.loadMergeMap(leagueId)
@@ -43,7 +42,8 @@ function _canonFromMergeHelpers(leagueLike) {
 function _readEspnSeasons() {
   // 1) window.__FL_ESPN (preferred if you set this anywhere)
   try {
-    const s = (typeof window !== "undefined" && window.__FL_ESPN?.seasons) || null;
+    const s =
+      (typeof window !== "undefined" && window.__FL_ESPN?.seasons) || null;
     if (Array.isArray(s)) return s;
   } catch {}
   // 1b) window.__espnSeasons (flat array stash)
@@ -51,11 +51,11 @@ function _readEspnSeasons() {
     const s = (typeof window !== "undefined" && window.__espnSeasons) || null;
     if (Array.isArray(s)) return s;
   } catch {}
-  
 
   // 2) window.__FL_PAYLOAD (some apps stash here)
   try {
-    const s = (typeof window !== "undefined" && window.__FL_PAYLOAD?.seasons) || null;
+    const s =
+      (typeof window !== "undefined" && window.__FL_PAYLOAD?.seasons) || null;
     if (Array.isArray(s)) return s;
   } catch {}
 
@@ -139,7 +139,9 @@ function _buildAliasMap({
   }
 
   // manual overrides LAST (highest priority)
-  Object.entries(manualAliases || {}).forEach(([alias, target]) => add(alias, target));
+  Object.entries(manualAliases || {}).forEach(([alias, target]) =>
+    add(alias, target)
+  );
 
   return map;
 }
@@ -171,7 +173,7 @@ function _buildSeasonMap({
       out[tid] = { name: canonOwner(nm), ownerId: null, teamId: Number(tid) };
     });
   }
-  
+
   // 2) reuse maps produced elsewhere in the app
   const reuse = [
     league?.ownerByTeamByYear?.[s],
@@ -182,10 +184,10 @@ function _buildSeasonMap({
   for (const cand of reuse) {
     if (!cand) continue;
     Object.entries(cand).forEach(([tid, nm]) => {
-      if (!out[tid]) out[tid] = { name: canonOwner(nm), ownerId: null, teamId: Number(tid) };
+      if (!out[tid])
+        out[tid] = { name: canonOwner(nm), ownerId: null, teamId: Number(tid) };
     });
   }
-  
 
   // 3) team-name join using teamNamesByOwner (if you maintain it)
   const seasons = Array.isArray(espnSeasons) ? espnSeasons : _readEspnSeasons();
@@ -203,10 +205,15 @@ function _buildSeasonMap({
       if (teamId == null || out[teamId]) return;
       const key = _normTeamName(t);
       const owner = nameKeyToOwner[key];
-      if (owner) out[teamId] = { name: canonOwner(owner), ownerId: null, teamId: Number(teamId) };
+      if (owner)
+        out[teamId] = {
+          name: canonOwner(owner),
+          ownerId: null,
+          teamId: Number(teamId),
+        };
     });
   }
-  
+
   // 4) map teamId → ownerId (GUID) and name using members + teams
   if (seasonObj) {
     // GUID → best real/display name
@@ -222,11 +229,13 @@ function _buildSeasonMap({
       const teamId = t?.id;
       if (teamId == null) return;
 
-      const guid = (Array.isArray(t?.owners) && t.owners[0]) || t?.primaryOwner || null;
+      const guid =
+        (Array.isArray(t?.owners) && t.owners[0]) || t?.primaryOwner || null;
       const bestName = guid ? guidToName.get(guid) : null;
 
       // Ensure an entry object exists
-      if (!out[teamId]) out[teamId] = { name: null, ownerId: null, teamId: Number(teamId) };
+      if (!out[teamId])
+        out[teamId] = { name: null, ownerId: null, teamId: Number(teamId) };
       if (!out[teamId].teamId) out[teamId].teamId = Number(teamId);
 
       // Fill/merge name and ownerId without nuking a better existing name
@@ -323,7 +332,9 @@ export function primeOwnerMaps({
     .sort()
     .join("|");
 
-  const canonByMergeLeague = _canonFromMergeHelpers(league || selectedLeague || {});
+  const canonByMergeLeague = _canonFromMergeHelpers(
+    league || selectedLeague || {}
+  );
   const canonOwner = (name) => {
     // 1) merge-helpers canonicalizer (if configured in your app)
     const m = canonByMergeLeague(name);
@@ -370,8 +381,7 @@ export function primeOwnerMaps({
     if (typeof window !== "undefined") {
       console.debug("ownerMaps primed", {
         seasons: Array.from(seasonsToBuild).sort(),
-        sampleSeason:
-          Array.from(seasonsToBuild).sort()[0] || "—",
+        sampleSeason: Array.from(seasonsToBuild).sort()[0] || "—",
       });
     }
   }
@@ -406,7 +416,9 @@ if (typeof window !== "undefined") {
     // show which teamIds still don't resolve to a real name
     diff(season) {
       const m = ownerMapFor(season) || {};
-      const missing = Object.entries(m).filter(([, v]) => !v.name || v.name === "Unknown");
+      const missing = Object.entries(m).filter(
+        ([, v]) => !v.name || v.name === "Unknown"
+      );
       return missing.map(([teamId]) => Number(teamId));
     },
     // 👇 NEW: debug helpers

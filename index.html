@@ -1,51 +1,42 @@
-<!doctype html>
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
-  </head>
-  <body>
-    <div id="root"></div>
 
-    <!-- FL boot shim: reads window.name and stashes JSON -->
-    <script>
-      (function () {
-        try {
-          var raw = window.name || "";
-          if (!raw) return;
-          var trimmed = (raw || "").trim();
-          if (!trimmed) return;
+ <!doctype html>
+   <head>
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>Vite + React</title>
+   </head>
+   <body>
+     <div id="root"></div>
+ 
+     <!-- FL boot shim: reads window.name and stashes JSON -->
+     <script>
+       (function () {
+         try {
+          var s = window.name || "";
+          if (!s || s.length < 8) return;
+          var header = s.slice(0, 8);
+          var body   = s.slice(8);
+          var json   = "";
+          // Works with both RAW and compressed payloads
+          if (header === "__RAW__") {
+            json = body;
+          } else if (header === "__FLZ__" && window.LZString && typeof LZString.decompressFromUTF16 === "function") {
+            json = LZString.decompressFromUTF16(body) || "";
+           }
+ 
+          if (json) {
+            sessionStorage.setItem("FL_PAYLOAD", json);
 
-          var storeValue = trimmed;
-          var header = trimmed.slice(0, 8);
-          if (header.indexOf("__RAW__") === 0) {
-            storeValue = trimmed.slice("__RAW__".length);
-          } else if (header.indexOf("__FLZ__") === 0) {
-            var compressed = trimmed.slice("__FLZ__".length);
-            if (compressed && window.LZString && typeof LZString.decompressFromUTF16 === "function") {
-              try {
-                var json = window.LZString.decompressFromUTF16(compressed) || "";
-                if (json) {
-                  storeValue = json;
-                }
-              } catch (decompressError) {
-                console.warn("FL boot shim decompress failed", decompressError);
-              }
-            }
-          }
-
-          if (storeValue) {
-            sessionStorage.setItem("FL_PAYLOAD", storeValue);
-            window.name = ""; // clear so refreshes don't re-import
-          }
-        } catch (e) {
-          console.warn("FL boot shim failed:", e);
-        }
-      })();
-    </script>
-
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-
-</html>
+             window.name = ""; // clear so refreshes don't re-import
+           }
+         } catch (e) {
+           console.warn("FL boot shim failed:", e);
+         }
+       })();
+     </script>
+ 
+     <script type="module" src="/src/main.jsx"></script>
+   </body>
+ 
+ </html>
