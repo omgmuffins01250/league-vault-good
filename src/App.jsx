@@ -239,6 +239,169 @@ function _emptyStore() {
   return { leaguesById: {}, lastSelectedLeagueId: "" };
 }
 
+function computeLeagueFingerprint(rows, seasons = [], meta = {}) {
+  const seasonSet = new Set();
+  const ownerSet = new Set();
+
+  const addSeason = (val) => {
+    const num = Number(val);
+    if (Number.isFinite(num)) seasonSet.add(num);
+  };
+
+  const pushOwner = (val) => {
+    if (!val && val !== 0) return;
+    const str = String(val).trim().toLowerCase();
+    if (!str) return;
+    ownerSet.add(str);
+  };
+
+  (rows || []).forEach((row) => {
+    if (!row) return;
+    addSeason(row.season ?? row.year ?? row.scoring_period_id);
+    pushOwner(row.manager ?? row.manager_name ?? row.owner ?? row.owner_name);
+    pushOwner(
+      row.opponent ?? row.opponent_manager ?? row.opponent_owner ?? row.opp
+    );
+  });
+
+  (seasons || []).forEach((season) => {
+    if (!season) return;
+    addSeason(
+      season?.seasonId ?? season?.scoringPeriodId ?? season?.season ?? null
+    );
+    (season?.members || []).forEach((member) => {
+      if (!member) return;
+      const full = [member.firstName || "", member.lastName || ""]
+        .join(" ")
+        .trim();
+      const display = String(member.displayName || member.nickname || "")
+        .trim()
+        .toLowerCase();
+      if (full) pushOwner(full);
+      if (display) pushOwner(display);
+    });
+  });
+
+  if (Array.isArray(meta?.owners)) {
+    meta.owners.forEach((owner) => pushOwner(owner));
+  }
+
+  const normalizedSeasons = Array.from(seasonSet)
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b)
+    .map(String);
+
+  const normalizedOwners = Array.from(ownerSet)
+    .filter(Boolean)
+    .sort();
+
+  const approxSize =
+    Number(meta?.size || meta?.leagueSize || 0) || normalizedOwners.length;
+
+  if (!normalizedSeasons.length && !normalizedOwners.length && !approxSize) {
+    return "";
+  }
+
+  return JSON.stringify({
+    seasons: normalizedSeasons,
+    owners: normalizedOwners,
+    size: approxSize,
+  });
+}
+
+function ensureUniqueLeagueId(
+  preferredId,
+  leagueName,
+  store,
+  fingerprint
+) {
+  const byId = (store && store.leaguesById) || {};
+  const normalizedName = String(leagueName || "")
+    .trim()
+    .toLowerCase();
+  const preferred = String(preferredId || "").trim();
+  const normalizedFingerprint = fingerprint
+    ? String(fingerprint).trim()
+    : "";
+
+  if (normalizedFingerprint) {
+    const matchByFingerprint = Object.entries(byId).find(([, rec]) => {
+      const recFp = String(rec?.leagueFingerprint || rec?.fingerprint || "")
+        .trim();
+      return recFp && recFp === normalizedFingerprint;
+    });
+    if (matchByFingerprint) {
+      return matchByFingerprint[0];
+    }
+  }
+
+  if (preferred) {
+    const existing = byId[preferred];
+    if (!existing) return preferred;
+    const existingName = String(existing.name || "")
+      .trim()
+      .toLowerCase();
+    const existingFingerprint = String(
+      existing.leagueFingerprint || existing.fingerprint || ""
+    ).trim();
+    const sameName = normalizedName && existingName === normalizedName;
+    const sameFingerprint =
+      normalizedFingerprint &&
+      existingFingerprint &&
+      existingFingerprint === normalizedFingerprint;
+    if (sameName || sameFingerprint) {
+      return preferred;
+    }
+  }
+
+  if (normalizedName) {
+    const matchByName = Object.entries(byId).find(([, rec]) => {
+      const recName = String(rec?.name || "").trim().toLowerCase();
+      if (recName !== normalizedName) return false;
+      if (!normalizedFingerprint) return true;
+      const recFp = String(rec?.leagueFingerprint || rec?.fingerprint || "")
+        .trim();
+      return !recFp || recFp === normalizedFingerprint;
+    });
+    if (matchByName) {
+      return matchByName[0];
+    }
+  }
+
+  const normalizedPreferred = preferred
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const base =
+    normalizedPreferred ||
+    normalizedName.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
+    `league_${Date.now()}`;
+
+  if (!byId[base]) return base;
+
+  let idx = 2;
+  while (byId[`${base}__${idx}`]) {
+    const existing = byId[`${base}__${idx}`];
+    const existingName = String(existing?.name || "")
+      .trim()
+      .toLowerCase();
+    const existingFingerprint = String(
+      existing?.leagueFingerprint || existing?.fingerprint || ""
+    ).trim();
+    const nameMatches = normalizedName && existingName === normalizedName;
+    const fingerprintMatches =
+      normalizedFingerprint &&
+      existingFingerprint &&
+      existingFingerprint === normalizedFingerprint;
+    if (nameMatches || fingerprintMatches) {
+      return `${base}__${idx}`;
+    }
+    idx += 1;
+  }
+
+  return `${base}__${idx}`;
+}
+
 function readStore() {
   const BK_KEY = `${LS_KEY}::backend`;
 
@@ -372,6 +535,7 @@ function upsertLeague({
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
   leagueIcon,
+  leagueFingerprint,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -427,6 +591,8 @@ function upsertLeague({
             type: "preset",
             value: DEFAULT_LEAGUE_ICON_GLYPH,
           },
+    leagueFingerprint:
+      leagueFingerprint || prev.leagueFingerprint || prev.fingerprint || "",
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -1857,7 +2023,7 @@ export default function App() {
     setMoneyInputs((prev) => {
       const next =
         typeof update === "function" ? update(prev) ?? {} : update || {};
-      const { leagueId, leagueName, platform, scoring } =
+      const { leagueId, leagueName, platform, scoring, fingerprint } =
         getCurrentLeagueIdentity();
       upsertLeague({
         leagueId,
@@ -1880,6 +2046,7 @@ export default function App() {
         espnScheduleByYear: scheduleByYear,
         hiddenManagers: Array.from(hiddenManagers),
         leagueIcon,
+        leagueFingerprint: fingerprint,
       });
       return next;
     });
@@ -2239,14 +2406,39 @@ export default function App() {
       const meta0 = keys0.length
         ? provisional.byLeague[keys0[0]]?.meta || {}
         : {};
-      const resolvedLeagueId =
-        String(data.leagueId || meta0.id || "").trim() || `espn_${Date.now()}`;
+      const candidateFingerprint = computeLeagueFingerprint(
+        combinedPlusLegacy,
+        seasons,
+        {
+          ...meta0,
+          owners:
+            (keys0.length && provisional.byLeague?.[keys0[0]]?.owners) || [],
+        }
+      );
+      const storeBeforeImport = readStore();
+      const idCandidate = String(
+        data.leagueId ||
+          meta0.id ||
+          meta0.leagueId ||
+          meta0.espnLeagueId ||
+          ""
+      ).trim();
+      const nameCandidate =
+        candidateName ||
+        meta0.name ||
+        (idCandidate ? `League ${idCandidate}` : "");
+      const resolvedLeagueId = ensureUniqueLeagueId(
+        idCandidate,
+        nameCandidate,
+        storeBeforeImport,
+        candidateFingerprint
+      );
       const resolvedLeagueName =
-        candidateName || meta0.name || `League ${resolvedLeagueId}`;
+        nameCandidate || `League ${resolvedLeagueId}`;
       // Make the just-imported league the active one in UI state
       setSelectedLeagueId(resolvedLeagueId);
       const savedForLeague =
-        readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
+        storeBeforeImport.leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
       if (
         savedForLeague &&
         Object.keys(savedForLeague).length > 0 &&
@@ -2316,6 +2508,15 @@ export default function App() {
       console.log(
         "[FL][dbg] meta for selected:",
         built.byLeague?.[selectedKey]?.meta
+      );
+
+      const finalFingerprint = computeLeagueFingerprint(
+        rowsFinal,
+        seasons,
+        {
+          ...(built.byLeague?.[selectedKey]?.meta || meta0),
+          owners: built.byLeague?.[selectedKey]?.owners || [],
+        }
       );
 
       const adpSrc = {};
@@ -2419,6 +2620,7 @@ export default function App() {
         espnCurrentWeekBySeason: currentWeekBySeasonMap,
         espnScheduleByYear: scheduleMap,
         leagueIcon,
+        leagueFingerprint: finalFingerprint,
       });
       setTimeout(() => {
         const s = readStore();
@@ -2625,7 +2827,8 @@ export default function App() {
   }));
 
   function getCurrentLeagueIdentity() {
-    const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
+    const leagueObj = derivedAll?.byLeague?.[selectedLeague] || {};
+    const meta = leagueObj?.meta || {};
     const leagueId =
       String(
         meta.id ??
@@ -2640,7 +2843,19 @@ export default function App() {
     const leagueName = meta.name || "Your Fantasy League";
     const platform = meta.platform || "ESPN";
     const scoring = meta.scoring || "Standard";
-    return { leagueId, leagueName, platform, scoring, meta };
+    const fingerprint = computeLeagueFingerprint(
+      rawRows,
+      Object.values(seasonsByYear || {}),
+      { ...meta, owners: leagueObj?.owners || [] }
+    );
+    return {
+      leagueId,
+      leagueName,
+      platform,
+      scoring,
+      meta: { ...meta, owners: leagueObj?.owners || [] },
+      fingerprint,
+    };
   }
 
   function normalizeLeagueIcon(nextIcon, prevIcon) {
@@ -2682,7 +2897,7 @@ export default function App() {
   function savePlayoffOverrides(nextOverrides) {
     const safe = nextOverrides || {};
     setPlayoffTeamsOverrides(safe);
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2707,6 +2922,7 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
+      leagueFingerprint: fingerprint,
     });
   }
 
@@ -2716,8 +2932,27 @@ export default function App() {
     setDerivedAll(built);
     setRawRows(all);
 
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint, meta } =
       getCurrentLeagueIdentity();
+    const builtKeys = built.leagues || [];
+    const metaForFingerprint =
+      (built.byLeague?.[selectedLeague] && {
+        ...built.byLeague[selectedLeague]?.meta,
+        owners: built.byLeague[selectedLeague]?.owners || [],
+      }) ||
+      (builtKeys.length && built.byLeague?.[builtKeys[0]]
+        ? {
+            ...built.byLeague[builtKeys[0]]?.meta,
+            owners: built.byLeague[builtKeys[0]]?.owners || [],
+          }
+        : null) ||
+      meta ||
+      {};
+    const updatedFingerprint = computeLeagueFingerprint(
+      all,
+      Object.values(seasonsByYear || {}),
+      metaForFingerprint
+    );
     upsertLeague({
       leagueId,
       leagueKey: selectedLeague,
@@ -2738,13 +2973,14 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon,
+      leagueFingerprint: updatedFingerprint || fingerprint,
     });
   }
 
   function handleLeagueIconChange(nextIcon) {
     const normalized = normalizeLeagueIcon(nextIcon, leagueIcon);
     setLeagueIcon(normalized);
-    const { leagueId, leagueName, platform, scoring } =
+    const { leagueId, leagueName, platform, scoring, fingerprint } =
       getCurrentLeagueIdentity();
     upsertLeague({
       leagueId,
@@ -2767,6 +3003,7 @@ export default function App() {
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
       leagueIcon: normalized,
+      leagueFingerprint: fingerprint,
     });
   }
   const headerIconIsUpload =
@@ -2989,7 +3226,13 @@ export default function App() {
                   onChangeHiddenManagers={(nextSet) => {
                     const nextArr = Array.from(nextSet || []);
                     setHiddenManagers(new Set(nextArr));
-                    const { leagueId, leagueName, platform, scoring } =
+                    const {
+                      leagueId,
+                      leagueName,
+                      platform,
+                      scoring,
+                      fingerprint,
+                    } =
                       getCurrentLeagueIdentity();
                     upsertLeague({
                       leagueId,
@@ -3014,6 +3257,7 @@ export default function App() {
                       espnScheduleByYear: scheduleByYear,
                       hiddenManagers: nextArr,
                       leagueIcon,
+                      leagueFingerprint: fingerprint,
                     });
                   }}
                   leagueIcon={leagueIcon}
