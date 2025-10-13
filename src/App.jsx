@@ -2116,6 +2116,70 @@ export default function App() {
         if (typeof window !== "undefined") {
           window.__espnSeasons = seasons;
         }
+
+        // Sleeper support: turn data.games → rows your pipeline understands
+        function _rowsFromSleeperGames(games, leagueNameGuess) {
+          const out = [];
+          (games || []).forEach((g) => {
+            const season = Number(g?.season) || null;
+            const week = Number(g?.week) || null;
+            const aOwner =
+              String(g?.home?.owner || "").trim() ||
+              `Owner ${g?.home?.teamId || ""}`;
+            const bOwner =
+              String(g?.away?.owner || "").trim() ||
+              `Owner ${g?.away?.teamId || ""}`;
+            const aPts = Number(g?.home?.points || 0) || 0;
+            const bPts = Number(g?.away?.points || 0) || 0;
+            const isPlayoff = !!g?.playoff;
+            const leagueName = String(leagueNameGuess || "").trim();
+
+            out.push({
+              season,
+              week,
+              manager: aOwner,
+              opponent: bOwner,
+              team_name: g?.home?.teamName || aOwner,
+              points_for: aPts,
+              points_against: bPts,
+              proj_for: null,
+              proj_against: null,
+              result: aPts > bPts ? "W" : aPts < bPts ? "L" : "T",
+              final_rank: "",
+              league_name: leagueName,
+              platform: "SLEEPER",
+              scoring: "Standard",
+              is_playoff: isPlayoff,
+            });
+            out.push({
+              season,
+              week,
+              manager: bOwner,
+              opponent: aOwner,
+              team_name: g?.away?.teamName || bOwner,
+              points_for: bPts,
+              points_against: aPts,
+              proj_for: null,
+              proj_against: null,
+              result: bPts > aPts ? "W" : bPts < aPts ? "L" : "T",
+              final_rank: "",
+              league_name: leagueName,
+              platform: "SLEEPER",
+              scoring: "Standard",
+              is_playoff: isPlayoff,
+            });
+          });
+          return out;
+        }
+
+        // Build rows from Sleeper games if present
+        const sleeperRows = Array.isArray(data?.games)
+          ? _rowsFromSleeperGames(
+              data.games,
+              data?.meta?.name || data?.leagueName
+            )
+          : [];
+
         const seasonsMap = Object.fromEntries(
           seasons.map((s) => [Number(s.seasonId), s])
         );
@@ -2166,7 +2230,7 @@ export default function App() {
           legacyLite.length
         );
 
-        if (!seasons.length && !legacy.length) {
+        if (!seasons.length && !legacy.length && !sleeperRows.length) {
           rebuildFromStore();
           try {
             window.name = "";
@@ -2175,12 +2239,16 @@ export default function App() {
         }
 
         const light = buildRowsLight(seasons);
-        const combinedRows = [...light.rows, ...light.txRows];
+
+        // 👇 include Sleeper rows that were built earlier in bootstrapFromPayload
+        const combinedRows = [...light.rows, ...light.txRows, ...sleeperRows];
         console.log(
           "[FL][dbg] lightRowsLen=",
           (light.rows || []).length,
           " lightTxLen=",
           (light.txRows || []).length,
+          " sleeperRowsLen=",
+          (sleeperRows || []).length,
           " combinedRowsLen=",
           combinedRows.length
         );
@@ -2312,6 +2380,12 @@ export default function App() {
         );
         setActivityBySeason(activityPreMerge);
 
+        // 👇 schedule fallback: if seasonal schedules were empty earlier, derive from the rows we have
+        if (!Object.keys(scheduleByYear || {}).length) {
+          const fallback = buildScheduleFromRows([...combinedRows]);
+          setScheduleByYear(fallback);
+        }
+
         const legacyNorm = coerceLegacyRows(legacy, {
           seasons,
           leagueId: data.leagueId,
@@ -2321,6 +2395,7 @@ export default function App() {
           [...combinedRows, ...legacyNorm],
           seasons
         );
+
         const provisional = buildFromRows(combinedPlusLegacy);
         const candidateName = (
           data.leagueName ||
@@ -2504,11 +2579,23 @@ export default function App() {
           seasonsLen: seasons.length,
         });
 
+        // 👇 platform + schedule resolution (Sleeper-friendly)
+        const platformResolved =
+          (data?.provider && String(data.provider).toUpperCase()) ||
+          built.byLeague[selectedKey]?.meta?.platform ||
+          (rowsFinal?.[0]?.platform || "").toUpperCase() ||
+          "ESPN";
+
+        const scheduleForSave =
+          scheduleByYear && Object.keys(scheduleByYear).length
+            ? scheduleByYear
+            : buildScheduleFromRows(rowsFinal);
+
         upsertLeague({
           leagueId: resolvedLeagueId,
           leagueKey: selectedKey,
           name: resolvedLeagueName,
-          platform: built.byLeague[selectedKey]?.meta?.platform || "ESPN",
+          platform: platformResolved,
           scoring: built.byLeague[selectedKey]?.meta?.scoring || "Standard",
           rows: rowsFinal,
           draftByYear: draftMinimal,
@@ -2525,9 +2612,10 @@ export default function App() {
           espnRosterAcqByYear: rosterAcq,
           espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
           espnCurrentWeekBySeason: currentWeekBySeasonMap,
-          espnScheduleByYear: scheduleMap,
+          espnScheduleByYear: scheduleForSave,
           leagueIcon,
         });
+
         setTimeout(() => {
           const s = readStore();
           const backend =
@@ -2730,6 +2818,7 @@ export default function App() {
     if (!leagueObj) return;
 
     // Auto-build alias overrides from ESPN members: displayName/nickname/username => "First Last"
+    // Auto-build alias overrides from ESPN members: displayName/nickname/username => "First Last"
     const manualAliases = {};
     Object.values(seasonsByYear || {}).forEach((s) => {
       (s?.members || []).forEach((m) => {
@@ -2744,6 +2833,23 @@ export default function App() {
           manualAliases[m.nickname] = full;
       });
     });
+
+    // Fallback for Sleeper (no seasons/members): seed identity aliases from latest owner map
+    if (
+      !Object.keys(manualAliases).length &&
+      ownerByTeamByYear &&
+      Object.keys(ownerByTeamByYear).length
+    ) {
+      const years = Object.keys(ownerByTeamByYear)
+        .map(Number)
+        .filter(Number.isFinite);
+      const latest = years.length ? Math.max(...years) : null;
+      const byTeam = latest ? ownerByTeamByYear[latest] : {};
+      Object.values(byTeam || {}).forEach((name) => {
+        const n = String(name || "").trim();
+        if (n && !manualAliases[n]) manualAliases[n] = n;
+      });
+    }
 
     primeOwnerMaps({
       league: {
@@ -2791,7 +2897,8 @@ export default function App() {
         .trim()
         .replace(/\s+/g, "_") || `league_${Date.now()}`;
     const leagueName = meta.name || "Your Fantasy League";
-    const platform = meta.platform || "ESPN";
+    const firstRowPlatform = (rawRows?.[0]?.platform || "").toUpperCase();
+    const platform = meta.platform || firstRowPlatform || "ESPN";
     const scoring = meta.scoring || "Standard";
     return { leagueId, leagueName, platform, scoring, meta };
   }
