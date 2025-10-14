@@ -2058,6 +2058,12 @@ export default function App() {
         }
 
         window.__FL_PAYLOAD = data;
+        const pickFirstPopulated = (...candidates) => {
+          for (const candidate of candidates || []) {
+            if (candidate && Object.keys(candidate).length) return candidate;
+          }
+          return null;
+        };
         (function normalizePickupsPayload(p) {
           let txByYear = {};
           let weeklyByYear = {};
@@ -2563,12 +2569,25 @@ export default function App() {
           }
           return out;
         })();
-        const rosterMap =
-          data.rostersByYear && Object.keys(data.rostersByYear).length
-            ? data.rostersByYear
-            : buildRostersByYear(seasons);
-        const lineupSlots = data.lineupSlotsByYear || {};
-        const rosterAcq = data.rosterAcqByYear || {};
+        const rosterMapCandidate =
+          pickFirstPopulated(
+            data.rostersByYear,
+            data.espnRostersByYear
+          ) || {};
+        const rosterMap = Object.keys(rosterMapCandidate).length
+          ? rosterMapCandidate
+          : buildRostersByYear(seasons);
+        const lineupSlots =
+          pickFirstPopulated(
+            data.lineupSlotsByYear,
+            data.espnLineupSlotsByYear,
+            data.espnLineupTemplateByYear
+          ) || {};
+        const rosterAcq =
+          pickFirstPopulated(
+            data.rosterAcqByYear,
+            data.espnRosterAcqByYear
+          ) || {};
         const existingMoney =
           readStore().leaguesById?.[resolvedLeagueId]?.moneyInputs || {};
         const mergedMoney = { ...existingMoney, ...(moneyInputs || {}) };
