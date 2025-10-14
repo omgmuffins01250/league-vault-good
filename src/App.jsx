@@ -2318,8 +2318,12 @@ export default function App() {
           }
           return {};
         })();
-        const currentWeekBySeasonMap = mergeCurrentWeekMaps(
+        const currentWeekFromData = mergeCurrentWeekMaps(
           data?.currentWeekByYear,
+          data?.currentWeekBySeason
+        );
+        const currentWeekBySeasonMap = mergeCurrentWeekMaps(
+          currentWeekFromData,
           { ...derivedCurrentWeeks, ...metaCurrentWeek }
         );
         setCurrentWeekBySeason(currentWeekBySeasonMap);
