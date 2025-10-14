@@ -7888,6 +7888,37 @@ const __num = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// NEW: normalize lineup slots input (array template OR counts map) → counts map per season
+function __normalizeLineupCountsPerSeason(src = {}) {
+  const out = {};
+  Object.entries(src || {}).forEach(([season, val]) => {
+    if (Array.isArray(val)) {
+      // array of slotIds → count occurrences
+      const counts = {};
+      for (const sid of val) {
+        const k = Number(sid);
+        if (!Number.isFinite(k)) continue;
+        counts[k] = (counts[k] || 0) + 1;
+      }
+      out[season] = counts;
+    } else if (val && typeof val === "object") {
+      out[season] = val;
+    } else {
+      out[season] = {};
+    }
+  });
+  return out;
+}
+
+// NEW: first non-empty object helper
+function __firstNonEmpty(...cands) {
+  for (const c of cands) {
+    if (c && typeof c === "object" && Object.keys(c).length) return c;
+  }
+  return {};
+}
+
+
 const __entrySlotId = (e) => e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
 const __toFiniteNum = (v) => {
   const n = Number(v);
@@ -8462,10 +8493,33 @@ export function RosterTab({
   rostersByYear = {},
   lineupSlotsByYear = {},
   currentWeekByYear = {},
-  rosterAcqByYear = {}, // ✅ new (optional; safe if not provided)
-  league, // ✅ optional: source of hiddenManagers
-  hiddenManagers, // ✅ optional: fallback array of names
+  rosterAcqByYear = {},
+  league,
+  hiddenManagers,
 }) {
+  // —— NEW: accept data from props OR fall back to league.* if props are empty
+  const RB = React.useMemo(
+    () => __firstNonEmpty(
+      rostersByYear,
+      league?.espnRostersByYear,
+      league?.rostersByYear
+    ),
+    [rostersByYear, league]
+  );
+
+  const LSYraw = React.useMemo(
+    () => __firstNonEmpty(
+      lineupSlotsByYear,
+      league?.espnLineupSlotsByYear,
+      league?.lineupSlotsByYear,
+      league?.espnLineupTemplateByYear   // allow ordered template too
+    ),
+    [lineupSlotsByYear, league]
+  );
+
+  // counts map per season regardless of original shape
+  const LSY = React.useMemo(() => __normalizeLineupCountsPerSeason(LSYraw), [LSYraw]);
+
   const hidden = React.useMemo(() => {
     const fromLeague = Array.isArray(league?.hiddenManagers)
       ? league.hiddenManagers
@@ -8476,13 +8530,14 @@ export function RosterTab({
 
   const seasons = React.useMemo(
     () =>
-      Object.keys(rostersByYear)
-
+      Object.keys(RB)
         .map((y) => Number(y))
         .filter((y) => y >= 2019)
         .sort((a, b) => b - a),
-    [rostersByYear]
+    [RB]
   );
+  
+  
   const [season, setSeason] = React.useState(
     seasons[0] || new Date().getFullYear()
   );
@@ -8490,7 +8545,7 @@ export function RosterTab({
     if (!seasons.length) return;
     if (!seasons.includes(season)) setSeason(seasons[0]);
   }, [seasons]);
-  const byTeam = rostersByYear?.[season] || {};
+  const byTeam = RB?.[season] || {};
 
   // Central owner resolver (tries ownerName, falls back to window.__ownerMaps.name, else Team X)
   const resolveOwner = React.useCallback(
@@ -8525,25 +8580,20 @@ export function RosterTab({
     return all;
   }, [byTeam, weekCap]);
   const rowSpecs = React.useMemo(() => {
-    const fromSettings = __buildRowSpecs(lineupSlotsByYear?.[season] || {});
+    const fromSettings = __buildRowSpecs(LSY?.[season] || {});
     if (fromSettings.length) return fromSettings;
     return __buildRowSpecs({
-      0: 1,
-      2: 2,
-      3: 2,
-      6: 1,
-      23: 1,
-      16: 1,
-      17: 1,
-      20: 6,
+      0: 1, 2: 2, 3: 2, 6: 1, 23: 1, 16: 1, 17: 1, 20: 6,
     });
-  }, [lineupSlotsByYear, season]);
+  }, [LSY, season]);
+  
 
   // starter slots for this season (derived from ESPN lineup settings)
   const startSlots = React.useMemo(
-    () => __buildStartSlots(lineupSlotsByYear?.[season] || {}),
-    [lineupSlotsByYear, season]
+    () => __buildStartSlots(LSY?.[season] || {}),
+    [LSY, season]
   );
+  
   const startSlotsSet = React.useMemo(() => new Set(startSlots), [startSlots]);
 
   const teamIds = React.useMemo(
@@ -8587,21 +8637,16 @@ export function RosterTab({
   // --- helper: bench left (potential - actual) for one team/week ---
   const __benchLeftFor = React.useCallback(
     (seasonId, teamId, week) => {
-      const entries = rostersByYear?.[seasonId]?.[teamId]?.[week] || [];
-      const starts = __buildStartSlots(lineupSlotsByYear?.[seasonId] || {});
+      const entries = RB?.[seasonId]?.[teamId]?.[week] || [];
+      const starts = __buildStartSlots(LSY?.[seasonId] || {});
       const startSet = new Set(starts);
       const actual = __actualStarterPoints(entries, startSet);
-      const potential = __potentialPoints(
-        entries,
-        starts,
-        seasonId,
-        teamId,
-        {}
-      );
+      const potential = __potentialPoints(entries, starts, seasonId, teamId, rosterAcqByYear);
       return Math.max(0, potential - actual);
     },
-    [rostersByYear, lineupSlotsByYear]
+    [RB, LSY, rosterAcqByYear]
   );
+  
 
   // ---------- WEEKLY SUMMARY (current `season`) ----------
   const weeklySummary = React.useMemo(() => {
@@ -8634,12 +8679,10 @@ export function RosterTab({
 
   // ---------- YEARLY SUMMARY (all seasons) ----------
   const yearlySummary = React.useMemo(() => {
-    const yearsAsc = [...seasons].sort((a, b) => a - b); // columns from oldest → newest
-
-    // Build Manager name list across all seasons (ensure stable order by latest season name)
+    const yearsAsc = [...seasons].sort((a, b) => a - b);
     const allManagers = new Set();
     for (const yr of seasons) {
-      const teams = Object.keys(rostersByYear?.[yr] || {}).map(Number);
+      const teams = Object.keys(RB?.[yr] || {}).map(Number);
       teams.forEach((tid) => {
         const name = resolveOwner(tid);
         if (!hidden.has(name)) allManagers.add(name);
@@ -8651,16 +8694,17 @@ export function RosterTab({
     const rows = managers.map((mgr) => {
       const perYear = yearsAsc.map((yr) => {
         // Collect teamIds whose resolveOwner(yr, tid) === mgr (use rostersByYear keys for that yr)
-        const tids = Object.keys(rostersByYear?.[yr] || {})
-          .map(Number)
-          .filter((tid) => resolveOwner(tid) === mgr);
+        const tids = Object.keys(RB?.[yr] || {})
+        .map(Number)
+        .filter((tid) => resolveOwner(tid) === mgr);
 
         if (!tids.length) return 0;
 
         // Weeks in this year (cap by currentWeek if present)
         const wksSet = new Set();
         tids.forEach((tid) =>
-          Object.keys(rostersByYear?.[yr]?.[tid] || {}).forEach((w) =>
+          
+          Object.keys(RB?.[yr]?.[tid] || {}).forEach((w) =>
             wksSet.add(Number(w))
           )
         );
