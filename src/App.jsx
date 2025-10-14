@@ -2572,6 +2572,7 @@ export default function App() {
         const rosterMapCandidate =
           pickFirstPopulated(
             data.rostersByYear,
+            data.sleeperRostersByYear,
             data.espnRostersByYear
           ) || {};
         const rosterMap = Object.keys(rosterMapCandidate).length
@@ -2580,12 +2581,15 @@ export default function App() {
         const lineupSlots =
           pickFirstPopulated(
             data.lineupSlotsByYear,
+            data.sleeperLineupSlotsByYear,
             data.espnLineupSlotsByYear,
-            data.espnLineupTemplateByYear
+            data.espnLineupTemplateByYear,
+            data.sleeperLineupTemplateByYear
           ) || {};
         const rosterAcq =
           pickFirstPopulated(
             data.rosterAcqByYear,
+            data.sleeperRosterAcqByYear,
             data.espnRosterAcqByYear
           ) || {};
         const existingMoney =
