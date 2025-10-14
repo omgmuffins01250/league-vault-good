@@ -769,6 +769,99 @@ function extractPlayoffTeamsBySeason(seasons = []) {
   });
   return out;
 }
+
+function normalizeCurrentWeekMap(map) {
+  if (!map || typeof map !== "object") return {};
+  const out = {};
+  Object.entries(map).forEach(([key, value]) => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    const safe = Math.floor(n);
+    const strKey = String(key);
+    out[strKey] = safe;
+  });
+  return out;
+}
+
+function deriveCurrentWeekBySeasonFromSeasons(seasons = []) {
+  const out = {};
+  (seasons || []).forEach((season) => {
+    const yrRaw =
+      season?.seasonId ?? season?.season ?? season?.year ?? season?.seasonYear;
+    const yr = Number(yrRaw);
+    if (!Number.isFinite(yr) || yr <= 0) return;
+
+    const candidates = new Set();
+    const push = (value) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) candidates.add(Math.floor(n));
+    };
+
+    push(season?.currentWeek);
+    push(season?.currentMatchupPeriod);
+    push(season?.currentMatchupPeriodId);
+
+    const status = season?.status || {};
+    [
+      status?.currentMatchupPeriod,
+      status?.currentMatchupPeriodId,
+      status?.matchupPeriodId,
+      status?.currentScoringPeriod,
+      status?.latestScoringPeriod,
+      status?.latestMatchupPeriod,
+      status?.latestMatchupPeriodId,
+    ].forEach(push);
+
+    const summary = season?.seasonSummary || season?.summary || {};
+    [
+      summary?.currentMatchupPeriod,
+      summary?.currentScoringPeriod,
+      summary?.latestMatchupPeriod,
+    ].forEach(push);
+
+    (season?.schedule || []).forEach((game) => {
+      [
+        game?.currentMatchupPeriod,
+        game?.currentMatchupPeriodId,
+        game?.matchupPeriodId,
+        game?.matchupPeriod,
+        game?.week,
+        game?.scoringPeriodId,
+      ].forEach(push);
+    });
+
+    if (!candidates.size) return;
+
+    let best = Math.max(...candidates);
+
+    const capCandidates = [
+      season?.settings?.scheduleSettings?.regularSeasonMatchupPeriodCount,
+      season?.settings?.scheduleSettings?.matchupPeriodCount,
+      season?.settings?.regularSeasonMatchupPeriodCount,
+      season?.settings?.matchupPeriodCount,
+      season?.scheduleSettings?.regularSeasonMatchupPeriodCount,
+      season?.scheduleSettings?.matchupPeriodCount,
+      season?.regularSeasonMatchupPeriodCount,
+      season?.matchupPeriodCount,
+    ];
+    for (const cand of capCandidates) {
+      const n = Number(cand);
+      if (Number.isFinite(n) && n > 0) {
+        best = Math.min(best, Math.floor(n));
+        break;
+      }
+    }
+
+    if (best > 0) out[String(Math.floor(yr))] = best;
+  });
+  return out;
+}
+
+function mergeCurrentWeekMaps(primary, fallback) {
+  const normalizedFallback = normalizeCurrentWeekMap(fallback);
+  const normalizedPrimary = normalizeCurrentWeekMap(primary);
+  return { ...normalizedFallback, ...normalizedPrimary };
+}
 function buildScheduleFromRows(rows = []) {
   const byYear = {};
   const seen = new Set();
@@ -1843,7 +1936,9 @@ export default function App() {
       setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
       setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
       setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
-      setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+      setCurrentWeekBySeason(
+        normalizeCurrentWeekMap(rec?.espnCurrentWeekBySeason)
+      );
       const sched =
         rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
           ? rec.espnScheduleByYear
@@ -1902,7 +1997,7 @@ export default function App() {
     setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
     setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
-    setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+    setCurrentWeekBySeason(normalizeCurrentWeekMap(rec?.espnCurrentWeekBySeason));
     const sched =
       rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
         ? rec.espnScheduleByYear
@@ -2201,10 +2296,38 @@ export default function App() {
         );
         setScheduleByYear(scheduleMap);
 
-        const currentWeekBySeasonMap =
-          data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
-            ? data.currentWeekByYear
-            : {};
+        const derivedCurrentWeeks =
+          deriveCurrentWeekBySeasonFromSeasons(seasons);
+        const metaCurrentWeek = (() => {
+          const seasonId =
+            data?.meta?.seasonId ??
+            data?.meta?.season ??
+            data?.seasonId ??
+            data?.season;
+          const yr = Number(seasonId);
+          if (!Number.isFinite(yr) || yr <= 0) return {};
+          const candidates = [
+            data?.meta?.currentMatchupPeriod,
+            data?.meta?.currentMatchupPeriodId,
+            data?.meta?.currentScoringPeriod,
+            data?.meta?.latestScoringPeriod,
+            data?.meta?.status?.currentMatchupPeriod,
+            data?.meta?.status?.currentScoringPeriod,
+            data?.currentMatchupPeriod,
+            data?.currentWeek,
+          ];
+          for (const cand of candidates) {
+            const n = Number(cand);
+            if (Number.isFinite(n) && n > 0) {
+              return { [String(Math.floor(yr))]: Math.floor(n) };
+            }
+          }
+          return {};
+        })();
+        const currentWeekBySeasonMap = mergeCurrentWeekMaps(
+          data?.currentWeekByYear,
+          { ...derivedCurrentWeeks, ...metaCurrentWeek }
+        );
         setCurrentWeekBySeason(currentWeekBySeasonMap);
 
         const playoffTeamsFromSeasons = {};
