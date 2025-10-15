@@ -226,8 +226,8 @@ function NicknamesControl({
   return (
     <Card title="Manager nicknames">
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Give managers alternate names. When enabled in Weekly Outlook, key
-        facts will rotate through these nicknames.
+        Give managers alternate names. When enabled in Weekly Outlook, key facts
+        will rotate through these nicknames.
       </p>
       <div className="mt-4 space-y-3">
         {ownersList.length === 0 ? (
@@ -11918,11 +11918,17 @@ export function WeeklyOutlookTab({
 
       const width = Math.max(
         1,
-        imageElement.naturalWidth || imageElement.width || imageElement.clientWidth || 0
+        imageElement.naturalWidth ||
+          imageElement.width ||
+          imageElement.clientWidth ||
+          0
       );
       const height = Math.max(
         1,
-        imageElement.naturalHeight || imageElement.height || imageElement.clientHeight || 0
+        imageElement.naturalHeight ||
+          imageElement.height ||
+          imageElement.clientHeight ||
+          0
       );
 
       const canvas = document.createElement("canvas");
@@ -12368,10 +12374,12 @@ export function WeeklyOutlookTab({
   }, [gamesBeforeThisWeek]);
 
   const pointsRankByOwner = React.useMemo(() => {
-    const arr = Array.from(seasonTotalsByOwner.entries()).map(([owner, row]) => ({
-      owner,
-      points: Number(row?.pf) || 0,
-    }));
+    const arr = Array.from(seasonTotalsByOwner.entries()).map(
+      ([owner, row]) => ({
+        owner,
+        points: Number(row?.pf) || 0,
+      })
+    );
 
     if (!arr.length) return new Map();
 
@@ -12380,7 +12388,8 @@ export function WeeklyOutlookTab({
       let prevPoints = null;
       let prevRank = 0;
       sorted.forEach((row, idx) => {
-        const rank = prevPoints != null && row.points === prevPoints ? prevRank : idx + 1;
+        const rank =
+          prevPoints != null && row.points === prevPoints ? prevRank : idx + 1;
         const existing = rankMap.get(row.owner) || {};
         existing[key] = rank;
         rankMap.set(row.owner, existing);
@@ -12390,15 +12399,11 @@ export function WeeklyOutlookTab({
     };
 
     applyRank(
-      arr
-        .slice()
-        .sort((a, b) => b.points - a.points),
+      arr.slice().sort((a, b) => b.points - a.points),
       "highRank"
     );
     applyRank(
-      arr
-        .slice()
-        .sort((a, b) => a.points - b.points),
+      arr.slice().sort((a, b) => a.points - b.points),
       "lowRank"
     );
 
@@ -12914,9 +12919,11 @@ export function WeeklyOutlookTab({
     <div ref={captureRef} className="space-y-6">
       <Card
         title={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <span>{`Weekly Outlook — Week ${currentWeek} (${currentYear})`}</span>
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <span className="truncate bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-[13px] font-semibold uppercase tracking-[0.2em] text-transparent drop-shadow">
+                {`Weekly Outlook — Week ${currentWeek} (${currentYear})`}
+              </span>
               <label
                 className={`flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${toggleLabelClass}`}
               >
@@ -12938,7 +12945,7 @@ export function WeeklyOutlookTab({
             <div
               ref={downloadMenuRef}
               data-snapshot-ignore="true"
-              className="relative"
+              className="relative flex-shrink-0"
             >
               <button
                 type="button"
@@ -12963,25 +12970,26 @@ export function WeeklyOutlookTab({
                 <span className="hidden sm:inline">Download</span>
                 <svg
                   viewBox="0 0 20 20"
-                  className={`h-3 w-3 transition-transform ${downloadMenuOpen ? "rotate-180" : ""}`}
+                  className={`h-3 w-3 transition-transform ${
+                    downloadMenuOpen ? "rotate-180" : ""
+                  }`}
                   fill="currentColor"
                   aria-hidden="true"
                 >
                   <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.976a.75.75 0 111.08 1.04l-4.25 4.55a.75.75 0 01-1.08 0l-4.25-4.55a.75.75 0 01.02-1.06z" />
                 </svg>
               </button>
-
               {downloadMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
+                  className="absolute right-0 z-50 mt-1 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
-                      downloadSnapshot();
+                      await downloadSnapshot();
                     }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
                   >
@@ -12998,9 +13006,9 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
-                      downloadPdf();
+                      await downloadPdf();
                     }}
                     className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
                   >
@@ -13351,13 +13359,25 @@ export function WeeklyOutlookTab({
               const winsB = Number(recordB.W) || 0;
               const lossesB = Number(recordB.L) || 0;
 
-              const totalsA = seasonTotalsByOwner.get(m.aName) || { pf: 0, pa: 0 };
-              const totalsB = seasonTotalsByOwner.get(m.bName) || { pf: 0, pa: 0 };
+              const totalsA = seasonTotalsByOwner.get(m.aName) || {
+                pf: 0,
+                pa: 0,
+              };
+              const totalsB = seasonTotalsByOwner.get(m.bName) || {
+                pf: 0,
+                pa: 0,
+              };
               const pfA = Number(totalsA?.pf) || 0;
               const pfB = Number(totalsB?.pf) || 0;
 
-              const streakA = streakByOwner.get(m.aName) || { type: null, length: 0 };
-              const streakB = streakByOwner.get(m.bName) || { type: null, length: 0 };
+              const streakA = streakByOwner.get(m.aName) || {
+                type: null,
+                length: 0,
+              };
+              const streakB = streakByOwner.get(m.bName) || {
+                type: null,
+                length: 0,
+              };
               const hStreak = headToHeadStreak(m.aName, m.bName);
 
               const rankA = pointsRankByOwner.get(m.aName) || {};
@@ -13412,9 +13432,13 @@ export function WeeklyOutlookTab({
               if (Math.abs(diffPF) >= 75)
                 pushFact(
                   `pf-diff-${m.aName}-${m.bName}`,
-                  `${diffPF >= 0 ? m.aName : m.bName} comes in as a huge favorite, outscoring ${
+                  `${
+                    diffPF >= 0 ? m.aName : m.bName
+                  } comes in as a huge favorite, outscoring ${
                     diffPF >= 0 ? m.bName : m.aName
-                  } by ${formatPointsValue(Math.abs(diffPF))} points this season.`,
+                  } by ${formatPointsValue(
+                    Math.abs(diffPF)
+                  )} points this season.`,
                   [m.aName, m.bName]
                 );
 
@@ -13541,7 +13565,10 @@ export function WeeklyOutlookTab({
                 } else {
                   seriesText = `This is the first regular-season meeting between ${m.aName} and ${m.bName}.`;
                 }
-                pushFact(`series-${m.aName}-${m.bName}`, seriesText, [m.aName, m.bName]);
+                pushFact(`series-${m.aName}-${m.bName}`, seriesText, [
+                  m.aName,
+                  m.bName,
+                ]);
               }
 
               if (facts.length < 3)
@@ -13554,7 +13581,9 @@ export function WeeklyOutlookTab({
               if (facts.length < 3)
                 pushFact(
                   `points-summary-${m.aName}-${m.bName}`,
-                  `${m.aName} has scored ${formatPointsValue(pfA)} points this season compared to ${formatPointsValue(
+                  `${m.aName} has scored ${formatPointsValue(
+                    pfA
+                  )} points this season compared to ${formatPointsValue(
                     pfB
                   )} for ${m.bName}.`,
                   [m.aName, m.bName]

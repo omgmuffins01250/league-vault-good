@@ -15,14 +15,42 @@ export function SidebarButton({ children, active, onClick, disabled }) {
 }
 
 export function Card({ className = "", children, title, subtitle, right }) {
+  const isTitlePrimitive =
+    typeof title === "string" || typeof title === "number";
   const titleNode =
-    typeof title === "string" ? (
-      <span className="bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-transparent drop-shadow">
-        {title}
-      </span>
-    ) : (
-      title
-    );
+    title == null
+      ? null
+      : isTitlePrimitive
+      ? (
+          <span className="bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-transparent drop-shadow">
+            {String(title)}
+          </span>
+        )
+      : title;
+
+  const renderTitle =
+    titleNode == null
+      ? null
+      : isTitlePrimitive
+      ? (
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
+            {titleNode}
+          </h3>
+        )
+      : titleNode;
+
+  const isRightPrimitive =
+    typeof right === "string" || typeof right === "number";
+  const renderRight =
+    right == null
+      ? null
+      : isRightPrimitive
+      ? (
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            {String(right)}
+          </span>
+        )
+      : right;
 
   return (
     <div
@@ -32,16 +60,16 @@ export function Card({ className = "", children, title, subtitle, right }) {
         <div className="absolute inset-0 opacity-80 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(92,105,134,0.16),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(135,151,176,0.12),transparent_60%)]" />
         <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
       </div>
-      {(title || right || subtitle) && (
+      {(renderTitle || renderRight || subtitle) && (
         <div className="relative z-10 px-5 py-4 flex flex-col gap-1 border-b border-white/60 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
-            {title ? (
-              <h3 className="text-[13px] font-semibold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
-                {titleNode}
-              </h3>
-            ) : null}
-            {right ? (
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">{right}</div>
+            {renderTitle ? <div className="min-w-0 flex-1">{renderTitle}</div> : null}
+            {renderRight ? (
+              <div
+                className={`${renderTitle ? "" : "ml-auto"} flex items-center gap-2`}
+              >
+                {renderRight}
+              </div>
             ) : null}
           </div>
           {subtitle ? (
