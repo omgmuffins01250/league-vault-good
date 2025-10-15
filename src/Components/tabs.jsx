@@ -28,6 +28,338 @@ import {
   Cell,
 } from "recharts";
 
+const SNAPSHOT_IGNORE_ATTR = "data-snapshot-ignore";
+
+const SNAPSHOT_COLOR_PROPS = [
+  "color",
+  "backgroundColor",
+  "borderColor",
+  "borderTopColor",
+  "borderRightColor",
+  "borderBottomColor",
+  "borderLeftColor",
+  "outlineColor",
+  "textDecorationColor",
+  "columnRuleColor",
+  "caretColor",
+  "accentColor",
+  "fill",
+  "stroke",
+];
+
+const COLORish_PROPS = new Set([
+  "color",
+  "background",
+  "background-color",
+  "background-image",
+  "border-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "column-rule-color",
+  "caret-color",
+  "accent-color",
+  "fill",
+  "stroke",
+  "box-shadow",
+  "text-shadow",
+]);
+
+const hasOKColor = (value) =>
+  typeof value === "string" && /okl(ch|ab)/i.test(value || "");
+
+let sharedColorCtx = null;
+const getColorContext = () => {
+  if (sharedColorCtx) return sharedColorCtx;
+  try {
+    sharedColorCtx = document.createElement("canvas").getContext("2d");
+  } catch {
+    sharedColorCtx = null;
+  }
+  return sharedColorCtx;
+};
+
+const normalizeColorValue = (ctx, value) => {
+  if (!value || !ctx || !hasOKColor(value)) return value;
+  try {
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = value;
+    return ctx.fillStyle;
+  } catch {
+    return value;
+  }
+};
+
+function applyColorNormalizationForClone(clone, { dark, ignoreAttr }) {
+  const ctx = getColorContext();
+  const toRGB = (val) => normalizeColorValue(ctx, val);
+  const shouldIgnore = ignoreAttr
+    ? (el) => el?.getAttribute?.(ignoreAttr) === "true"
+    : () => false;
+  const win = document.defaultView || window;
+
+  clone.querySelectorAll("*").forEach((el) => {
+    if (shouldIgnore(el)) return;
+    const cs = win.getComputedStyle(el);
+
+    SNAPSHOT_COLOR_PROPS.forEach((prop) => {
+      const value = cs[prop];
+      if (hasOKColor(value)) {
+        el.style[prop] = toRGB(value);
+      }
+    });
+
+    const bgi = cs.backgroundImage;
+    if (hasOKColor(bgi)) {
+      el.style.backgroundImage = "none";
+      el.style.backgroundColor =
+        toRGB(cs.backgroundColor) ||
+        (dark ? "rgb(24,24,27)" : "rgb(255,255,255)");
+    }
+
+    if (hasOKColor(cs.boxShadow)) el.style.boxShadow = "none";
+    if (hasOKColor(cs.textShadow)) el.style.textShadow = "none";
+  });
+}
+
+function cloneWithInlineStyles(root, { filter } = {}) {
+  const clone = root.cloneNode(true);
+
+  const walk = (src, dst) => {
+    if (filter && filter(src) === false) {
+      dst.remove();
+      return;
+    }
+    if (src.nodeType !== 1 || dst.nodeType !== 1) return;
+    const cs = getComputedStyle(src);
+
+    const style = dst.style;
+    Array.from(cs).forEach((prop) => {
+      let value = cs.getPropertyValue(prop);
+      if (!value) return;
+
+      if (
+        COLORish_PROPS.has(prop) ||
+        /color/i.test(prop) ||
+        prop.includes("shadow") ||
+        prop === "background" ||
+        prop.startsWith("border")
+      ) {
+        value = normalizeColorValue(getColorContext(), value);
+        if (prop === "background-image" && hasOKColor(value)) {
+          value = "none";
+        }
+      }
+
+      style.setProperty(prop, value, cs.getPropertyPriority(prop));
+    });
+
+    if (dst.tagName === "IMG") {
+      dst.setAttribute("crossorigin", "anonymous");
+    }
+
+    const srcKids = src.childNodes || [];
+    const dstKids = dst.childNodes || [];
+    for (let i = 0; i < srcKids.length; i++) {
+      if (!dstKids[i]) continue;
+      if (srcKids[i].nodeType === 1) walk(srcKids[i], dstKids[i]);
+    }
+  };
+
+  walk(root, clone);
+  return clone;
+}
+
+async function exportElementToPNG(
+  node,
+  { pixelRatio = 2, backgroundColor = "#ffffff", filter } = {}
+) {
+  const rect = node.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+
+  const cloned = cloneWithInlineStyles(node, { filter });
+  cloned.style.background = backgroundColor;
+
+  const wrapper = document.createElement("div");
+  wrapper.style.width = `${width}px`;
+  wrapper.style.height = `${height}px`;
+  wrapper.style.position = "relative";
+  wrapper.style.isolation = "isolate";
+  wrapper.appendChild(cloned);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+  fo.setAttribute("x", "0");
+  fo.setAttribute("y", "0");
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", String(height));
+  fo.appendChild(wrapper);
+  svg.appendChild(fo);
+
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(svg);
+  const svgDataUrl =
+    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+
+  const img = new Image();
+  img.decoding = "async";
+  img.crossOrigin = "anonymous";
+  await new Promise((res, rej) => {
+    img.onload = () => res();
+    img.onerror = (e) => rej(e);
+    img.src = svgDataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(width * pixelRatio));
+  canvas.height = Math.max(1, Math.floor(height * pixelRatio));
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL("image/png");
+}
+
+let html2canvasPromise = null;
+const ensureHtml2Canvas = async () => {
+  if (!html2canvasPromise) {
+    html2canvasPromise = import("html2canvas").then((mod) =>
+      mod?.default || mod
+    );
+  }
+  return html2canvasPromise;
+};
+
+async function captureNodeToPNG(node, {
+  backgroundColor,
+  pixelRatio,
+  dark = false,
+  ignoreAttr = SNAPSHOT_IGNORE_ATTR,
+} = {}) {
+  const ignoreFn = ignoreAttr
+    ? (el) => el?.getAttribute?.(ignoreAttr) === "true"
+    : () => false;
+
+  const captureWithHtml2Canvas = async () => {
+    const rect = node.getBoundingClientRect();
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "-100000px";
+    wrapper.style.top = "0";
+    wrapper.style.width = `${Math.ceil(rect.width)}px`;
+    wrapper.style.pointerEvents = "none";
+    wrapper.style.background = backgroundColor;
+    document.body.appendChild(wrapper);
+
+    try {
+      const clone = node.cloneNode(true);
+      wrapper.appendChild(clone);
+
+      applyColorNormalizationForClone(clone, { dark, ignoreAttr });
+
+      await new Promise((r) => requestAnimationFrame(r));
+
+      const fullW = Math.ceil(clone.scrollWidth || clone.clientWidth);
+      const fullH = Math.ceil(clone.scrollHeight || clone.clientHeight);
+
+      const html2canvas = await ensureHtml2Canvas();
+
+      const canvas = await html2canvas(clone, {
+        backgroundColor,
+        scale: pixelRatio,
+        useCORS: true,
+        removeContainer: true,
+        width: fullW,
+        height: fullH,
+        windowWidth: fullW,
+        windowHeight: fullH,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el) => ignoreFn(el),
+      });
+
+      return canvas.toDataURL("image/png");
+    } finally {
+      wrapper.remove();
+    }
+  };
+
+  try {
+    return await captureWithHtml2Canvas();
+  } catch (err) {
+    console.warn("Primary snapshot attempt failed, falling back", err);
+    return exportElementToPNG(node, {
+      pixelRatio,
+      backgroundColor,
+      filter: ignoreAttr
+        ? (el) => el?.getAttribute?.(ignoreAttr) !== "true"
+        : undefined,
+    });
+  }
+}
+
+const downloadDataUrl = (dataUrl, filename) => {
+  if (!dataUrl) throw new Error("No snapshot data generated");
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+};
+
+function useSnapshotDownload({ getFileName } = {}) {
+  const captureRef = React.useRef(null);
+
+  const onSnap = React.useCallback(async () => {
+    try {
+      const node = captureRef.current;
+      if (!node) return;
+
+      const dark =
+        document.documentElement.classList.contains("dark") ||
+        window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+      const backgroundColor = dark ? "rgb(17,17,20)" : "rgb(255,255,255)";
+      const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
+
+      try {
+        await document.fonts?.ready;
+      } catch {}
+
+      const rawName = getFileName?.();
+      const baseName = (rawName && String(rawName).trim()) || "snapshot.png";
+      const filename = baseName.endsWith(".png")
+        ? baseName
+        : `${baseName}.png`;
+
+      const dataUrl = await captureNodeToPNG(node, {
+        backgroundColor,
+        pixelRatio,
+        dark,
+      });
+
+      downloadDataUrl(dataUrl, filename);
+    } catch (err) {
+      console.error("Snapshot failed:", err);
+      alert("Snapshot failed. See console for details.");
+    }
+  }, [getFileName]);
+
+  return { captureRef, onSnap };
+}
+
 /* NEW: ESPN activity extractor                                       */
 /**
  * Turn ESPN seasons (2018+) into:
@@ -1013,17 +1345,53 @@ export function MembersTab({ league }) {
   const labelFor = (yr) => `${yr} Team Name`;
   const latestLabel = latest ? `Updated through ${latest}` : null;
 
+  const getMembersSnapshotName = React.useCallback(() => {
+    const nameCandidate = [league?.leagueName, league?.name]
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .find((v) => v.length > 0);
+    const slug = (nameCandidate || "league")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "");
+    const latestSuffix = latest ? `-${latest}` : "";
+    return `league-members-${slug || "league"}${latestSuffix}.png`;
+  }, [league?.leagueName, league?.name, latest]);
+
+  const { captureRef, onSnap } = useSnapshotDownload({
+    getFileName: getMembersSnapshotName,
+  });
+
   return (
-    <Card
-      title="League Members"
-      right={
-        latestLabel ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
-            {latestLabel}
-          </span>
-        ) : null
-      }
-    >
+    <div ref={captureRef} className="space-y-6">
+      <Card
+        title="League Members"
+        right={
+          <div className="flex items-center gap-2">
+            {latestLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                {latestLabel}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={onSnap}
+              data-snapshot-ignore="true"
+              className="inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-xs border border-zinc-300/60 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-900/70 hover:bg-white/90 hover:dark:bg-zinc-900/90 shadow-sm"
+              title="Save snapshot"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
+              </svg>
+              <span className="hidden sm:inline">Snapshot</span>
+            </button>
+          </div>
+        }
+      >
       <div className="space-y-6">
         <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
           <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
@@ -1105,7 +1473,8 @@ export function MembersTab({ league }) {
           </div>
         </div>
       </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 /* CareerTab — Playful Sport styling (wider + ticks + hover tooltip) */
@@ -11721,166 +12090,15 @@ export function WeeklyOutlookTab({
     return canvas.toDataURL("image/png");
   }
 
-  // Screenshot: capture target + handler (robust clone-in-place + html2canvas)
-  // Screenshot: capture target + handler (clone + targeted color normalization)
-  const captureRef = React.useRef(null);
-
-  const onSnap = React.useCallback(async () => {
-    try {
-      const node = captureRef.current;
-      if (!node) return;
-
-      const dark =
-        document.documentElement.classList.contains("dark") ||
-        window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-      const backgroundColor = dark ? "rgb(17,17,20)" : "rgb(255,255,255)";
-      const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
-
-      // fonts first to avoid reflow in the clone
-      try {
-        await document.fonts?.ready;
-      } catch {}
-
-      const download = (dataUrl) => {
-        if (!dataUrl) throw new Error("No snapshot data generated");
-        const wk = Number(currentWeek) || 0;
-        const yr = Number(currentYear) || new Date().getFullYear();
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = `weekly-outlook-wk${wk}-${yr}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      };
-
-      const captureWithHtml2Canvas = async () => {
-        const download = (dataUrl) => {
-          if (!dataUrl) throw new Error("No snapshot data generated");
-          const wk = Number(currentWeek) || 0;
-          const yr = Number(currentYear) || new Date().getFullYear();
-          const a = document.createElement("a");
-          a.href = dataUrl;
-          a.download = `weekly-outlook-wk${wk}-${yr}.png`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        };
-        // off-screen wrapper with same width as live node
-        const rect = node.getBoundingClientRect();
-        const wrapper = document.createElement("div");
-        wrapper.style.position = "fixed";
-        wrapper.style.left = "-100000px";
-        wrapper.style.top = "0";
-        wrapper.style.width = `${Math.ceil(rect.width)}px`;
-        wrapper.style.pointerEvents = "none";
-        wrapper.style.background = backgroundColor;
-        document.body.appendChild(wrapper);
-
-        try {
-          // deep clone into wrapper so browser lays it out naturally
-          const clone = node.cloneNode(true);
-          wrapper.appendChild(clone);
-
-          // targeted OKLCH → RGB normalization (preserve other styling)
-          const ctx = document.createElement("canvas").getContext("2d");
-          const toRGB = (val) => {
-            if (!val || !ctx) return val;
-            try {
-              ctx.fillStyle = "#000";
-              ctx.fillStyle = val;
-              return ctx.fillStyle;
-            } catch {
-              return val;
-            }
-          };
-          const hasOK = (s) => typeof s === "string" && /okl(ch|ab)/i.test(s);
-          const COLOR_PROPS = [
-            "color",
-            "backgroundColor",
-            "borderColor",
-            "borderTopColor",
-            "borderRightColor",
-            "borderBottomColor",
-            "borderLeftColor",
-            "outlineColor",
-            "textDecorationColor",
-            "columnRuleColor",
-            "caretColor",
-            "accentColor",
-            "fill",
-            "stroke",
-          ];
-          const win = document.defaultView || window;
-
-          clone.querySelectorAll("*").forEach((el) => {
-            const cs = win.getComputedStyle(el);
-
-            // 1) simple color props
-            COLOR_PROPS.forEach((p) => {
-              const v = cs[p];
-              if (hasOK(v)) el.style[p] = toRGB(v);
-            });
-
-            // 2) gradients containing OKLCH → fall back to solid bg
-            const bgi = cs.backgroundImage;
-            if (hasOK(bgi)) {
-              el.style.backgroundImage = "none";
-              el.style.backgroundColor =
-                toRGB(cs.backgroundColor) ||
-                (dark ? "rgb(24,24,27)" : "rgb(255,255,255)");
-            }
-
-            // 3) shadows containing OKLCH only
-            if (hasOK(cs.boxShadow)) el.style.boxShadow = "none";
-            if (hasOK(cs.textShadow)) el.style.textShadow = "none";
-          });
-
-          // let styles apply
-          await new Promise((r) => requestAnimationFrame(r));
-
-          // render the CLONE at full height
-          const fullW = Math.ceil(clone.scrollWidth || clone.clientWidth);
-          const fullH = Math.ceil(clone.scrollHeight || clone.clientHeight);
-
-          const canvas = await html2canvas(clone, {
-            backgroundColor,
-            scale: pixelRatio,
-            useCORS: true,
-            removeContainer: true,
-            width: fullW,
-            height: fullH,
-            windowWidth: fullW,
-            windowHeight: fullH,
-            scrollX: 0,
-            scrollY: 0,
-            ignoreElements: (el) =>
-              el?.getAttribute?.("data-snapshot-ignore") === "true",
-          });
-
-          return canvas.toDataURL("image/png");
-        } finally {
-          wrapper.remove();
-        }
-      };
-
-      let dataUrl = null;
-      try {
-        dataUrl = await captureWithHtml2Canvas();
-      } catch (err) {
-        console.warn("Primary snapshot attempt failed, falling back", err);
-        dataUrl = await exportElementToPNG(node, {
-          pixelRatio,
-          backgroundColor,
-          filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
-        });
-      }
-
-      download(dataUrl);
-    } catch (err) {
-      console.error("Snapshot failed:", err);
-      alert("Snapshot failed. See console for details.");
-    }
+  const getWeeklySnapshotName = React.useCallback(() => {
+    const wk = Number(currentWeek) || 0;
+    const yr = Number(currentYear) || new Date().getFullYear();
+    return `weekly-outlook-wk${wk}-${yr}.png`;
   }, [currentWeek, currentYear]);
+
+  const { captureRef, onSnap } = useSnapshotDownload({
+    getFileName: getWeeklySnapshotName,
+  });
 
   // Pull projections directly from stored rows in localStorage
   const projByOwner = React.useMemo(() => {
