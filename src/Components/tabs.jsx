@@ -11583,7 +11583,7 @@ export function WeeklyOutlookTab({
 
       const m = new Map();
       rows.forEach((r) => {
-        const owner = (r.manager || r.owner || "").trim();
+        const owner = canonicalize(r?.manager || r?.owner || "").trim();
         const p = Number(r?.proj_for ?? r?.projFor);
         if (owner && Number.isFinite(p)) m.set(owner, p);
       });
