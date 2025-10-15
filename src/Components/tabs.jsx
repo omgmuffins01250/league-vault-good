@@ -11936,6 +11936,160 @@ export function WeeklyOutlookTab({
     projByOwner,
     scoreByOwner,
   ]);
+
+  const formatPointsValue = (val) =>
+    Math.round(Number(val) || 0).toLocaleString();
+
+  const rankWord = (rank, type) => {
+    if (!Number.isFinite(rank)) return null;
+    const mapHigh = {
+      1: "highest",
+      2: "second highest",
+      3: "third highest",
+    };
+    const mapLow = {
+      1: "lowest",
+      2: "second lowest",
+      3: "third lowest",
+    };
+    return type === "high" ? mapHigh[rank] || null : mapLow[rank] || null;
+  };
+
+  const gamesBeforeThisWeek = React.useMemo(() => {
+    const cutYear = Number(currentYear) || 0;
+    const cutWeek = Number(currentWeek) || 0;
+    const all = Array.isArray(league?.games) ? league.games : [];
+
+    return all
+      .map((g) => {
+        const season = Number(g?.season);
+        const week = Number(g?.week);
+        if (!Number.isFinite(season) || season !== cutYear) return null;
+        if (!Number.isFinite(week)) return null;
+        if (cutWeek && week >= cutWeek) return null;
+
+        const owner = canonicalize(g?.owner ?? g?.manager ?? "");
+        const opp = canonicalize(g?.opp ?? g?.opponent ?? "");
+        if (!owner || !opp) return null;
+
+        return {
+          owner,
+          opp,
+          week,
+          res: String(g?.res || g?.result || "").toUpperCase(),
+          pf: pickNum(
+            g?.pf,
+            g?.points_for,
+            g?.points,
+            g?.score,
+            g?.owner_points,
+            g?.pts,
+            g?.fpts
+          ),
+          pa: pickNum(
+            g?.pa,
+            g?.points_against,
+            g?.opp_points,
+            g?.oppPts,
+            g?.against,
+            g?.opp_score
+          ),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.week ?? 0) - (b.week ?? 0));
+  }, [league?.games, currentYear, currentWeek, canonicalize]);
+
+  const seasonTotalsByOwner = React.useMemo(() => {
+    const totals = new Map();
+    gamesBeforeThisWeek.forEach((g) => {
+      if (!g?.owner) return;
+      const row = totals.get(g.owner) || {
+        pf: 0,
+        pa: 0,
+        games: 0,
+        wins: 0,
+        losses: 0,
+      };
+      if (Number.isFinite(g.pf)) row.pf += g.pf;
+      if (Number.isFinite(g.pa)) row.pa += g.pa;
+      if (g.res === "W") row.wins += 1;
+      else if (g.res === "L") row.losses += 1;
+      row.games += 1;
+      totals.set(g.owner, row);
+    });
+    return totals;
+  }, [gamesBeforeThisWeek]);
+
+  const streakByOwner = React.useMemo(() => {
+    const grouped = new Map();
+    gamesBeforeThisWeek.forEach((g) => {
+      if (!g?.owner) return;
+      if (!grouped.has(g.owner)) grouped.set(g.owner, []);
+      grouped.get(g.owner).push(g);
+    });
+
+    const out = new Map();
+    grouped.forEach((arr, owner) => {
+      arr.sort((a, b) => (a.week ?? 0) - (b.week ?? 0));
+      let curType = null;
+      let curLen = 0;
+      arr.forEach((g) => {
+        const type = g.res === "W" ? "win" : g.res === "L" ? "loss" : null;
+        if (!type) {
+          curType = null;
+          curLen = 0;
+          return;
+        }
+        if (curType === type) {
+          curLen += 1;
+        } else {
+          curType = type;
+          curLen = 1;
+        }
+      });
+      out.set(owner, { type: curType, length: curLen });
+    });
+    return out;
+  }, [gamesBeforeThisWeek]);
+
+  const pointsRankByOwner = React.useMemo(() => {
+    const arr = Array.from(seasonTotalsByOwner.entries()).map(([owner, row]) => ({
+      owner,
+      points: Number(row?.pf) || 0,
+    }));
+
+    if (!arr.length) return new Map();
+
+    const rankMap = new Map();
+    const applyRank = (sorted, key) => {
+      let prevPoints = null;
+      let prevRank = 0;
+      sorted.forEach((row, idx) => {
+        const rank = prevPoints != null && row.points === prevPoints ? prevRank : idx + 1;
+        const existing = rankMap.get(row.owner) || {};
+        existing[key] = rank;
+        rankMap.set(row.owner, existing);
+        prevPoints = row.points;
+        prevRank = rank;
+      });
+    };
+
+    applyRank(
+      arr
+        .slice()
+        .sort((a, b) => b.points - a.points),
+      "highRank"
+    );
+    applyRank(
+      arr
+        .slice()
+        .sort((a, b) => a.points - b.points),
+      "lowRank"
+    );
+
+    return rankMap;
+  }, [seasonTotalsByOwner]);
   // ---------- head-to-head history (REG season only; deduped per game) ----------
   const h2hIndex = React.useMemo(() => {
     // key: "ownerA|ownerB" (sorted) -> { total, aWins, bWins, rows:[latest first] }
@@ -12137,6 +12291,68 @@ export function WeeklyOutlookTab({
         bPts,
         winner,
       };
+    },
+    [h2hIndex, currentYear, currentWeek]
+  );
+
+  const headToHeadStreak = React.useCallback(
+    (ownerA, ownerB) => {
+      const key = [ownerA, ownerB].sort().join("|");
+      const rec = h2hIndex.get(key);
+      if (!rec || !Array.isArray(rec.rows)) return null;
+
+      const cutYear = Number(currentYear) || 0;
+      const cutWeek = Number(currentWeek) || 0;
+
+      const chronological = rec.rows
+        .filter((r) => {
+          const y = Number(r.year) || 0;
+          const w = Number(r.week) || 0;
+          return y < cutYear || (y === cutYear && w < cutWeek);
+        })
+        .sort((a, b) => {
+          const ay = Number(a.year) || 0;
+          const by = Number(b.year) || 0;
+          if (ay !== by) return ay - by;
+          const aw = Number(a.week) || 0;
+          const bw = Number(b.week) || 0;
+          return aw - bw;
+        });
+
+      if (!chronological.length) return null;
+
+      let winner = null;
+      let count = 0;
+
+      for (let i = chronological.length - 1; i >= 0; i -= 1) {
+        const row = chronological[i];
+        const aPts = Number(row?.aPts);
+        const bPts = Number(row?.bPts);
+        if (!Number.isFinite(aPts) || !Number.isFinite(bPts)) break;
+
+        let gameWinner = null;
+        if (aPts > bPts) gameWinner = row.a;
+        else if (aPts < bPts) gameWinner = row.b;
+        else gameWinner = null;
+
+        if (!gameWinner) break;
+
+        if (!winner) {
+          winner = gameWinner;
+          count = 1;
+        } else if (gameWinner === winner) {
+          count += 1;
+        } else {
+          break;
+        }
+      }
+
+      if (winner && count >= 2) {
+        const loser = winner === ownerA ? ownerB : ownerA;
+        return { winner, loser, count };
+      }
+
+      return null;
     },
     [h2hIndex, currentYear, currentWeek]
   );
@@ -12733,6 +12949,198 @@ export function WeeklyOutlookTab({
               const Ao = outlookFor(m.aName);
               const Bo = outlookFor(m.bName);
 
+              const recordA = ownerRecordNow.get(m.aName) || { W: 0, L: 0 };
+              const recordB = ownerRecordNow.get(m.bName) || { W: 0, L: 0 };
+              const winsA = Number(recordA.W) || 0;
+              const lossesA = Number(recordA.L) || 0;
+              const winsB = Number(recordB.W) || 0;
+              const lossesB = Number(recordB.L) || 0;
+
+              const totalsA = seasonTotalsByOwner.get(m.aName) || { pf: 0, pa: 0 };
+              const totalsB = seasonTotalsByOwner.get(m.bName) || { pf: 0, pa: 0 };
+              const pfA = Number(totalsA?.pf) || 0;
+              const pfB = Number(totalsB?.pf) || 0;
+
+              const streakA = streakByOwner.get(m.aName) || { type: null, length: 0 };
+              const streakB = streakByOwner.get(m.bName) || { type: null, length: 0 };
+              const hStreak = headToHeadStreak(m.aName, m.bName);
+
+              const rankA = pointsRankByOwner.get(m.aName) || {};
+              const rankB = pointsRankByOwner.get(m.bName) || {};
+
+              const nowPctA = pctNum(Ao.now);
+              const nowPctB = pctNum(Bo.now);
+
+              const facts = [];
+              const pushFact = (key, text) => {
+                if (!text) return;
+                if (facts.some((f) => f.text === text)) return;
+                facts.push({ key, text });
+              };
+
+              if (streakA?.type === "win" && streakA.length >= 3)
+                pushFact(
+                  `streak-${m.aName}-win`,
+                  `${m.aName} looks to continue their ${streakA.length}-game win streak.`
+                );
+
+              if (streakA?.type === "loss" && streakA.length >= 3)
+                pushFact(
+                  `streak-${m.aName}-loss`,
+                  `${m.aName} looks to break their ${streakA.length}-game losing streak.`
+                );
+
+              if (streakB?.type === "win" && streakB.length >= 3)
+                pushFact(
+                  `streak-${m.bName}-win`,
+                  `${m.bName} looks to continue their ${streakB.length}-game win streak.`
+                );
+
+              if (streakB?.type === "loss" && streakB.length >= 3)
+                pushFact(
+                  `streak-${m.bName}-loss`,
+                  `${m.bName} looks to break their ${streakB.length}-game losing streak.`
+                );
+
+              if (hStreak)
+                pushFact(
+                  `h2h-${m.aName}-${m.bName}`,
+                  `${hStreak.winner} has won ${hStreak.count} matchups in a row against ${hStreak.loser}.`
+                );
+
+              const diffPF = pfA - pfB;
+              if (Math.abs(diffPF) >= 75)
+                pushFact(
+                  `pf-diff-${m.aName}-${m.bName}`,
+                  `${diffPF >= 0 ? m.aName : m.bName} has outscored ${
+                    diffPF >= 0 ? m.bName : m.aName
+                  } by ${formatPointsValue(Math.abs(diffPF))} points this season.`
+                );
+
+              if (winsA - lossesA === 1)
+                pushFact(
+                  `above500-${m.aName}`,
+                  `${m.aName} is looking to stay above .500.`
+                );
+
+              if (winsA - lossesA === -1)
+                pushFact(
+                  `return500-${m.aName}`,
+                  `${m.aName} is looking to return to .500.`
+                );
+
+              if (winsB - lossesB === 1)
+                pushFact(
+                  `above500-${m.bName}`,
+                  `${m.bName} is looking to stay above .500.`
+                );
+
+              if (winsB - lossesB === -1)
+                pushFact(
+                  `return500-${m.bName}`,
+                  `${m.bName} is looking to return to .500.`
+                );
+
+              if (Number(currentWeek) >= 3) {
+                if (winsA === 0 && lossesA > 0)
+                  pushFact(
+                    `first-win-${m.aName}`,
+                    `${m.aName} is looking for their first win of the season.`
+                  );
+                if (lossesA === 0 && winsA > 0)
+                  pushFact(
+                    `undefeated-${m.aName}`,
+                    `${m.aName} is looking to stay undefeated.`
+                  );
+                if (winsB === 0 && lossesB > 0)
+                  pushFact(
+                    `first-win-${m.bName}`,
+                    `${m.bName} is looking for their first win of the season.`
+                  );
+                if (lossesB === 0 && winsB > 0)
+                  pushFact(
+                    `undefeated-${m.bName}`,
+                    `${m.bName} is looking to stay undefeated.`
+                  );
+              }
+
+              if (rankA?.highRank && rankA.highRank <= 3) {
+                const word = rankWord(rankA.highRank, "high");
+                if (word)
+                  pushFact(
+                    `rank-high-${m.aName}`,
+                    `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`
+                  );
+              } else if (rankA?.lowRank && rankA.lowRank <= 3) {
+                const word = rankWord(rankA.lowRank, "low");
+                if (word)
+                  pushFact(
+                    `rank-low-${m.aName}`,
+                    `${m.aName} desperately needs to spark the offense as the ${word} scoring team in the league.`
+                  );
+              }
+
+              if (rankB?.highRank && rankB.highRank <= 3) {
+                const word = rankWord(rankB.highRank, "high");
+                if (word)
+                  pushFact(
+                    `rank-high-${m.bName}`,
+                    `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`
+                  );
+              } else if (rankB?.lowRank && rankB.lowRank <= 3) {
+                const word = rankWord(rankB.lowRank, "low");
+                if (word)
+                  pushFact(
+                    `rank-low-${m.bName}`,
+                    `${m.bName} desperately needs to spark the offense as the ${word} scoring team in the league.`
+                  );
+              }
+
+              if (nowPctA != null && nowPctA <= 25)
+                pushFact(
+                  `low-odds-${m.aName}`,
+                  `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`
+                );
+
+              if (nowPctB != null && nowPctB <= 25)
+                pushFact(
+                  `low-odds-${m.bName}`,
+                  `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`
+                );
+
+              if (facts.length < 3) {
+                let seriesText = "";
+                if (h.total > 0) {
+                  if (h.wA === h.wB) {
+                    seriesText = `${m.aName} and ${m.bName} are tied ${h.wA}-${h.wB} in the regular-season series.`;
+                  } else {
+                    const leader = h.wA > h.wB ? m.aName : m.bName;
+                    const wins = Math.max(h.wA, h.wB);
+                    const losses = Math.min(h.wA, h.wB);
+                    seriesText = `${leader} leads the regular-season series ${wins}-${losses}.`;
+                  }
+                } else {
+                  seriesText = `This is the first regular-season meeting between ${m.aName} and ${m.bName}.`;
+                }
+                pushFact(`series-${m.aName}-${m.bName}`, seriesText);
+              }
+
+              if (facts.length < 3)
+                pushFact(
+                  `records-${m.aName}-${m.bName}`,
+                  `${m.aName} enters at ${winsA}-${lossesA} while ${m.bName} sits at ${winsB}-${lossesB}.`
+                );
+
+              if (facts.length < 3)
+                pushFact(
+                  `points-summary-${m.aName}-${m.bName}`,
+                  `${m.aName} has scored ${formatPointsValue(pfA)} points this season compared to ${formatPointsValue(
+                    pfB
+                  )} for ${m.bName}.`
+                );
+
+              const displayFacts = facts.slice(0, 5);
+
               return (
                 <div
                   key={i}
@@ -12878,6 +13286,21 @@ export function WeeklyOutlookTab({
                       </div>
                     </div>
                   </div>
+
+                  {displayFacts.length > 0 && (
+                    <div className="mt-4 text-left">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        Key Facts
+                      </div>
+                      <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+                        {displayFacts.map((fact, idx) => (
+                          <li key={fact.key || idx} className="leading-snug text-zinc-700 dark:text-zinc-200">
+                            {fact.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Outlook pills */}
                   <div className="mt-4 grid grid-cols-2 gap-3">
