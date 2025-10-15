@@ -11567,17 +11567,53 @@ export function WeeklyOutlookTab({
 
   // Pull projections directly from stored rows in localStorage
   const projByOwner = React.useMemo(() => {
+    const STORE_KEY = "FL_STORE_v1";
+
+    const pickStoreObject = () => {
+      if (typeof window === "undefined") return null;
+
+      const parseJSON = (raw) => {
+        if (!raw || typeof raw !== "string") return null;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      };
+
+      try {
+        const fromLocal = parseJSON(localStorage.getItem(STORE_KEY));
+        const fromSession = parseJSON(sessionStorage.getItem(STORE_KEY));
+        const fromVolatile =
+          window.__FL_VOLATILE_STORE__ &&
+          typeof window.__FL_VOLATILE_STORE__ === "object"
+            ? window.__FL_VOLATILE_STORE__
+            : null;
+
+        const nonEmpty = (obj) =>
+          obj && typeof obj === "object" && Object.keys(obj).length > 0;
+
+        if (nonEmpty(fromLocal)) return fromLocal;
+        if (nonEmpty(fromSession)) return fromSession;
+        if (nonEmpty(fromVolatile)) return fromVolatile;
+
+        return fromLocal || fromSession || fromVolatile || null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
-      const STORE_KEY = "FL_STORE_v1";
-      const store = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+      const store = pickStoreObject() || {};
+      const leagues = store.leaguesById || {};
       const lid =
-        store.lastSelectedLeagueId || Object.keys(store.leaguesById || {})[0];
-      const L = (store.leaguesById || {})[lid] || {};
+        store.lastSelectedLeagueId || Object.keys(leagues)[0] || null;
+      const leagueStore = (lid && leagues[lid]) || {};
 
       const yr = Number(currentYear) || 0;
       const wk = Number(currentWeek) || 0;
 
-      const rows = (L.rows || []).filter(
+      const rows = (leagueStore.rows || []).filter(
         (r) => Number(r.season) === yr && Number(r.week) === wk
       );
 
