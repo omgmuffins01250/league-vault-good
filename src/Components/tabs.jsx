@@ -205,6 +205,11 @@ const SETUP_SLOT_ORDER = [
   21, 24, 25, 26, 27, 28, 29,
 ];
 const ALWAYS_UPPER = new Set(["PPR", "FAAB", "IDP"]);
+const SCORING_TYPE_ID_LABEL = new Map([
+  [2, "PPR"],
+  [3, "Half PPR"],
+  [4, "Custom"],
+]);
 function pickFirst(...vals) {
   for (const val of vals) {
     if (val === undefined || val === null) continue;
@@ -327,8 +332,57 @@ function resolveScoringLabel(league, season) {
     season?.settings?.playerRankType,
     league?.meta?.scoring
   );
-  const label = humanizeToken(scoringRaw);
+  const scoringTypeId = pickFirst(
+    season?.scoringSettings?.scoringTypeId,
+    season?.settings?.scoringSettings?.scoringTypeId,
+    season?.settings?.scoringTypeId,
+    league?.meta?.scoringTypeId
+  );
+  const idLabel = Number.isFinite(Number(scoringTypeId))
+    ? SCORING_TYPE_ID_LABEL.get(Number(scoringTypeId))
+    : null;
+  const label = humanizeToken(scoringRaw) || idLabel || "";
+  if (label && label.toLowerCase() !== "standard") return label;
+  const inferred = inferScoringFromSettings(
+    season?.scoringSettings,
+    season?.settings?.scoringSettings,
+    season?.settings
+  );
+  if (inferred) return inferred;
   return label || "Standard";
+}
+
+function inferScoringFromSettings(...settingsObjects) {
+  const seen = new Set();
+  let fallback = "";
+  for (const obj of settingsObjects) {
+    if (!obj || typeof obj !== "object") continue;
+    const stack = [obj];
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current || typeof current !== "object") continue;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      for (const [key, value] of Object.entries(current)) {
+        if (value && typeof value === "object") {
+          stack.push(value);
+          continue;
+        }
+        if (typeof value === "number" && Number.isFinite(value)) {
+          if (/recept/i.test(key)) {
+            if (value >= 1) return "PPR";
+            if (value > 0 && value < 1) fallback ||= "Half PPR";
+          }
+        } else if (typeof value === "boolean") {
+          if (value && /ppr/i.test(key)) return "PPR";
+        } else if (typeof value === "string") {
+          if (/half[-_\s]*ppr/i.test(value)) return "Half PPR";
+          if (/ppr/i.test(value)) return "PPR";
+        }
+      }
+    }
+  }
+  return fallback || "";
 }
 function resolveFaab(acquisitionSettings) {
   if (!acquisitionSettings || typeof acquisitionSettings !== "object") {
@@ -550,12 +604,11 @@ export function SetupTab({
       draftOrderLabel,
     ]
   );
-  const hasExtras = useMemo(
-    () =>
-      rosterSlots.length > 0 ||
-      extraGeneralInfos.some((info) => info.value && info.value !== "—"),
-    [rosterSlots, extraGeneralInfos]
+  const hasExtraGeneralInfos = useMemo(
+    () => extraGeneralInfos.some((info) => info.value && info.value !== "—"),
+    [extraGeneralInfos]
   );
+  const hasRosterSlots = rosterSlots.length > 0;
   const [showMore, setShowMore] = useState(false);
   useEffect(() => {
     setShowMore(false);
@@ -719,7 +772,23 @@ export function SetupTab({
             <Info label="Platform" value={league.meta.platform} />
             <Info label="Scoring" value={scoringDisplay || "Standard"} />
           </div>
-          {hasExtras && (
+          {hasRosterSlots && (
+            <div className="mt-4">
+              <div className="text-xs uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                Roster Slots
+              </div>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+                {rosterSlots.map((slot) => (
+                  <Info
+                    key={slot.key}
+                    label={slot.label}
+                    value={slot.count}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {hasExtraGeneralInfos && (
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
               <div className="flex flex-col items-center gap-1">
                 <button
@@ -735,27 +804,14 @@ export function SetupTab({
                 </div>
               </div>
               {showMore && (
-                <div className="mt-4 grid lg:grid-cols-2 gap-4 text-sm">
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {extraGeneralInfos.map((info) => (
-                      <Info
-                        key={info.label}
-                        label={info.label}
-                        value={info.value}
-                      />
-                    ))}
-                  </div>
-                  {rosterSlots.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {rosterSlots.map((slot) => (
-                        <Info
-                          key={slot.key}
-                          label={slot.label}
-                          value={slot.count}
-                        />
-                      ))}
-                    </div>
-                  )}
+                <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
+                  {extraGeneralInfos.map((info) => (
+                    <Info
+                      key={info.label}
+                      label={info.label}
+                      value={info.value}
+                    />
+                  ))}
                 </div>
               )}
             </div>
