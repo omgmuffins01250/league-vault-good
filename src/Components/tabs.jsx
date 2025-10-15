@@ -1,6 +1,7 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState } from "react";
+import html2canvas from "html2canvas";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
 import {
@@ -12913,9 +12914,13 @@ export function WeeklyOutlookTab({
     <div ref={captureRef} className="space-y-6">
       <Card
         title={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <span>{`Weekly Outlook — Week ${currentWeek} (${currentYear})`}</span>
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <span
+                className="truncate bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-[13px] font-semibold uppercase tracking-[0.2em] text-transparent drop-shadow"
+              >
+                {`Weekly Outlook — Week ${currentWeek} (${currentYear})`}
+              </span>
               <label
                 className={`flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${toggleLabelClass}`}
               >
@@ -12937,7 +12942,7 @@ export function WeeklyOutlookTab({
             <div
               ref={downloadMenuRef}
               data-snapshot-ignore="true"
-              className="relative"
+              className="relative flex-shrink-0"
             >
               <button
                 type="button"
@@ -12978,9 +12983,9 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
-                      downloadSnapshot();
+                      await downloadSnapshot();
                     }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
                   >
@@ -12997,9 +13002,9 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
-                      downloadPdf();
+                      await downloadPdf();
                     }}
                     className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
                   >
