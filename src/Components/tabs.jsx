@@ -12945,7 +12945,7 @@ export function WeeklyOutlookTab({
             <div
               ref={downloadMenuRef}
               data-snapshot-ignore="true"
-              className="relative flex-shrink-0"
+              className="relative z-50 flex-shrink-0" // ⬅️ raise stacking
             >
               <button
                 type="button"
@@ -12979,15 +12979,20 @@ export function WeeklyOutlookTab({
                   <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.976a.75.75 0 111.08 1.04l-4.25 4.55a.75.75 0 01-1.08 0l-4.25-4.55a.75.75 0 01.02-1.06z" />
                 </svg>
               </button>
+
               {downloadMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 z-50 mt-1 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={async () => {
+                    onMouseDown={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setDownloadMenuOpen(false);
                       await downloadSnapshot();
                     }}
@@ -13003,10 +13008,13 @@ export function WeeklyOutlookTab({
                     </svg>
                     <span>Snapshot (PNG)</span>
                   </button>
+
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={async () => {
+                    onMouseDown={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setDownloadMenuOpen(false);
                       await downloadPdf();
                     }}
