@@ -13353,8 +13353,8 @@ export function WeeklyOutlookTab({
         <div className="mb-4 text-center">
           <div
             className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight
-                    bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent
-                    drop-shadow"
+                    bg-gradient-to-br from-orange-400 via-yellow-300 to-red-400 bg-clip-text text-transparent
+                    drop-shadow-[0_1px_0_rgba(0,0,0,0.4)]"
           >
             Matchups &amp; Outlook
           </div>
