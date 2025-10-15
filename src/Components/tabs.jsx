@@ -12271,8 +12271,183 @@ export function WeeklyOutlookTab({
     scoreByOwner,
   ]);
 
+  const lineupCountsByYear = React.useMemo(() => {
+    const candidates = [
+      league?.espnLineupSlotsByYear,
+      league?.lineupSlotsByYear,
+      league?.espnLineupTemplateByYear,
+    ];
+    if (typeof window !== "undefined") {
+      const src = window.__FL_SOURCES || window.__sources || {};
+      candidates.push(src?.lineupSlotsByYear);
+      candidates.push(src?.espnLineupSlotsByYear);
+      candidates.push(src?.espnLineupTemplateByYear);
+    }
+    const picked = __firstNonEmpty(...candidates);
+    return __normalizeLineupCountsPerSeason(picked || {});
+  }, [league]);
+
+  const startSlotSetThisYear = React.useMemo(() => {
+    const counts =
+      lineupCountsByYear?.[currentYear] ||
+      lineupCountsByYear?.[String(currentYear)] ||
+      {};
+    const slots = __buildStartSlots(counts);
+    return slots.length ? new Set(slots) : __DEFAULT_START_SLOTS;
+  }, [lineupCountsByYear, currentYear]);
+
+  const rostersByYear = React.useMemo(() => {
+    const candidates = [league?.espnRostersByYear, league?.rostersByYear];
+    if (typeof window !== "undefined") {
+      candidates.push((window.__FL_SOURCES || {}).rostersByYear);
+    }
+    const picked = __firstNonEmpty(...candidates);
+    return picked && typeof picked === "object" ? picked : {};
+  }, [league]);
+
+  const playersOnByeByOwner = React.useMemo(() => {
+    const map = new Map();
+    const yr = Number(currentYear);
+    const wk = Number(currentWeek);
+    if (!Number.isFinite(yr) || !Number.isFinite(wk) || wk <= 0) return map;
+
+    const byTeam =
+      rostersByYear?.[yr] ||
+      rostersByYear?.[String(yr)] ||
+      {};
+    if (!byTeam || typeof byTeam !== "object") return map;
+
+    const ownerNameFromMap =
+      typeof window !== "undefined" &&
+      window.__ownerMaps &&
+      typeof window.__ownerMaps.name === "function"
+        ? window.__ownerMaps.name.bind(window.__ownerMaps)
+        : null;
+
+    const ownerByTeam =
+      league?.ownerByTeamByYear?.[yr] ||
+      league?.ownerByTeamByYear?.[String(yr)] ||
+      {};
+
+    const resolveOwnerName = (teamId) => {
+      const tid = Number(teamId);
+      if (!Number.isFinite(tid)) return null;
+      const fromMap = ownerNameFromMap
+        ? ownerNameFromMap(yr, tid)
+        : null;
+      const fallback =
+        ownerByTeam?.[tid] ||
+        ownerByTeam?.[String(tid)] ||
+        null;
+      const name = fromMap || fallback || "";
+      const canon = canonicalize(name).trim();
+      return canon || null;
+    };
+
+    const entryName = (entry) => {
+      const direct =
+        entry?.name ||
+        entry?.player?.fullName ||
+        entry?.player?.name ||
+        entry?.playerPoolEntry?.player?.fullName ||
+        entry?.playerPoolEntry?.player?.name;
+      if (direct) return String(direct).trim();
+      const combo = [
+        entry?.player?.firstName,
+        entry?.player?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (combo) return combo.trim();
+      const poolCombo = [
+        entry?.playerPoolEntry?.player?.firstName,
+        entry?.playerPoolEntry?.player?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return poolCombo.trim();
+    };
+
+    Object.entries(byTeam || {}).forEach(([teamIdKey, weeksObj]) => {
+      const ownerName = resolveOwnerName(teamIdKey);
+      if (!ownerName) return;
+      const entries = weeksObj?.[wk];
+      if (!Array.isArray(entries) || !entries.length) return;
+      const seenPlayers = new Set();
+      const byePlayers = [];
+
+      entries.forEach((entry) => {
+        const slotId = Number(__entrySlotId(entry));
+        if (!startSlotSetThisYear.has(slotId)) return;
+        if (!__entryIsOnByeForWeek(entry, wk)) return;
+        const name = entryName(entry);
+        if (!name || seenPlayers.has(name)) return;
+        seenPlayers.add(name);
+        byePlayers.push(name);
+      });
+
+      if (byePlayers.length >= 3) map.set(ownerName, byePlayers);
+    });
+
+    return map;
+  }, [
+    rostersByYear,
+    currentYear,
+    currentWeek,
+    league?.ownerByTeamByYear,
+    canonicalize,
+    startSlotSetThisYear,
+  ]);
+
+  const pairKeyOf = React.useCallback(
+    (a, b) =>
+      [String(a || ""), String(b || "")] 
+        .sort((x, y) => x.localeCompare(y))
+        .join("|"),
+    []
+  );
+
+  const largestProjectionGap = React.useMemo(() => {
+    let best = null;
+    matchupsThisWeek.forEach((m) => {
+      const aProj = Number(m?.projA);
+      const bProj = Number(m?.projB);
+      if (!Number.isFinite(aProj) || !Number.isFinite(bProj)) return;
+      const diff = Math.abs(aProj - bProj);
+      if (!Number.isFinite(diff)) return;
+      if (!best || diff > best.diff || (diff === best.diff && pairKeyOf(m.aName, m.bName).localeCompare(best.key) < 0)) {
+        best = {
+          key: pairKeyOf(m.aName, m.bName),
+          diff,
+          leader: aProj >= bProj ? m.aName : m.bName,
+          trailer: aProj >= bProj ? m.bName : m.aName,
+        };
+      }
+    });
+    return best;
+  }, [matchupsThisWeek, pairKeyOf]);
+
   const formatPointsValue = (val) =>
     Math.round(Number(val) || 0).toLocaleString();
+
+  const formatProjectionDiff = (val) => {
+    const n = Math.abs(Number(val) || 0);
+    if (!Number.isFinite(n)) return "0";
+    const rounded = Math.round(n * 10) / 10;
+    const isFractional = Math.abs(rounded - Math.round(rounded)) > 1e-6;
+    return isFractional
+      ? rounded.toLocaleString(undefined, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
+      : Math.round(rounded).toLocaleString();
+  };
+
+  const isRecord500 = (wins, losses) => {
+    const w = Number(wins) || 0;
+    const l = Number(losses) || 0;
+    return w === l && w + l > 0;
+  };
 
   const rankWord = (rank, type) => {
     if (!Number.isFinite(rank)) return null;
@@ -12333,6 +12508,97 @@ export function WeeklyOutlookTab({
       .filter(Boolean)
       .sort((a, b) => (a.week ?? 0) - (b.week ?? 0));
   }, [league?.games, currentYear, currentWeek, canonicalize]);
+
+  const priorMatchupsThisSeason = React.useMemo(() => {
+    const byGame = new Map();
+    const season = Number(currentYear);
+    const cutWeek = Number(currentWeek);
+    if (!Number.isFinite(season)) return new Map();
+
+    for (const raw of league?.games || []) {
+      const yr = Number(raw?.season);
+      if (yr !== season) continue;
+      const wk = Number(raw?.week);
+      if (!Number.isFinite(wk)) continue;
+      if (raw?.is_playoff === true) continue;
+      if (Number.isFinite(cutWeek) && cutWeek > 0 && wk >= cutWeek) continue;
+      const owner = canonicalize(raw?.owner ?? raw?.manager ?? "").trim();
+      const opp = canonicalize(raw?.opp ?? raw?.opponent ?? "").trim();
+      if (!owner || !opp) continue;
+      const pairKey = pairKeyOf(owner, opp);
+      const gameKey = `${wk}|${pairKey}`;
+      const pf = pickNum(
+        raw?.pf,
+        raw?.points_for,
+        raw?.points,
+        raw?.score,
+        raw?.owner_points,
+        raw?.pts,
+        raw?.fpts
+      );
+      const pa = pickNum(
+        raw?.pa,
+        raw?.points_against,
+        raw?.opp_points,
+        raw?.oppPts,
+        raw?.against,
+        raw?.opp_score
+      );
+      const res = String(raw?.res || raw?.result || "").toUpperCase();
+      const cur = byGame.get(gameKey) || {
+        week: wk,
+        pairKey,
+        rows: [],
+      };
+      cur.rows.push({ owner, opp, pf, pa, res });
+      byGame.set(gameKey, cur);
+    }
+
+    const map = new Map();
+    byGame.forEach(({ week, pairKey, rows }) => {
+      const owners = pairKey.split("|");
+      if (owners.length !== 2) return;
+      const [aName, bName] = owners;
+
+      const scoreFor = (owner) => {
+        for (const row of rows) {
+          if (row.owner === owner && Number.isFinite(row.pf)) return Number(row.pf);
+          if (row.opp === owner && Number.isFinite(row.pa)) return Number(row.pa);
+        }
+        return null;
+      };
+
+      const scoreA = scoreFor(aName);
+      const scoreB = scoreFor(bName);
+
+      let winner = null;
+      let loser = null;
+      if (Number.isFinite(scoreA) && Number.isFinite(scoreB)) {
+        if (scoreA > scoreB) {
+          winner = aName;
+          loser = bName;
+        } else if (scoreB > scoreA) {
+          winner = bName;
+          loser = aName;
+        }
+      }
+
+      if (!winner) {
+        const winRow = rows.find((r) => r.res === "W");
+        if (winRow) {
+          winner = winRow.owner;
+          loser = winRow.opp;
+        }
+      }
+
+      const arr = map.get(pairKey) || [];
+      arr.push({ week, winner, loser });
+      map.set(pairKey, arr);
+    });
+
+    map.forEach((arr) => arr.sort((a, b) => (a.week ?? 0) - (b.week ?? 0)));
+    return map;
+  }, [league?.games, currentYear, currentWeek, canonicalize, pairKeyOf, pickNum]);
 
   const seasonTotalsByOwner = React.useMemo(() => {
     const totals = new Map();
@@ -12423,6 +12689,52 @@ export function WeeklyOutlookTab({
 
     return rankMap;
   }, [seasonTotalsByOwner]);
+  const standingsNow = React.useMemo(() => {
+    const set = new Set();
+    (league?.owners || []).forEach((o) => {
+      const name = canonicalize(o).trim();
+      if (name) set.add(name);
+    });
+    seasonTotalsByOwner.forEach((_, owner) => {
+      const name = canonicalize(owner).trim();
+      if (name) set.add(name);
+    });
+    ownerRecordNow.forEach((_, owner) => {
+      const name = canonicalize(owner).trim();
+      if (name) set.add(name);
+    });
+
+    const rows = [];
+    set.forEach((owner) => {
+      if (!owner) return;
+      const totals = seasonTotalsByOwner.get(owner) || {};
+      const record = ownerRecordNow.get(owner) || {};
+      const wins = Number(record.W ?? totals.wins ?? 0) || 0;
+      const losses = Number(record.L ?? totals.losses ?? 0) || 0;
+      const games = Number(totals.games) || wins + losses;
+      const ties = Math.max(0, games - wins - losses);
+      const pf = Number(totals.pf) || 0;
+      const pct = games > 0 ? wins / games : 0;
+      rows.push({ owner, wins, losses, ties, pct, pf });
+    });
+
+    rows.sort((a, b) => {
+      if (b.pct !== a.pct) return b.pct - a.pct;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.pf !== a.pf) return b.pf - a.pf;
+      return a.owner.localeCompare(b.owner);
+    });
+
+    const map = new Map();
+    rows.forEach((row, idx) => {
+      map.set(row.owner, { ...row, rank: idx + 1 });
+    });
+
+    return { rows, map };
+  }, [league?.owners, seasonTotalsByOwner, ownerRecordNow, canonicalize]);
+
+  const playoffCountThisYear = Number(mergedPlayoffTeams?.[currentYear] || 0);
+  const totalTeams = standingsNow.rows.length;
   // ---------- head-to-head history (REG season only; deduped per game) ----------
   const h2hIndex = React.useMemo(() => {
     // key: "ownerA|ownerB" (sorted) -> { total, aWins, bWins, rows:[latest first] }
@@ -13402,11 +13714,18 @@ export function WeeklyOutlookTab({
               };
               const hStreak = headToHeadStreak(m.aName, m.bName);
 
-              const rankA = pointsRankByOwner.get(m.aName) || {};
-              const rankB = pointsRankByOwner.get(m.bName) || {};
+              const pointsRankA = pointsRankByOwner.get(m.aName) || {};
+              const pointsRankB = pointsRankByOwner.get(m.bName) || {};
 
               const nowPctA = pctNum(Ao.now);
               const nowPctB = pctNum(Bo.now);
+
+              const standingsA = standingsNow.map.get(m.aName) || {};
+              const standingsB = standingsNow.map.get(m.bName) || {};
+              const pairKey = pairKeyOf(m.aName, m.bName);
+              const priorMeetings = priorMatchupsThisSeason.get(pairKey) || [];
+              const byePlayersA = playersOnByeByOwner.get(m.aName) || [];
+              const byePlayersB = playersOnByeByOwner.get(m.bName) || [];
 
               const facts = [];
               const pushFact = (key, text, ownersInvolved = []) => {
@@ -13425,7 +13744,7 @@ export function WeeklyOutlookTab({
               if (streakA?.type === "loss" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-loss`,
-                  `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`,
+                  `${m.aName} looks to stop the bleeding after ${streakA.length} straight losses.`,
                   [m.aName]
                 );
 
@@ -13439,7 +13758,7 @@ export function WeeklyOutlookTab({
               if (streakB?.type === "loss" && streakB.length >= 3)
                 pushFact(
                   `streak-${m.bName}-loss`,
-                  `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`,
+                  `${m.bName} looks to stop the bleeding after ${streakB.length} straight losses.`,
                   [m.bName]
                 );
 
@@ -13447,6 +13766,121 @@ export function WeeklyOutlookTab({
                 pushFact(
                   `h2h-${m.aName}-${m.bName}`,
                   `${hStreak.winner} has dominated ${hStreak.loser}, winning their last ${hStreak.count} matchups.`,
+                  [m.aName, m.bName]
+                );
+
+              if (
+                playoffCountThisYear > 0 &&
+                Number.isFinite(Number(standingsA.rank)) &&
+                Number.isFinite(Number(standingsB.rank))
+              ) {
+                const bubbleRank = playoffCountThisYear;
+                const justOutRank = bubbleRank + 1;
+                if (
+                  standingsA.rank === bubbleRank &&
+                  standingsB.rank === justOutRank
+                ) {
+                  pushFact(
+                    `bubble-line-${pairKey}`,
+                    `${m.aName} looks to hold their current playoff position against ${m.bName}.`,
+                    [m.aName, m.bName]
+                  );
+                } else if (
+                  standingsB.rank === bubbleRank &&
+                  standingsA.rank === justOutRank
+                ) {
+                  pushFact(
+                    `bubble-line-${pairKey}`,
+                    `${m.bName} looks to hold their current playoff position against ${m.aName}.`,
+                    [m.aName, m.bName]
+                  );
+                }
+              }
+
+              if (priorMeetings.length === 1) {
+                const prior = priorMeetings[0] || {};
+                if (
+                  prior?.winner &&
+                  prior?.loser &&
+                  Number.isFinite(Number(prior.week))
+                ) {
+                  pushFact(
+                    `sweep-${pairKey}-${prior.week}`,
+                    `${prior.winner} looks to sweep ${prior.loser} after taking the W in week ${prior.week}.`,
+                    [prior.winner, prior.loser]
+                  );
+                }
+              }
+
+              if (largestProjectionGap && largestProjectionGap.key === pairKey)
+                pushFact(
+                  `proj-gap-${pairKey}`,
+                  `${largestProjectionGap.leader} with a ${formatProjectionDiff(
+                    largestProjectionGap.diff
+                  )} projected point differential over ${
+                    largestProjectionGap.trailer
+                  }, the largest of the week.`,
+                  [largestProjectionGap.leader, largestProjectionGap.trailer]
+                );
+
+              if (
+                totalTeams >= 2 &&
+                ((standingsA.rank === 1 && standingsB.rank === 2) ||
+                  (standingsA.rank === 2 && standingsB.rank === 1))
+              ) {
+                const ordered = [
+                  { name: m.aName, rank: standingsA.rank },
+                  { name: m.bName, rank: standingsB.rank },
+                ].sort((x, y) => x.rank - y.rank);
+                pushFact(
+                  `top-dog-${pairKey}`,
+                  `${ordered[0].name} and ${ordered[1].name} battle it out for top dog.`,
+                  ordered.map((o) => o.name)
+                );
+              }
+
+              if (
+                totalTeams >= 2 &&
+                ((standingsA.rank === totalTeams &&
+                  standingsB.rank === totalTeams - 1) ||
+                  (standingsB.rank === totalTeams &&
+                    standingsA.rank === totalTeams - 1))
+              ) {
+                const ordered = [
+                  { name: m.aName, rank: standingsA.rank },
+                  { name: m.bName, rank: standingsB.rank },
+                ].sort((x, y) => y.rank - x.rank);
+                pushFact(
+                  `cellar-${pairKey}`,
+                  `${ordered[0].name} and ${ordered[1].name} play to see who is the worst of the worst.`,
+                  ordered.map((o) => o.name)
+                );
+              }
+
+              if (Array.isArray(byePlayersA) && byePlayersA.length >= 3) {
+                const listed = byePlayersA.slice(0, 3).join(", ");
+                const suffix = byePlayersA.length > 3 ? ", ..." : "";
+                pushFact(
+                  `bye-${m.aName}`,
+                  `${m.aName} looks to survive with ${listed}${suffix} on bye.`,
+                  [m.aName]
+                );
+              }
+
+              if (Array.isArray(byePlayersB) && byePlayersB.length >= 3) {
+                const listed = byePlayersB.slice(0, 3).join(", ");
+                const suffix = byePlayersB.length > 3 ? ", ..." : "";
+                pushFact(
+                  `bye-${m.bName}`,
+                  `${m.bName} looks to survive with ${listed}${suffix} on bye.`,
+                  [m.bName]
+                );
+              }
+
+              if (isRecord500(winsA, lossesA) && isRecord500(winsB, lossesB))
+                pushFact(
+                  `battle-500-${pairKey}`,
+                  `${m.aName} and ${m.bName} fight it out in the battle of the 500's.`,
                   [m.aName, m.bName]
                 );
 
@@ -13519,16 +13953,16 @@ export function WeeklyOutlookTab({
                   );
               }
 
-              if (rankA?.highRank && rankA.highRank <= 3) {
-                const word = rankWord(rankA.highRank, "high");
+              if (pointsRankA?.highRank && pointsRankA.highRank <= 3) {
+                const word = rankWord(pointsRankA.highRank, "high");
                 if (word)
                   pushFact(
                     `rank-high-${m.aName}`,
                     `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`,
                     [m.aName]
                   );
-              } else if (rankA?.lowRank && rankA.lowRank <= 3) {
-                const word = rankWord(rankA.lowRank, "low");
+              } else if (pointsRankA?.lowRank && pointsRankA.lowRank <= 3) {
+                const word = rankWord(pointsRankA.lowRank, "low");
                 if (word)
                   pushFact(
                     `rank-low-${m.aName}`,
@@ -13537,16 +13971,16 @@ export function WeeklyOutlookTab({
                   );
               }
 
-              if (rankB?.highRank && rankB.highRank <= 3) {
-                const word = rankWord(rankB.highRank, "high");
+              if (pointsRankB?.highRank && pointsRankB.highRank <= 3) {
+                const word = rankWord(pointsRankB.highRank, "high");
                 if (word)
                   pushFact(
                     `rank-high-${m.bName}`,
                     `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`,
                     [m.bName]
                   );
-              } else if (rankB?.lowRank && rankB.lowRank <= 3) {
-                const word = rankWord(rankB.lowRank, "low");
+              } else if (pointsRankB?.lowRank && pointsRankB.lowRank <= 3) {
+                const word = rankWord(pointsRankB.lowRank, "low");
                 if (word)
                   pushFact(
                     `rank-low-${m.bName}`,
