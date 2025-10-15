@@ -2195,42 +2195,10 @@ export default function App() {
         );
         setScheduleByYear(scheduleMap);
 
-        const derivedCurrentWeeks =
-          deriveCurrentWeekBySeasonFromSeasons(seasons);
-        const metaCurrentWeek = (() => {
-          const seasonId =
-            data?.meta?.seasonId ??
-            data?.meta?.season ??
-            data?.seasonId ??
-            data?.season;
-          const yr = Number(seasonId);
-          if (!Number.isFinite(yr) || yr <= 0) return {};
-          const candidates = [
-            data?.meta?.currentMatchupPeriod,
-            data?.meta?.currentMatchupPeriodId,
-            data?.meta?.currentScoringPeriod,
-            data?.meta?.latestScoringPeriod,
-            data?.meta?.status?.currentMatchupPeriod,
-            data?.meta?.status?.currentScoringPeriod,
-            data?.currentMatchupPeriod,
-            data?.currentWeek,
-          ];
-          for (const cand of candidates) {
-            const n = Number(cand);
-            if (Number.isFinite(n) && n > 0) {
-              return { [String(Math.floor(yr))]: Math.floor(n) };
-            }
-          }
-          return {};
-        })();
-        const currentWeekFromData = mergeCurrentWeekMaps(
-          data?.currentWeekByYear,
-          data?.currentWeekBySeason
-        );
-        const currentWeekBySeasonMap = mergeCurrentWeekMaps(
-          currentWeekFromData,
-          { ...derivedCurrentWeeks, ...metaCurrentWeek }
-        );
+        const currentWeekBySeasonMap =
+          data?.currentWeekByYear && Object.keys(data.currentWeekByYear).length
+            ? data.currentWeekByYear
+            : {};
         setCurrentWeekBySeason(currentWeekBySeasonMap);
 
         const playoffTeamsFromSeasons = {};

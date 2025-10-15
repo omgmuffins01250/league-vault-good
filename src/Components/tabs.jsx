@@ -7862,6 +7862,39 @@ const SLOT = {
 // ESPN defaultPositionId for players: QB=1, RB=2, WR=3, TE=4, K=5, DST=16
 const POS = { QB: 1, RB: 2, WR: 3, TE: 4, K: 5, DST: 16 };
 const __POS_LABEL = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST" };
+// Sleeper → ESPN id coercion
+const SLP_TO_SLOT = {
+  QB: 0,
+  RB: 2,
+  WR: 3,
+  TE: 6,
+  OP: 7,
+  FLEX: 23,
+  DST: 16,
+  D: 16,
+  K: 17,
+  BN: 20,
+  BENCH: 20,
+  IR: 21,
+};
+const SLP_TO_POS = { QB: 1, RB: 2, WR: 3, TE: 4, K: 5, DST: 16, D: 16 };
+
+// Coerce any slot token (number | string) to an ESPN slot id (number) or null
+function __coerceSlotId(token) {
+  if (Number.isFinite(Number(token))) return Number(token);
+  const t = String(token || "").toUpperCase();
+  return Number.isFinite(SLP_TO_SLOT[t]) ? SLP_TO_SLOT[t] : null;
+}
+
+// Coerce any position token (number | string) to an ESPN defaultPositionId (number) or null
+function __coercePosId(token) {
+  if (Number.isFinite(Number(token))) {
+    const n = Number(token);
+    return n === 0 ? null : n; // guard zeroes
+  }
+  const t = String(token || "").toUpperCase();
+  return Number.isFinite(SLP_TO_POS[t]) ? SLP_TO_POS[t] : null;
+}
 
 // is player (by posId) eligible for a given slotId?
 function __eligible(posId, slotId) {
@@ -7888,21 +7921,26 @@ const __num = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// NEW: normalize lineup slots input (array template OR counts map) → counts map per season
 function __normalizeLineupCountsPerSeason(src = {}) {
   const out = {};
   Object.entries(src || {}).forEach(([season, val]) => {
     if (Array.isArray(val)) {
-      // array of slotIds → count occurrences
       const counts = {};
-      for (const sid of val) {
-        const k = Number(sid);
-        if (!Number.isFinite(k)) continue;
-        counts[k] = (counts[k] || 0) + 1;
+      for (const tok of val) {
+        const sid = __coerceSlotId(tok);
+        if (!Number.isFinite(sid)) continue;
+        counts[sid] = (counts[sid] || 0) + 1;
       }
       out[season] = counts;
     } else if (val && typeof val === "object") {
-      out[season] = val;
+      // also coerce keys if they’re strings like "QB"
+      const counts = {};
+      Object.entries(val).forEach(([k, v]) => {
+        const sid = __coerceSlotId(k);
+        if (!Number.isFinite(sid)) return;
+        counts[sid] = Number(v) || 0;
+      });
+      out[season] = counts;
     } else {
       out[season] = {};
     }
@@ -7918,21 +7956,32 @@ function __firstNonEmpty(...cands) {
   return {};
 }
 
-
-const __entrySlotId = (e) => e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
-const __toFiniteNum = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+const __entrySlotId = (e) => {
+  // ESPN first
+  const espn = e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
+  // Sleeper often uses strings like "RB", "BN"
+  return __coerceSlotId(espn ?? e?.position ?? e?.roster_slot);
 };
 
 const __entryPosId = (e) => {
-  const cand =
+  // ESPN
+  const espn =
     e?.defaultPositionId ??
     e?.playerPoolEntry?.player?.defaultPositionId ??
     e?.player?.defaultPositionId ??
     e?.posId;
-  return __toFiniteNum(cand); // => null unless truly 0/2/4/6/16/17
+  if (espn != null) return __coercePosId(espn);
+
+  // Sleeper: position / fantasy_positions[0]
+  const sl =
+    e?.position ??
+    e?.player?.position ??
+    (Array.isArray(e?.player?.fantasy_positions)
+      ? e.player.fantasy_positions[0]
+      : null);
+  return __coercePosId(sl);
 };
+
 const __entryPts = (e) =>
   __num(
     e?.appliedTotal ??
@@ -8499,26 +8548,31 @@ export function RosterTab({
 }) {
   // —— NEW: accept data from props OR fall back to league.* if props are empty
   const RB = React.useMemo(
-    () => __firstNonEmpty(
-      rostersByYear,
-      league?.espnRostersByYear,
-      league?.rostersByYear
-    ),
+    () =>
+      __firstNonEmpty(
+        rostersByYear,
+        league?.espnRostersByYear,
+        league?.rostersByYear
+      ),
     [rostersByYear, league]
   );
 
   const LSYraw = React.useMemo(
-    () => __firstNonEmpty(
-      lineupSlotsByYear,
-      league?.espnLineupSlotsByYear,
-      league?.lineupSlotsByYear,
-      league?.espnLineupTemplateByYear   // allow ordered template too
-    ),
+    () =>
+      __firstNonEmpty(
+        lineupSlotsByYear,
+        league?.espnLineupSlotsByYear,
+        league?.lineupSlotsByYear,
+        league?.espnLineupTemplateByYear // allow ordered template too
+      ),
     [lineupSlotsByYear, league]
   );
 
   // counts map per season regardless of original shape
-  const LSY = React.useMemo(() => __normalizeLineupCountsPerSeason(LSYraw), [LSYraw]);
+  const LSY = React.useMemo(
+    () => __normalizeLineupCountsPerSeason(LSYraw),
+    [LSYraw]
+  );
 
   const hidden = React.useMemo(() => {
     const fromLeague = Array.isArray(league?.hiddenManagers)
@@ -8536,8 +8590,7 @@ export function RosterTab({
         .sort((a, b) => b - a),
     [RB]
   );
-  
-  
+
   const [season, setSeason] = React.useState(
     seasons[0] || new Date().getFullYear()
   );
@@ -8583,17 +8636,23 @@ export function RosterTab({
     const fromSettings = __buildRowSpecs(LSY?.[season] || {});
     if (fromSettings.length) return fromSettings;
     return __buildRowSpecs({
-      0: 1, 2: 2, 3: 2, 6: 1, 23: 1, 16: 1, 17: 1, 20: 6,
+      0: 1,
+      2: 2,
+      3: 2,
+      6: 1,
+      23: 1,
+      16: 1,
+      17: 1,
+      20: 6,
     });
   }, [LSY, season]);
-  
 
   // starter slots for this season (derived from ESPN lineup settings)
   const startSlots = React.useMemo(
     () => __buildStartSlots(LSY?.[season] || {}),
     [LSY, season]
   );
-  
+
   const startSlotsSet = React.useMemo(() => new Set(startSlots), [startSlots]);
 
   const teamIds = React.useMemo(
@@ -8641,12 +8700,17 @@ export function RosterTab({
       const starts = __buildStartSlots(LSY?.[seasonId] || {});
       const startSet = new Set(starts);
       const actual = __actualStarterPoints(entries, startSet);
-      const potential = __potentialPoints(entries, starts, seasonId, teamId, rosterAcqByYear);
+      const potential = __potentialPoints(
+        entries,
+        starts,
+        seasonId,
+        teamId,
+        rosterAcqByYear
+      );
       return Math.max(0, potential - actual);
     },
     [RB, LSY, rosterAcqByYear]
   );
-  
 
   // ---------- WEEKLY SUMMARY (current `season`) ----------
   const weeklySummary = React.useMemo(() => {
@@ -8695,15 +8759,14 @@ export function RosterTab({
       const perYear = yearsAsc.map((yr) => {
         // Collect teamIds whose resolveOwner(yr, tid) === mgr (use rostersByYear keys for that yr)
         const tids = Object.keys(RB?.[yr] || {})
-        .map(Number)
-        .filter((tid) => resolveOwner(tid) === mgr);
+          .map(Number)
+          .filter((tid) => resolveOwner(tid) === mgr);
 
         if (!tids.length) return 0;
 
         // Weeks in this year (cap by currentWeek if present)
         const wksSet = new Set();
         tids.forEach((tid) =>
-          
           Object.keys(RB?.[yr]?.[tid] || {}).forEach((w) =>
             wksSet.add(Number(w))
           )
