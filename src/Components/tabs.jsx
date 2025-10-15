@@ -12981,38 +12981,38 @@ export function WeeklyOutlookTab({
               if (streakA?.type === "win" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-win`,
-                  `${m.aName} looks to continue their ${streakA.length}-game win streak.`
+                  `${m.aName} looks to continue rolling, coming in on a ${streakA.length}-game win streak.`
                 );
 
               if (streakA?.type === "loss" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-loss`,
-                  `${m.aName} looks to break their ${streakA.length}-game losing streak.`
+                  `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`
                 );
 
               if (streakB?.type === "win" && streakB.length >= 3)
                 pushFact(
                   `streak-${m.bName}-win`,
-                  `${m.bName} looks to continue their ${streakB.length}-game win streak.`
+                  `${m.bName} looks to continue rolling, coming in on a ${streakB.length}-game win streak.`
                 );
 
               if (streakB?.type === "loss" && streakB.length >= 3)
                 pushFact(
                   `streak-${m.bName}-loss`,
-                  `${m.bName} looks to break their ${streakB.length}-game losing streak.`
+                  `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`
                 );
 
               if (hStreak)
                 pushFact(
                   `h2h-${m.aName}-${m.bName}`,
-                  `${hStreak.winner} has won ${hStreak.count} matchups in a row against ${hStreak.loser}.`
+                  `${hStreak.winner} has dominated ${hStreak.loser}, winning their last ${hStreak.count} matchups.`
                 );
 
               const diffPF = pfA - pfB;
               if (Math.abs(diffPF) >= 75)
                 pushFact(
                   `pf-diff-${m.aName}-${m.bName}`,
-                  `${diffPF >= 0 ? m.aName : m.bName} has outscored ${
+                  `${diffPF >= 0 ? m.aName : m.bName} comes in as a huge favorite, outscoring ${
                     diffPF >= 0 ? m.bName : m.aName
                   } by ${formatPointsValue(Math.abs(diffPF))} points this season.`
                 );
@@ -13099,13 +13099,17 @@ export function WeeklyOutlookTab({
               if (nowPctA != null && nowPctA <= 25)
                 pushFact(
                   `low-odds-${m.aName}`,
-                  `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`
+                  nowPctA === 0
+                    ? `${m.aName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsA}-${lossesA} record.`
+                    : `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`
                 );
 
               if (nowPctB != null && nowPctB <= 25)
                 pushFact(
                   `low-odds-${m.bName}`,
-                  `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`
+                  nowPctB === 0
+                    ? `${m.bName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsB}-${lossesB} record.`
+                    : `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`
                 );
 
               if (facts.length < 3) {
