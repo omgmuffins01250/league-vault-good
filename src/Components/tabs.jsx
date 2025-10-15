@@ -27,6 +27,331 @@ import {
   Cell,
 } from "recharts";
 
+const COLORish_PROPS = new Set([
+  "color",
+  "background",
+  "background-color",
+  "background-image",
+  "border-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "column-rule-color",
+  "caret-color",
+  "accent-color",
+  "fill",
+  "stroke",
+  "box-shadow",
+  "text-shadow",
+]);
+
+const hasOKColor = (value) =>
+  typeof value === "string" && /okl(ch|ab)/i.test(value || "");
+
+let sharedColorCtx = null;
+const getColorContext = () => {
+  if (sharedColorCtx) return sharedColorCtx;
+  try {
+    sharedColorCtx = document.createElement("canvas").getContext("2d");
+  } catch {
+    sharedColorCtx = null;
+  }
+  return sharedColorCtx;
+};
+
+const normalizeColorValue = (ctx, value) => {
+  if (!value || !ctx || !hasOKColor(value)) return value;
+  try {
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = value;
+    return ctx.fillStyle;
+  } catch {
+    return value;
+  }
+};
+
+function cloneWithInlineStyles(root, { filter } = {}) {
+  const clone = root.cloneNode(true);
+
+  const walk = (src, dst) => {
+    if (filter && filter(src) === false) {
+      dst.remove();
+      return;
+    }
+    if (src.nodeType !== 1 || dst.nodeType !== 1) return;
+    const cs = getComputedStyle(src);
+
+    const style = dst.style;
+    Array.from(cs).forEach((prop) => {
+      let value = cs.getPropertyValue(prop);
+      if (!value) return;
+
+      if (
+        COLORish_PROPS.has(prop) ||
+        /color/i.test(prop) ||
+        prop.includes("shadow") ||
+        prop === "background" ||
+        prop.startsWith("border")
+      ) {
+        value = normalizeColorValue(getColorContext(), value);
+        if (prop === "background-image" && hasOKColor(value)) {
+          value = "none";
+        }
+      }
+
+      style.setProperty(prop, value, cs.getPropertyPriority(prop));
+    });
+
+    if (dst.tagName === "IMG") {
+      dst.setAttribute("crossorigin", "anonymous");
+    }
+
+    const srcKids = src.childNodes || [];
+    const dstKids = dst.childNodes || [];
+    for (let i = 0; i < srcKids.length; i++) {
+      if (!dstKids[i]) continue;
+      if (srcKids[i].nodeType === 1) walk(srcKids[i], dstKids[i]);
+    }
+  };
+
+  walk(root, clone);
+  return clone;
+}
+
+async function exportElementToPNG(
+  node,
+  { pixelRatio = 2, backgroundColor = "#ffffff", filter } = {}
+) {
+  const rect = node.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+
+  const cloned = cloneWithInlineStyles(node, { filter });
+
+  cloned.style.background = backgroundColor;
+
+  const wrapper = document.createElement("div");
+  wrapper.style.width = `${width}px`;
+  wrapper.style.height = `${height}px`;
+  wrapper.style.position = "relative";
+  wrapper.style.isolation = "isolate";
+  wrapper.appendChild(cloned);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const fo = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "foreignObject"
+  );
+  fo.setAttribute("x", "0");
+  fo.setAttribute("y", "0");
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", String(height));
+  fo.appendChild(wrapper);
+  svg.appendChild(fo);
+
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(svg);
+  const svgDataUrl =
+    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+
+  const img = new Image();
+  img.decoding = "async";
+  img.crossOrigin = "anonymous";
+  await new Promise((res, rej) => {
+    img.onload = () => res();
+    img.onerror = (e) => rej(e);
+    img.src = svgDataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(width * pixelRatio));
+  canvas.height = Math.max(1, Math.floor(height * pixelRatio));
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL("image/png");
+}
+
+function useSnapshotTarget({ getFileName } = {}) {
+  const captureRef = React.useRef(null);
+
+  const resolveFileName = React.useCallback(() => {
+    if (typeof getFileName === "function") {
+      try {
+        const raw = getFileName();
+        if (typeof raw === "string" && raw.trim()) {
+          const trimmed = raw.trim();
+          return /\.png$/i.test(trimmed) ? trimmed : `${trimmed}.png`;
+        }
+      } catch {
+        /* noop */
+      }
+    }
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `snapshot-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
+      now.getDate()
+    )}-${pad(now.getHours())}${pad(now.getMinutes())}.png`;
+  }, [getFileName]);
+
+  const onSnap = React.useCallback(async () => {
+    try {
+      const node = captureRef.current;
+      if (!node) return;
+
+      const dark =
+        document.documentElement.classList.contains("dark") ||
+        window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+      const backgroundColor = dark
+        ? "rgb(17,17,20)"
+        : "rgb(255,255,255)";
+      const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
+
+      try {
+        await document.fonts?.ready;
+      } catch {}
+
+      const download = (dataUrl) => {
+        if (!dataUrl) throw new Error("No snapshot data generated");
+        const name = resolveFileName();
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+
+      const captureWithHtml2Canvas = async () => {
+        if (typeof html2canvas !== "function") {
+          throw new Error("html2canvas not available");
+        }
+
+        const rect = node.getBoundingClientRect();
+        const wrapper = document.createElement("div");
+        wrapper.style.position = "fixed";
+        wrapper.style.left = "-100000px";
+        wrapper.style.top = "0";
+        wrapper.style.width = `${Math.ceil(rect.width)}px`;
+        wrapper.style.pointerEvents = "none";
+        wrapper.style.background = backgroundColor;
+        document.body.appendChild(wrapper);
+
+        try {
+          const clone = node.cloneNode(true);
+          wrapper.appendChild(clone);
+
+          const ctx = document.createElement("canvas").getContext("2d");
+          const toRGB = (val) => {
+            if (!val || !ctx) return val;
+            try {
+              ctx.fillStyle = "#000";
+              ctx.fillStyle = val;
+              return ctx.fillStyle;
+            } catch {
+              return val;
+            }
+          };
+          const hasOK = (s) => typeof s === "string" && /okl(ch|ab)/i.test(s);
+          const COLOR_PROPS = [
+            "color",
+            "backgroundColor",
+            "borderColor",
+            "borderTopColor",
+            "borderRightColor",
+            "borderBottomColor",
+            "borderLeftColor",
+            "outlineColor",
+            "textDecorationColor",
+            "columnRuleColor",
+            "caretColor",
+            "accentColor",
+            "fill",
+            "stroke",
+          ];
+          const win = document.defaultView || window;
+
+          clone.querySelectorAll("*").forEach((el) => {
+            const cs = win.getComputedStyle(el);
+
+            COLOR_PROPS.forEach((p) => {
+              const v = cs[p];
+              if (hasOK(v)) el.style[p] = toRGB(v);
+            });
+
+            const bgi = cs.backgroundImage;
+            if (hasOK(bgi)) {
+              el.style.backgroundImage = "none";
+              el.style.backgroundColor =
+                toRGB(cs.backgroundColor) ||
+                (dark ? "rgb(24,24,27)" : "rgb(255,255,255)");
+            }
+
+            if (hasOK(cs.boxShadow)) el.style.boxShadow = "none";
+            if (hasOK(cs.textShadow)) el.style.textShadow = "none";
+          });
+
+          await new Promise((r) => requestAnimationFrame(r));
+
+          const fullW = Math.ceil(clone.scrollWidth || clone.clientWidth);
+          const fullH = Math.ceil(clone.scrollHeight || clone.clientHeight);
+
+          const canvas = await html2canvas(clone, {
+            backgroundColor,
+            scale: pixelRatio,
+            useCORS: true,
+            removeContainer: true,
+            width: fullW,
+            height: fullH,
+            windowWidth: fullW,
+            windowHeight: fullH,
+            scrollX: 0,
+            scrollY: 0,
+            ignoreElements: (el) =>
+              el?.getAttribute?.("data-snapshot-ignore") === "true",
+          });
+
+          return canvas.toDataURL("image/png");
+        } finally {
+          wrapper.remove();
+        }
+      };
+
+      let dataUrl = null;
+      try {
+        dataUrl = await captureWithHtml2Canvas();
+      } catch (err) {
+        console.warn("Primary snapshot attempt failed, falling back", err);
+        dataUrl = await exportElementToPNG(node, {
+          pixelRatio,
+          backgroundColor,
+          filter: (el) =>
+            el?.getAttribute?.("data-snapshot-ignore") !== "true",
+        });
+      }
+
+      download(dataUrl);
+    } catch (err) {
+      console.error("Snapshot failed:", err);
+      alert("Snapshot failed. See console for details.");
+    }
+  }, [resolveFileName]);
+
+  return { captureRef, onSnap };
+}
+
 /* NEW: ESPN activity extractor                                       */
 /**
  * Turn ESPN seasons (2018+) into:
@@ -866,49 +1191,86 @@ export function MembersTab({ league }) {
   const labelFor = (yr) => `${yr} Team Name`;
   const latestLabel = latest ? `Updated through ${latest}` : null;
 
+  const membersSnapshotName = React.useCallback(() => {
+    const base =
+      (league?.name && String(league.name)) ||
+      (league?.leagueId && String(league.leagueId)) ||
+      "league";
+    const slug = base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const suffix = latest ? `-thru-${latest}` : "";
+    return `league-members${slug ? `-${slug}` : ""}${suffix}.png`;
+  }, [league?.name, league?.leagueId, latest]);
+
+  const { captureRef, onSnap } = useSnapshotTarget({
+    getFileName: membersSnapshotName,
+  });
+
   return (
-    <Card
-      title="League Members"
-      right={
-        latestLabel ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
-            {latestLabel}
-          </span>
-        ) : null
-      }
-    >
-      <div className="space-y-6">
-        <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
-          <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
-          <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+    <div ref={captureRef} className="space-y-6">
+      <Card
+        title="League Members"
+        right={
+          <div className="flex items-center gap-2">
+            {latestLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                {latestLabel}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={onSnap}
+              data-snapshot-ignore="true"
+              className="inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] border border-zinc-300/60 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-900/70 hover:bg-white/90 hover:dark:bg-zinc-900/90 shadow-sm text-slate-600 dark:text-slate-200"
+              title="Save snapshot"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
+              </svg>
+              <span className="hidden sm:inline">Snapshot</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
+            <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
+            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
-          <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[660px] text-[12px] text-slate-700 dark:text-slate-200">
-              <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
-                <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
-                  <th className="px-3 py-2 text-left font-semibold ...">
-                    Member
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium">
-                    Yr Joined
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium">
-                    Yrs Played
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium whitespace-nowrap">
-                    Current Team
-                  </th>
-
-                  {seasonsDesc.map((yr) => (
-                    <th
-                      key={`hdr-${yr}`}
-                      className="px-4 py-3 text-center font-medium whitespace-nowrap"
-                    >
-                      {labelFor(yr)}
+            <div className="relative overflow-x-auto">
+              <table className="w-full min-w-[660px] text-[12px] text-slate-700 dark:text-slate-200">
+                <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
+                  <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
+                    <th className="px-3 py-2 text-left font-semibold ...">
+                      Member
                     </th>
-                  ))}
-                </tr>
-              </thead>
+                    <th className="px-3 py-2 text-center font-medium">
+                      Yr Joined
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium">
+                      Yrs Played
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium whitespace-nowrap">
+                      Current Team
+                    </th>
+
+                    {seasonsDesc.map((yr) => (
+                      <th
+                        key={`hdr-${yr}`}
+                        className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                      >
+                        {labelFor(yr)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
               <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
                 {league.members.map((m) => (
                   <tr
@@ -11389,335 +11751,13 @@ export function WeeklyOutlookTab({
       .filter(Number.isFinite);
     return weeks.length ? Math.max(...weeks) : 1;
   }, [seasonThisYear, league?.games, currentYear]);
-  const COLORish_PROPS = new Set([
-    "color",
-    "background",
-    "background-color",
-    "background-image",
-    "border-color",
-    "border-top-color",
-    "border-right-color",
-    "border-bottom-color",
-    "border-left-color",
-    "outline-color",
-    "text-decoration-color",
-    "column-rule-color",
-    "caret-color",
-    "accent-color",
-    "fill",
-    "stroke",
-    "box-shadow",
-    "text-shadow",
-  ]);
-
-  const hasOKColor = (value) =>
-    typeof value === "string" && /okl(ch|ab)/i.test(value || "");
-
-  let sharedColorCtx = null;
-  const getColorContext = () => {
-    if (sharedColorCtx) return sharedColorCtx;
-    try {
-      sharedColorCtx = document.createElement("canvas").getContext("2d");
-    } catch {
-      sharedColorCtx = null;
-    }
-    return sharedColorCtx;
-  };
-
-  const normalizeColorValue = (ctx, value) => {
-    if (!value || !ctx || !hasOKColor(value)) return value;
-    try {
-      ctx.fillStyle = "#000";
-      ctx.fillStyle = value;
-      return ctx.fillStyle;
-    } catch {
-      return value;
-    }
-  };
-
-  // Inline computed styles into a deep clone of a node (so the SVG has everything it needs)
-  function cloneWithInlineStyles(root, { filter } = {}) {
-    const clone = root.cloneNode(true);
-
-    const walk = (src, dst) => {
-      if (filter && filter(src) === false) {
-        dst.remove(); // drop ignored nodes
-        return;
-      }
-      if (src.nodeType !== 1 || dst.nodeType !== 1) return;
-      const cs = getComputedStyle(src);
-
-      const style = dst.style;
-      Array.from(cs).forEach((prop) => {
-        let value = cs.getPropertyValue(prop);
-        if (!value) return;
-
-        if (
-          COLORish_PROPS.has(prop) ||
-          /color/i.test(prop) ||
-          prop.includes("shadow") ||
-          prop === "background" ||
-          prop.startsWith("border")
-        ) {
-          value = normalizeColorValue(getColorContext(), value);
-          if (prop === "background-image" && hasOKColor(value)) {
-            // Drop gradients html2canvas / SVG can’t parse yet
-            value = "none";
-          }
-        }
-
-        style.setProperty(prop, value, cs.getPropertyPriority(prop));
-      });
-
-      // ensure images/fonts can load
-      if (dst.tagName === "IMG") {
-        dst.setAttribute("crossorigin", "anonymous");
-      }
-
-      // recurse
-      const srcKids = src.childNodes || [];
-      const dstKids = dst.childNodes || [];
-      for (let i = 0; i < srcKids.length; i++) {
-        if (!dstKids[i]) continue;
-        if (srcKids[i].nodeType === 1) walk(srcKids[i], dstKids[i]); // ELEMENT_NODE
-      }
-    };
-
-    walk(root, clone);
-    return clone;
-  }
-
-  // Render an element to PNG using SVG <foreignObject> + canvas
-  async function exportElementToPNG(
-    node,
-    { pixelRatio = 2, backgroundColor = "#ffffff", filter } = {}
-  ) {
-    const rect = node.getBoundingClientRect();
-    const width = Math.ceil(rect.width);
-    const height = Math.ceil(rect.height);
-
-    // Deep clone with inline styles
-    const cloned = cloneWithInlineStyles(node, { filter });
-
-    // Force a solid background so the PNG isn’t transparent in dark mode
-    cloned.style.background = backgroundColor;
-
-    // Wrap in a container that fixes relative positioning contexts
-    const wrapper = document.createElement("div");
-    wrapper.style.width = `${width}px`;
-    wrapper.style.height = `${height}px`;
-    wrapper.style.position = "relative";
-    wrapper.style.isolation = "isolate"; // prevent blending glitches
-    wrapper.appendChild(cloned);
-
-    // Build SVG with foreignObject
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("width", String(width));
-    svg.setAttribute("height", String(height));
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-
-    const fo = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "foreignObject"
-    );
-    fo.setAttribute("x", "0");
-    fo.setAttribute("y", "0");
-    fo.setAttribute("width", String(width));
-    fo.setAttribute("height", String(height));
-    fo.appendChild(wrapper);
-    svg.appendChild(fo);
-
-    // Serialize SVG to data URL
-    const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(svg);
-    const svgDataUrl =
-      "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
-
-    // Draw to canvas
-    const img = new Image();
-    img.decoding = "async";
-    img.crossOrigin = "anonymous";
-    await new Promise((res, rej) => {
-      img.onload = () => res();
-      img.onerror = (e) => rej(e);
-      img.src = svgDataUrl;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.floor(width * pixelRatio));
-    canvas.height = Math.max(1, Math.floor(height * pixelRatio));
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    // fill bg
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL("image/png");
-  }
-
-  // Screenshot: capture target + handler (robust clone-in-place + html2canvas)
-  // Screenshot: capture target + handler (clone + targeted color normalization)
-  const captureRef = React.useRef(null);
-
-  const onSnap = React.useCallback(async () => {
-    try {
-      const node = captureRef.current;
-      if (!node) return;
-
-      const dark =
-        document.documentElement.classList.contains("dark") ||
-        window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-      const backgroundColor = dark ? "rgb(17,17,20)" : "rgb(255,255,255)";
-      const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
-
-      // fonts first to avoid reflow in the clone
-      try {
-        await document.fonts?.ready;
-      } catch {}
-
-      const download = (dataUrl) => {
-        if (!dataUrl) throw new Error("No snapshot data generated");
-        const wk = Number(currentWeek) || 0;
-        const yr = Number(currentYear) || new Date().getFullYear();
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = `weekly-outlook-wk${wk}-${yr}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      };
-
-      const captureWithHtml2Canvas = async () => {
-        const download = (dataUrl) => {
-          if (!dataUrl) throw new Error("No snapshot data generated");
-          const wk = Number(currentWeek) || 0;
-          const yr = Number(currentYear) || new Date().getFullYear();
-          const a = document.createElement("a");
-          a.href = dataUrl;
-          a.download = `weekly-outlook-wk${wk}-${yr}.png`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        };
-        // off-screen wrapper with same width as live node
-        const rect = node.getBoundingClientRect();
-        const wrapper = document.createElement("div");
-        wrapper.style.position = "fixed";
-        wrapper.style.left = "-100000px";
-        wrapper.style.top = "0";
-        wrapper.style.width = `${Math.ceil(rect.width)}px`;
-        wrapper.style.pointerEvents = "none";
-        wrapper.style.background = backgroundColor;
-        document.body.appendChild(wrapper);
-
-        try {
-          // deep clone into wrapper so browser lays it out naturally
-          const clone = node.cloneNode(true);
-          wrapper.appendChild(clone);
-
-          // targeted OKLCH → RGB normalization (preserve other styling)
-          const ctx = document.createElement("canvas").getContext("2d");
-          const toRGB = (val) => {
-            if (!val || !ctx) return val;
-            try {
-              ctx.fillStyle = "#000";
-              ctx.fillStyle = val;
-              return ctx.fillStyle;
-            } catch {
-              return val;
-            }
-          };
-          const hasOK = (s) => typeof s === "string" && /okl(ch|ab)/i.test(s);
-          const COLOR_PROPS = [
-            "color",
-            "backgroundColor",
-            "borderColor",
-            "borderTopColor",
-            "borderRightColor",
-            "borderBottomColor",
-            "borderLeftColor",
-            "outlineColor",
-            "textDecorationColor",
-            "columnRuleColor",
-            "caretColor",
-            "accentColor",
-            "fill",
-            "stroke",
-          ];
-          const win = document.defaultView || window;
-
-          clone.querySelectorAll("*").forEach((el) => {
-            const cs = win.getComputedStyle(el);
-
-            // 1) simple color props
-            COLOR_PROPS.forEach((p) => {
-              const v = cs[p];
-              if (hasOK(v)) el.style[p] = toRGB(v);
-            });
-
-            // 2) gradients containing OKLCH → fall back to solid bg
-            const bgi = cs.backgroundImage;
-            if (hasOK(bgi)) {
-              el.style.backgroundImage = "none";
-              el.style.backgroundColor =
-                toRGB(cs.backgroundColor) ||
-                (dark ? "rgb(24,24,27)" : "rgb(255,255,255)");
-            }
-
-            // 3) shadows containing OKLCH only
-            if (hasOK(cs.boxShadow)) el.style.boxShadow = "none";
-            if (hasOK(cs.textShadow)) el.style.textShadow = "none";
-          });
-
-          // let styles apply
-          await new Promise((r) => requestAnimationFrame(r));
-
-          // render the CLONE at full height
-          const fullW = Math.ceil(clone.scrollWidth || clone.clientWidth);
-          const fullH = Math.ceil(clone.scrollHeight || clone.clientHeight);
-
-          const canvas = await html2canvas(clone, {
-            backgroundColor,
-            scale: pixelRatio,
-            useCORS: true,
-            removeContainer: true,
-            width: fullW,
-            height: fullH,
-            windowWidth: fullW,
-            windowHeight: fullH,
-            scrollX: 0,
-            scrollY: 0,
-            ignoreElements: (el) =>
-              el?.getAttribute?.("data-snapshot-ignore") === "true",
-          });
-
-          return canvas.toDataURL("image/png");
-        } finally {
-          wrapper.remove();
-        }
-      };
-
-      let dataUrl = null;
-      try {
-        dataUrl = await captureWithHtml2Canvas();
-      } catch (err) {
-        console.warn("Primary snapshot attempt failed, falling back", err);
-        dataUrl = await exportElementToPNG(node, {
-          pixelRatio,
-          backgroundColor,
-          filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
-        });
-      }
-
-      download(dataUrl);
-    } catch (err) {
-      console.error("Snapshot failed:", err);
-      alert("Snapshot failed. See console for details.");
-    }
-  }, [currentWeek, currentYear]);
+  const { captureRef, onSnap } = useSnapshotTarget({
+    getFileName: React.useCallback(() => {
+      const wk = Number(currentWeek) || 0;
+      const yr = Number(currentYear) || new Date().getFullYear();
+      return `weekly-outlook-wk${wk}-${yr}.png`;
+    }, [currentWeek, currentYear]),
+  });
 
   // Pull projections directly from stored rows in localStorage
   const projByOwner = React.useMemo(() => {
