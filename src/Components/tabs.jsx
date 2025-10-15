@@ -1053,6 +1053,12 @@ export function CareerTab({ league }) {
   // Toggle: show graph instead of table for Win%-by-score
   const [showWpGraph, setShowWpGraph] = React.useState(false);
 
+  // Sorting for the rank table
+  const [rankSort, setRankSort] = React.useState({
+    key: "totalPF",
+    direction: "asc",
+  });
+
   React.useEffect(() => {
     setSelectedNames(new Set(visibleOwners.map(String)));
     setSelectedYears(new Set(allSeasons));
@@ -1240,26 +1246,37 @@ export function CareerTab({ league }) {
     const uniqSorted = Array.from(new Set(vals.filter((v) => v != null))).sort(
       (a, b) => (better === "high" ? b - a : a - b)
     );
-    const map = new Map();
-    uniqSorted.forEach((v, i) => map.set(v, i + 1));
-    return arr.map((a) => ({
-      name: a.name,
-      r: a.val == null ? null : map.get(a.val),
-    }));
+    const valueToRank = new Map();
+    uniqSorted.forEach((v, i) => valueToRank.set(v, i + 1));
+    const result = new Map();
+    arr.forEach((a) => {
+      result.set(a.name, a.val == null ? null : valueToRank.get(a.val));
+    });
+    return result;
   };
   const rowsForRank = careerStatsFiltered.map((r) => ({
     name: r.name,
+    totalPF: r.pointsFor,
+    totalPA: r.pointsAgainst,
     avgPF: r.avgPF,
-    pa: r.pointsAgainst,
+    avgPA: r.avgPA,
     winPct: r.winPct,
     avgPlace: avgPlacement(r.name) == null ? null : -avgPlacement(r.name),
   }));
+  const rTotalPF = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: r.totalPF })),
+    "high"
+  );
+  const rTotalPA = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: -r.totalPA })),
+    "high"
+  );
   const rAvgPF = rank(
     rowsForRank.map((r) => ({ name: r.name, val: r.avgPF })),
     "high"
   );
-  const rPA = rank(
-    rowsForRank.map((r) => ({ name: r.name, val: -r.pa })),
+  const rAvgPA = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: -r.avgPA })),
     "high"
   );
   const rWin = rank(
@@ -1272,12 +1289,60 @@ export function CareerTab({ league }) {
   );
   const rankRow = (name) => ({
     name,
-    avgPF: rAvgPF.find((x) => x.name === name)?.r ?? "—",
-    pa: rPA.find((x) => x.name === name)?.r ?? "—",
-    winPct: rWin.find((x) => x.name === name)?.r ?? "—",
-    place: rPlace.find((x) => x.name === name)?.r ?? "—",
+    totalPF: rTotalPF.get(name) ?? null,
+    totalPA: rTotalPA.get(name) ?? null,
+    avgPF: rAvgPF.get(name) ?? null,
+    avgPA: rAvgPA.get(name) ?? null,
+    winPct: rWin.get(name) ?? null,
+    place: rPlace.get(name) ?? null,
   });
   const rankTable = owners.map((o) => rankRow(o));
+
+  const rankColumns = [
+    { key: "name", label: "Member", align: "left" },
+    { key: "totalPF", label: "Rank: Total PF", align: "center" },
+    { key: "totalPA", label: "Rank: Total PA", align: "center" },
+    { key: "avgPF", label: "Rank: Avg PF", align: "center" },
+    { key: "avgPA", label: "Rank: Avg PA", align: "center" },
+    { key: "place", label: "Rank: Placement", align: "center" },
+    { key: "winPct", label: "Rank: Win %", align: "center" },
+  ];
+
+  const sortedRankTable = React.useMemo(() => {
+    const arr = [...rankTable];
+    const dir = rankSort.direction === "asc" ? 1 : -1;
+    const key = rankSort.key;
+    arr.sort((a, b) => {
+      if (key === "name") {
+        return a.name.localeCompare(b.name) * dir;
+      }
+      const av = a[key];
+      const bv = b[key];
+      if (av == null && bv == null) {
+        return a.name.localeCompare(b.name);
+      }
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = av - bv;
+      if (cmp !== 0) return cmp * dir;
+      return a.name.localeCompare(b.name);
+    });
+    return arr;
+  }, [rankTable, rankSort]);
+
+  const toggleRankSort = (key) => {
+    setRankSort((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
+  const formatRankValue = (val) => (val == null ? "—" : val);
 
   // ---------- Win% by own scoring buckets (per manager, per season) ----------
   // Buckets: 10, 20, ..., 200 (200 means 200+)
@@ -1703,22 +1768,45 @@ export function CareerTab({ league }) {
             <table className="w-full text-[13px] text-slate-700 dark:text-slate-200">
               <thead
                 className="bg-gradient-to-r from-white/80 via-white/60 to-white/40 dark:from-white/10 dark:via-white/5 dark:to-white/0
-                border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
+                  border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
               >
                 <tr>
-                  <th className="px-4 py-3 text-left">Member</th>
-                  <th className="px-4 py-3 text-center">Rank: Avg PF</th>
-                  <th className="px-4 py-3 text-center">
-                    Rank: PA (lower better)
-                  </th>
-                  <th className="px-4 py-3 text-center">Rank: Win %</th>
-                  <th className="px-4 py-3 text-center">
-                    Rank: Placement (avg)
-                  </th>
+                  {rankColumns.map((col) => {
+                    const isSorted = rankSort.key === col.key;
+                    const ariaSort = isSorted
+                      ? rankSort.direction === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined;
+                    const justify =
+                      col.align === "left" ? "justify-start" : "justify-center";
+                    return (
+                      <th
+                        key={col.key}
+                        className={`px-4 py-3 ${
+                          col.align === "left" ? "text-left" : "text-center"
+                        }`}
+                        aria-sort={ariaSort}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleRankSort(col.key)}
+                          className={`flex w-full items-center gap-1 ${justify} uppercase tracking-[0.25em] transition text-slate-600 dark:text-slate-300 hover:text-violet-500 dark:hover:text-violet-300`}
+                        >
+                          <span>{col.label}</span>
+                          {isSorted && (
+                            <span aria-hidden="true" className="text-[10px]">
+                              {rankSort.direction === "asc" ? "↑" : "↓"}
+                            </span>
+                          )}
+                        </button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/40 dark:divide-white/5">
-                {rankTable.map((r, idx) => (
+                {sortedRankTable.map((r, idx) => (
                   <tr
                     key={r.name}
                     className={`transition-colors ${
@@ -1727,21 +1815,22 @@ export function CareerTab({ league }) {
                         : "bg-white/45 dark:bg-white/[0.025]"
                     } hover:bg-violet-100/50 dark:hover:bg-violet-500/10`}
                   >
-                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
-                      {r.name}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.avgPF}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.pa}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.winPct}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.place}
-                    </td>
+                    {rankColumns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={`px-4 py-3 ${
+                          col.align === "left" ? "text-left" : "text-center"
+                        } ${
+                          col.key === "name"
+                            ? "font-semibold text-slate-800 dark:text-slate-100"
+                            : "tabular-nums"
+                        }`}
+                      >
+                        {col.key === "name"
+                          ? r.name
+                          : formatRankValue(r[col.key])}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
