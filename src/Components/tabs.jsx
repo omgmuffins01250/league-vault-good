@@ -9,6 +9,7 @@ import {
   primeOwnerMaps,
   ownerMapFor,
 } from "../ownerMaps.jsx";
+import { normalizeNicknameMap } from "../Utils/nicknames.js";
 // near the top of App.jsx (or tabs.jsx)
 import "../Data/finishData.jsx";
 import {
@@ -160,6 +161,147 @@ function HideManagerControl({
             <span className="truncate">{name}</span>
           </label>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+function NicknamesControl({
+  owners = [],
+  nicknamesByOwner = {},
+  onChangeNicknames,
+}) {
+  const sanitized = useMemo(
+    () => normalizeNicknameMap(nicknamesByOwner),
+    [nicknamesByOwner]
+  );
+  const [drafts, setDrafts] = useState({});
+
+  const ownersList = useMemo(() => {
+    const base = Array.isArray(owners) ? owners : [];
+    const extras = Object.keys(sanitized).filter(
+      (name) => !base.includes(name)
+    );
+    return [...base, ...extras].filter(Boolean);
+  }, [owners, sanitized]);
+
+  const updateDraft = (owner, value) => {
+    setDrafts((prev) => ({ ...prev, [owner]: value }));
+  };
+
+  const handleAdd = (owner) => {
+    const raw = drafts[owner] ?? "";
+    const value = String(raw).trim();
+    if (!value) return;
+    const existing = sanitized[owner] || [];
+    const isDuplicate = existing.some(
+      (n) => n.toLowerCase() === value.toLowerCase()
+    );
+    if (isDuplicate) {
+      setDrafts((prev) => ({ ...prev, [owner]: "" }));
+      return;
+    }
+    const next = normalizeNicknameMap({
+      ...sanitized,
+      [owner]: [...existing, value],
+    });
+    onChangeNicknames?.(next);
+    setDrafts((prev) => ({ ...prev, [owner]: "" }));
+  };
+
+  const handleRemove = (owner, index) => {
+    const existing = sanitized[owner] || [];
+    if (!existing[index]) return;
+    const filtered = existing.filter((_, i) => i !== index);
+    const next = { ...sanitized };
+    if (filtered.length) {
+      next[owner] = filtered;
+    } else {
+      delete next[owner];
+    }
+    onChangeNicknames?.(normalizeNicknameMap(next));
+  };
+
+  return (
+    <Card title="Manager nicknames">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        Give managers alternate names. When enabled in Weekly Outlook, key
+        facts will rotate through these nicknames.
+      </p>
+      <div className="mt-4 space-y-3">
+        {ownersList.length === 0 ? (
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            Import league data to manage manager nicknames.
+          </div>
+        ) : (
+          ownersList.map((owner) => {
+            const entries = sanitized[owner] || [];
+            const draftValue = drafts[owner] ?? "";
+            const hasDraft = String(draftValue).trim().length > 0;
+            return (
+              <div
+                key={owner}
+                className="rounded-xl border border-zinc-200/70 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-zinc-700 dark:text-zinc-100">
+                      {owner}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {entries.length === 0 ? (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          No nicknames yet.
+                        </span>
+                      ) : (
+                        entries.map((nickname, idx) => (
+                          <span
+                            key={`${owner}-${nickname}-${idx}`}
+                            className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+                          >
+                            <span>{nickname}</span>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs px-1"
+                              onClick={() => handleRemove(owner, idx)}
+                              aria-label={`Remove nickname ${nickname}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleAdd(owner);
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={draftValue}
+                      onChange={(event) =>
+                        updateDraft(owner, event.target.value)
+                      }
+                      placeholder="Add nickname"
+                      className="input input-sm input-bordered"
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-sm btn-primary"
+                      disabled={!hasDraft}
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </Card>
   );
@@ -468,6 +610,8 @@ export function SetupTab({
   onLegacyCsvMerged,
   hiddenManagers = new Set(), // ← add
   onChangeHiddenManagers, // ← add
+  managerNicknames = {},
+  onChangeManagerNicknames,
   leagueIcon,
   onLeagueIconChange,
 }) {
@@ -760,6 +904,13 @@ export function SetupTab({
           owners={league.owners || []}
           hidden={hiddenManagers}
           onChangeHidden={onChangeHiddenManagers}
+        />
+      )}
+      {league && (
+        <NicknamesControl
+          owners={league.owners || []}
+          nicknamesByOwner={managerNicknames}
+          onChangeNicknames={onChangeManagerNicknames}
         />
       )}
       {league && (
@@ -11242,6 +11393,7 @@ export function WeeklyOutlookTab({
   playoffTeamsBase = {},
   playoffTeamsOverrides = {},
   scheduleThisYear = [],
+  managerNicknames = {},
 }) {
   if (!league) return null;
   React.useEffect(() => {
@@ -11260,6 +11412,30 @@ export function WeeklyOutlookTab({
       typeof window.__ownerMaps.canon === "function" &&
       window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
     ((s) => (s == null ? "" : String(s)));
+
+  const [useNicknames, setUseNicknames] = React.useState(false);
+  const leagueNicknames = league?.managerNicknames;
+  const nicknamesFromProp = React.useMemo(
+    () => normalizeNicknameMap(managerNicknames),
+    [managerNicknames]
+  );
+  const nicknamesFromLeague = React.useMemo(
+    () => normalizeNicknameMap(leagueNicknames),
+    [leagueNicknames]
+  );
+  const activeNicknames = React.useMemo(() => {
+    if (Object.keys(nicknamesFromProp).length > 0) return nicknamesFromProp;
+    return nicknamesFromLeague;
+  }, [nicknamesFromProp, nicknamesFromLeague]);
+  const hasNicknames = Object.keys(activeNicknames).length > 0;
+  const shouldUseNicknames = useNicknames && hasNicknames;
+  const toggleLabelClass = hasNicknames
+    ? "text-indigo-600 dark:text-indigo-300"
+    : "text-zinc-400 dark:text-zinc-600";
+
+  React.useEffect(() => {
+    if (!hasNicknames && useNicknames) setUseNicknames(false);
+  }, [hasNicknames, useNicknames]);
 
   // ---------- tiny helpers ----------
   const pickNum = (...vals) => {
@@ -12579,6 +12755,9 @@ export function WeeklyOutlookTab({
       ? "text-emerald-500"
       : "text-rose-500";
 
+  const escapeRegExp = (value) =>
+    String(value).replace(/([.*+?^${}()|[\]\\])/g, "\\$1");
+
   // convenience for H2H line styling
   const h2hLine = (myWins, oppWins) => {
     const total = Number(myWins) + Number(oppWins);
@@ -12597,8 +12776,25 @@ export function WeeklyOutlookTab({
     <div ref={captureRef} className="space-y-6">
       <Card
         title={
-          <div className="flex items-center justify-between gap-2">
-            <span>{`Weekly Outlook — Week ${currentWeek} (${currentYear})`}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span>{`Weekly Outlook — Week ${currentWeek} (${currentYear})`}</span>
+              <label
+                className={`flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${toggleLabelClass}`}
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-xs"
+                  checked={shouldUseNicknames}
+                  disabled={!hasNicknames}
+                  onChange={(event) =>
+                    hasNicknames && setUseNicknames(event.target.checked)
+                  }
+                  aria-label="Use manager nicknames in key facts"
+                />
+                <span>Use nicknames</span>
+              </label>
+            </div>
 
             {/* Camera button (ignored in snapshot) */}
             <button
@@ -12618,7 +12814,7 @@ export function WeeklyOutlookTab({
                 fill="currentColor"
                 aria-hidden="true"
               >
-                <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
+                <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 01-2-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
               </svg>
               <span className="hidden sm:inline">Snapshot</span>
             </button>
@@ -12972,40 +13168,45 @@ export function WeeklyOutlookTab({
               const nowPctB = pctNum(Bo.now);
 
               const facts = [];
-              const pushFact = (key, text) => {
+              const pushFact = (key, text, ownersInvolved = []) => {
                 if (!text) return;
                 if (facts.some((f) => f.text === text)) return;
-                facts.push({ key, text });
+                facts.push({ key, text, owners: ownersInvolved });
               };
 
               if (streakA?.type === "win" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-win`,
-                  `${m.aName} looks to continue rolling, coming in on a ${streakA.length}-game win streak.`
+                  `${m.aName} looks to continue rolling, coming in on a ${streakA.length}-game win streak.`,
+                  [m.aName]
                 );
 
               if (streakA?.type === "loss" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-loss`,
-                  `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`
+                  `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`,
+                  [m.aName]
                 );
 
               if (streakB?.type === "win" && streakB.length >= 3)
                 pushFact(
                   `streak-${m.bName}-win`,
-                  `${m.bName} looks to continue rolling, coming in on a ${streakB.length}-game win streak.`
+                  `${m.bName} looks to continue rolling, coming in on a ${streakB.length}-game win streak.`,
+                  [m.bName]
                 );
 
               if (streakB?.type === "loss" && streakB.length >= 3)
                 pushFact(
                   `streak-${m.bName}-loss`,
-                  `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`
+                  `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`,
+                  [m.bName]
                 );
 
               if (hStreak)
                 pushFact(
                   `h2h-${m.aName}-${m.bName}`,
-                  `${hStreak.winner} has dominated ${hStreak.loser}, winning their last ${hStreak.count} matchups.`
+                  `${hStreak.winner} has dominated ${hStreak.loser}, winning their last ${hStreak.count} matchups.`,
+                  [m.aName, m.bName]
                 );
 
               const diffPF = pfA - pfB;
@@ -13014,53 +13215,62 @@ export function WeeklyOutlookTab({
                   `pf-diff-${m.aName}-${m.bName}`,
                   `${diffPF >= 0 ? m.aName : m.bName} comes in as a huge favorite, outscoring ${
                     diffPF >= 0 ? m.bName : m.aName
-                  } by ${formatPointsValue(Math.abs(diffPF))} points this season.`
+                  } by ${formatPointsValue(Math.abs(diffPF))} points this season.`,
+                  [m.aName, m.bName]
                 );
 
               if (winsA - lossesA === 1)
                 pushFact(
                   `above500-${m.aName}`,
-                  `${m.aName} is looking to stay above .500.`
+                  `${m.aName} is looking to stay above .500.`,
+                  [m.aName]
                 );
 
               if (winsA - lossesA === -1)
                 pushFact(
                   `return500-${m.aName}`,
-                  `${m.aName} is looking to return to .500.`
+                  `${m.aName} is looking to return to .500.`,
+                  [m.aName]
                 );
 
               if (winsB - lossesB === 1)
                 pushFact(
                   `above500-${m.bName}`,
-                  `${m.bName} is looking to stay above .500.`
+                  `${m.bName} is looking to stay above .500.`,
+                  [m.bName]
                 );
 
               if (winsB - lossesB === -1)
                 pushFact(
                   `return500-${m.bName}`,
-                  `${m.bName} is looking to return to .500.`
+                  `${m.bName} is looking to return to .500.`,
+                  [m.bName]
                 );
 
               if (Number(currentWeek) >= 3) {
                 if (winsA === 0 && lossesA > 0)
                   pushFact(
                     `first-win-${m.aName}`,
-                    `${m.aName} is looking for their first win of the season.`
+                    `${m.aName} is looking for their first win of the season.`,
+                    [m.aName]
                   );
                 if (lossesA === 0 && winsA > 0)
                   pushFact(
                     `undefeated-${m.aName}`,
-                    `${m.aName} is looking to stay undefeated.`
+                    `${m.aName} is looking to stay undefeated.`,
+                    [m.aName]
                   );
                 if (winsB === 0 && lossesB > 0)
                   pushFact(
                     `first-win-${m.bName}`,
-                    `${m.bName} is looking for their first win of the season.`
+                    `${m.bName} is looking for their first win of the season.`,
+                    [m.bName]
                   );
                 if (lossesB === 0 && winsB > 0)
                   pushFact(
                     `undefeated-${m.bName}`,
-                    `${m.bName} is looking to stay undefeated.`
+                    `${m.bName} is looking to stay undefeated.`,
+                    [m.bName]
                   );
               }
 
@@ -13069,14 +13279,16 @@ export function WeeklyOutlookTab({
                 if (word)
                   pushFact(
                     `rank-high-${m.aName}`,
-                    `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`
+                    `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`,
+                    [m.aName]
                   );
               } else if (rankA?.lowRank && rankA.lowRank <= 3) {
                 const word = rankWord(rankA.lowRank, "low");
                 if (word)
                   pushFact(
                     `rank-low-${m.aName}`,
-                    `${m.aName} desperately needs to spark the offense as the ${word} scoring team in the league.`
+                    `${m.aName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
+                    [m.aName]
                   );
               }
 
@@ -13085,14 +13297,16 @@ export function WeeklyOutlookTab({
                 if (word)
                   pushFact(
                     `rank-high-${m.bName}`,
-                    `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`
+                    `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`,
+                    [m.bName]
                   );
               } else if (rankB?.lowRank && rankB.lowRank <= 3) {
                 const word = rankWord(rankB.lowRank, "low");
                 if (word)
                   pushFact(
                     `rank-low-${m.bName}`,
-                    `${m.bName} desperately needs to spark the offense as the ${word} scoring team in the league.`
+                    `${m.bName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
+                    [m.bName]
                   );
               }
 
@@ -13101,7 +13315,8 @@ export function WeeklyOutlookTab({
                   `low-odds-${m.aName}`,
                   nowPctA === 0
                     ? `${m.aName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsA}-${lossesA} record.`
-                    : `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`
+                    : `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`,
+                  [m.aName]
                 );
 
               if (nowPctB != null && nowPctB <= 25)
@@ -13109,7 +13324,8 @@ export function WeeklyOutlookTab({
                   `low-odds-${m.bName}`,
                   nowPctB === 0
                     ? `${m.bName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsB}-${lossesB} record.`
-                    : `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`
+                    : `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`,
+                  [m.bName]
                 );
 
               if (facts.length < 3) {
@@ -13126,13 +13342,14 @@ export function WeeklyOutlookTab({
                 } else {
                   seriesText = `This is the first regular-season meeting between ${m.aName} and ${m.bName}.`;
                 }
-                pushFact(`series-${m.aName}-${m.bName}`, seriesText);
+                pushFact(`series-${m.aName}-${m.bName}`, seriesText, [m.aName, m.bName]);
               }
 
               if (facts.length < 3)
                 pushFact(
                   `records-${m.aName}-${m.bName}`,
-                  `${m.aName} enters at ${winsA}-${lossesA} while ${m.bName} sits at ${winsB}-${lossesB}.`
+                  `${m.aName} enters at ${winsA}-${lossesA} while ${m.bName} sits at ${winsB}-${lossesB}.`,
+                  [m.aName, m.bName]
                 );
 
               if (facts.length < 3)
@@ -13140,10 +13357,35 @@ export function WeeklyOutlookTab({
                   `points-summary-${m.aName}-${m.bName}`,
                   `${m.aName} has scored ${formatPointsValue(pfA)} points this season compared to ${formatPointsValue(
                     pfB
-                  )} for ${m.bName}.`
+                  )} for ${m.bName}.`,
+                  [m.aName, m.bName]
                 );
 
               const displayFacts = facts.slice(0, 5);
+              const nicknameCounters = new Map();
+              const renderFactText = (fact) => {
+                if (!shouldUseNicknames) return fact.text;
+                const ownersForFact = Array.isArray(fact?.owners)
+                  ? fact.owners
+                  : [];
+                if (!ownersForFact.length) return fact.text;
+                let nextText = fact.text;
+                const seenOwners = new Set();
+                ownersForFact.forEach((ownerName) => {
+                  const ownerKey = String(ownerName || "");
+                  if (!ownerKey || seenOwners.has(ownerKey)) return;
+                  seenOwners.add(ownerKey);
+                  const options = activeNicknames[ownerKey] || [];
+                  if (!options.length) return;
+                  const idx = nicknameCounters.get(ownerKey) ?? 0;
+                  nicknameCounters.set(ownerKey, idx + 1);
+                  const nickname = options[idx % options.length];
+                  if (!nickname) return;
+                  const pattern = new RegExp(escapeRegExp(ownerKey), "g");
+                  nextText = nextText.replace(pattern, nickname);
+                });
+                return nextText;
+              };
 
               return (
                 <div
@@ -13307,8 +13549,11 @@ export function WeeklyOutlookTab({
                       </div>
                       <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-left">
                         {displayFacts.map((fact, idx) => (
-                          <li key={fact.key || idx} className="leading-snug text-zinc-700 dark:text-zinc-200">
-                            {fact.text}
+                          <li
+                            key={fact.key || idx}
+                            className="leading-snug text-zinc-700 dark:text-zinc-200"
+                          >
+                            {renderFactText(fact)}
                           </li>
                         ))}
                       </ul>
