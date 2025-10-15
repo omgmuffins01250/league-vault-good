@@ -205,6 +205,11 @@ const SETUP_SLOT_ORDER = [
   21, 24, 25, 26, 27, 28, 29,
 ];
 const ALWAYS_UPPER = new Set(["PPR", "FAAB", "IDP"]);
+const SCORING_TYPE_ID_LABEL = new Map([
+  [2, "PPR"],
+  [3, "Half PPR"],
+  [4, "Custom"],
+]);
 function pickFirst(...vals) {
   for (const val of vals) {
     if (val === undefined || val === null) continue;
@@ -327,8 +332,57 @@ function resolveScoringLabel(league, season) {
     season?.settings?.playerRankType,
     league?.meta?.scoring
   );
-  const label = humanizeToken(scoringRaw);
+  const scoringTypeId = pickFirst(
+    season?.scoringSettings?.scoringTypeId,
+    season?.settings?.scoringSettings?.scoringTypeId,
+    season?.settings?.scoringTypeId,
+    league?.meta?.scoringTypeId
+  );
+  const idLabel = Number.isFinite(Number(scoringTypeId))
+    ? SCORING_TYPE_ID_LABEL.get(Number(scoringTypeId))
+    : null;
+  const label = humanizeToken(scoringRaw) || idLabel || "";
+  if (label && label.toLowerCase() !== "standard") return label;
+  const inferred = inferScoringFromSettings(
+    season?.scoringSettings,
+    season?.settings?.scoringSettings,
+    season?.settings
+  );
+  if (inferred) return inferred;
   return label || "Standard";
+}
+
+function inferScoringFromSettings(...settingsObjects) {
+  const seen = new Set();
+  let fallback = "";
+  for (const obj of settingsObjects) {
+    if (!obj || typeof obj !== "object") continue;
+    const stack = [obj];
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current || typeof current !== "object") continue;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      for (const [key, value] of Object.entries(current)) {
+        if (value && typeof value === "object") {
+          stack.push(value);
+          continue;
+        }
+        if (typeof value === "number" && Number.isFinite(value)) {
+          if (/recept/i.test(key)) {
+            if (value >= 1) return "PPR";
+            if (value > 0 && value < 1) fallback ||= "Half PPR";
+          }
+        } else if (typeof value === "boolean") {
+          if (value && /ppr/i.test(key)) return "PPR";
+        } else if (typeof value === "string") {
+          if (/half[-_\s]*ppr/i.test(value)) return "Half PPR";
+          if (/ppr/i.test(value)) return "PPR";
+        }
+      }
+    }
+  }
+  return fallback || "";
 }
 function resolveFaab(acquisitionSettings) {
   if (!acquisitionSettings || typeof acquisitionSettings !== "object") {
@@ -550,12 +604,11 @@ export function SetupTab({
       draftOrderLabel,
     ]
   );
-  const hasExtras = useMemo(
-    () =>
-      rosterSlots.length > 0 ||
-      extraGeneralInfos.some((info) => info.value && info.value !== "—"),
-    [rosterSlots, extraGeneralInfos]
+  const hasExtraGeneralInfos = useMemo(
+    () => extraGeneralInfos.some((info) => info.value && info.value !== "—"),
+    [extraGeneralInfos]
   );
+  const hasRosterSlots = rosterSlots.length > 0;
   const [showMore, setShowMore] = useState(false);
   useEffect(() => {
     setShowMore(false);
@@ -719,7 +772,19 @@ export function SetupTab({
             <Info label="Platform" value={league.meta.platform} />
             <Info label="Scoring" value={scoringDisplay || "Standard"} />
           </div>
-          {hasExtras && (
+          {hasRosterSlots && (
+            <div className="mt-4">
+              <div className="text-xs uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                Roster Slots
+              </div>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+                {rosterSlots.map((slot) => (
+                  <Info key={slot.key} label={slot.label} value={slot.count} />
+                ))}
+              </div>
+            </div>
+          )}
+          {hasExtraGeneralInfos && (
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
               <div className="flex flex-col items-center gap-1">
                 <button
@@ -735,27 +800,14 @@ export function SetupTab({
                 </div>
               </div>
               {showMore && (
-                <div className="mt-4 grid lg:grid-cols-2 gap-4 text-sm">
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {extraGeneralInfos.map((info) => (
-                      <Info
-                        key={info.label}
-                        label={info.label}
-                        value={info.value}
-                      />
-                    ))}
-                  </div>
-                  {rosterSlots.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {rosterSlots.map((slot) => (
-                        <Info
-                          key={slot.key}
-                          label={slot.label}
-                          value={slot.count}
-                        />
-                      ))}
-                    </div>
-                  )}
+                <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
+                  {extraGeneralInfos.map((info) => (
+                    <Info
+                      key={info.label}
+                      label={info.label}
+                      value={info.value}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -853,11 +905,11 @@ export function MembersTab({ league }) {
                   ))}
                 </tr>
               </thead>
-              <tbody className="[&>tr:nth-child(odd)]:bg-white/60 dark:[&>tr:nth-child(odd)]:bg-white/5 [&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
+              <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
                 {league.members.map((m) => (
                   <tr
                     key={m.id}
-                    className="transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
+                    className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
                   >
                     {/* OWNER (manager) NAME */}
                     <td className="px-3 py-2 text-left">
@@ -996,6 +1048,12 @@ export function CareerTab({ league }) {
 
   // Toggle: show graph instead of table for Win%-by-score
   const [showWpGraph, setShowWpGraph] = React.useState(false);
+
+  // Sorting for the rank table
+  const [rankSort, setRankSort] = React.useState({
+    key: "totalPF",
+    direction: "asc",
+  });
 
   React.useEffect(() => {
     setSelectedNames(new Set(visibleOwners.map(String)));
@@ -1184,26 +1242,37 @@ export function CareerTab({ league }) {
     const uniqSorted = Array.from(new Set(vals.filter((v) => v != null))).sort(
       (a, b) => (better === "high" ? b - a : a - b)
     );
-    const map = new Map();
-    uniqSorted.forEach((v, i) => map.set(v, i + 1));
-    return arr.map((a) => ({
-      name: a.name,
-      r: a.val == null ? null : map.get(a.val),
-    }));
+    const valueToRank = new Map();
+    uniqSorted.forEach((v, i) => valueToRank.set(v, i + 1));
+    const result = new Map();
+    arr.forEach((a) => {
+      result.set(a.name, a.val == null ? null : valueToRank.get(a.val));
+    });
+    return result;
   };
   const rowsForRank = careerStatsFiltered.map((r) => ({
     name: r.name,
+    totalPF: r.pointsFor,
+    totalPA: r.pointsAgainst,
     avgPF: r.avgPF,
-    pa: r.pointsAgainst,
+    avgPA: r.avgPA,
     winPct: r.winPct,
     avgPlace: avgPlacement(r.name) == null ? null : -avgPlacement(r.name),
   }));
+  const rTotalPF = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: r.totalPF })),
+    "high"
+  );
+  const rTotalPA = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: -r.totalPA })),
+    "high"
+  );
   const rAvgPF = rank(
     rowsForRank.map((r) => ({ name: r.name, val: r.avgPF })),
     "high"
   );
-  const rPA = rank(
-    rowsForRank.map((r) => ({ name: r.name, val: -r.pa })),
+  const rAvgPA = rank(
+    rowsForRank.map((r) => ({ name: r.name, val: -r.avgPA })),
     "high"
   );
   const rWin = rank(
@@ -1216,12 +1285,60 @@ export function CareerTab({ league }) {
   );
   const rankRow = (name) => ({
     name,
-    avgPF: rAvgPF.find((x) => x.name === name)?.r ?? "—",
-    pa: rPA.find((x) => x.name === name)?.r ?? "—",
-    winPct: rWin.find((x) => x.name === name)?.r ?? "—",
-    place: rPlace.find((x) => x.name === name)?.r ?? "—",
+    totalPF: rTotalPF.get(name) ?? null,
+    totalPA: rTotalPA.get(name) ?? null,
+    avgPF: rAvgPF.get(name) ?? null,
+    avgPA: rAvgPA.get(name) ?? null,
+    winPct: rWin.get(name) ?? null,
+    place: rPlace.get(name) ?? null,
   });
   const rankTable = owners.map((o) => rankRow(o));
+
+  const rankColumns = [
+    { key: "name", label: "Member", align: "left" },
+    { key: "totalPF", label: "Rank: Total PF", align: "center" },
+    { key: "totalPA", label: "Rank: Total PA", align: "center" },
+    { key: "avgPF", label: "Rank: Avg PF", align: "center" },
+    { key: "avgPA", label: "Rank: Avg PA", align: "center" },
+    { key: "place", label: "Rank: Placement", align: "center" },
+    { key: "winPct", label: "Rank: Win %", align: "center" },
+  ];
+
+  const sortedRankTable = React.useMemo(() => {
+    const arr = [...rankTable];
+    const dir = rankSort.direction === "asc" ? 1 : -1;
+    const key = rankSort.key;
+    arr.sort((a, b) => {
+      if (key === "name") {
+        return a.name.localeCompare(b.name) * dir;
+      }
+      const av = a[key];
+      const bv = b[key];
+      if (av == null && bv == null) {
+        return a.name.localeCompare(b.name);
+      }
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = av - bv;
+      if (cmp !== 0) return cmp * dir;
+      return a.name.localeCompare(b.name);
+    });
+    return arr;
+  }, [rankTable, rankSort]);
+
+  const toggleRankSort = (key) => {
+    setRankSort((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
+  const formatRankValue = (val) => (val == null ? "—" : val);
 
   // ---------- Win% by own scoring buckets (per manager, per season) ----------
   // Buckets: 10, 20, ..., 200 (200 means 200+)
@@ -1647,22 +1764,45 @@ export function CareerTab({ league }) {
             <table className="w-full text-[13px] text-slate-700 dark:text-slate-200">
               <thead
                 className="bg-gradient-to-r from-white/80 via-white/60 to-white/40 dark:from-white/10 dark:via-white/5 dark:to-white/0
-                border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
+                  border-b border-white/40 dark:border-white/10 uppercase text-[11px] tracking-[0.25em] text-slate-600 dark:text-slate-300"
               >
                 <tr>
-                  <th className="px-4 py-3 text-left">Member</th>
-                  <th className="px-4 py-3 text-center">Rank: Avg PF</th>
-                  <th className="px-4 py-3 text-center">
-                    Rank: PA (lower better)
-                  </th>
-                  <th className="px-4 py-3 text-center">Rank: Win %</th>
-                  <th className="px-4 py-3 text-center">
-                    Rank: Placement (avg)
-                  </th>
+                  {rankColumns.map((col) => {
+                    const isSorted = rankSort.key === col.key;
+                    const ariaSort = isSorted
+                      ? rankSort.direction === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined;
+                    const justify =
+                      col.align === "left" ? "justify-start" : "justify-center";
+                    return (
+                      <th
+                        key={col.key}
+                        className={`px-4 py-3 ${
+                          col.align === "left" ? "text-left" : "text-center"
+                        }`}
+                        aria-sort={ariaSort}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleRankSort(col.key)}
+                          className={`flex w-full items-center gap-1 ${justify} uppercase tracking-[0.25em] transition text-slate-600 dark:text-slate-300 hover:text-violet-500 dark:hover:text-violet-300`}
+                        >
+                          <span>{col.label}</span>
+                          {isSorted && (
+                            <span aria-hidden="true" className="text-[10px]">
+                              {rankSort.direction === "asc" ? "↑" : "↓"}
+                            </span>
+                          )}
+                        </button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/40 dark:divide-white/5">
-                {rankTable.map((r, idx) => (
+                {sortedRankTable.map((r, idx) => (
                   <tr
                     key={r.name}
                     className={`transition-colors ${
@@ -1671,21 +1811,22 @@ export function CareerTab({ league }) {
                         : "bg-white/45 dark:bg-white/[0.025]"
                     } hover:bg-violet-100/50 dark:hover:bg-violet-500/10`}
                   >
-                    <td className="px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100">
-                      {r.name}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.avgPF}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.pa}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.winPct}
-                    </td>
-                    <td className="px-4 py-3 text-center tabular-nums">
-                      {r.place}
-                    </td>
+                    {rankColumns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={`px-4 py-3 ${
+                          col.align === "left" ? "text-left" : "text-center"
+                        } ${
+                          col.key === "name"
+                            ? "font-semibold text-slate-800 dark:text-slate-100"
+                            : "tabular-nums"
+                        }`}
+                      >
+                        {col.key === "name"
+                          ? r.name
+                          : formatRankValue(r[col.key])}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -7862,6 +8003,39 @@ const SLOT = {
 // ESPN defaultPositionId for players: QB=1, RB=2, WR=3, TE=4, K=5, DST=16
 const POS = { QB: 1, RB: 2, WR: 3, TE: 4, K: 5, DST: 16 };
 const __POS_LABEL = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DST" };
+// Sleeper → ESPN id coercion
+const SLP_TO_SLOT = {
+  QB: 0,
+  RB: 2,
+  WR: 3,
+  TE: 6,
+  OP: 7,
+  FLEX: 23,
+  DST: 16,
+  D: 16,
+  K: 17,
+  BN: 20,
+  BENCH: 20,
+  IR: 21,
+};
+const SLP_TO_POS = { QB: 1, RB: 2, WR: 3, TE: 4, K: 5, DST: 16, D: 16 };
+
+// Coerce any slot token (number | string) to an ESPN slot id (number) or null
+function __coerceSlotId(token) {
+  if (Number.isFinite(Number(token))) return Number(token);
+  const t = String(token || "").toUpperCase();
+  return Number.isFinite(SLP_TO_SLOT[t]) ? SLP_TO_SLOT[t] : null;
+}
+
+// Coerce any position token (number | string) to an ESPN defaultPositionId (number) or null
+function __coercePosId(token) {
+  if (Number.isFinite(Number(token))) {
+    const n = Number(token);
+    return n === 0 ? null : n; // guard zeroes
+  }
+  const t = String(token || "").toUpperCase();
+  return Number.isFinite(SLP_TO_POS[t]) ? SLP_TO_POS[t] : null;
+}
 
 // is player (by posId) eligible for a given slotId?
 function __eligible(posId, slotId) {
@@ -7888,21 +8062,26 @@ const __num = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// NEW: normalize lineup slots input (array template OR counts map) → counts map per season
 function __normalizeLineupCountsPerSeason(src = {}) {
   const out = {};
   Object.entries(src || {}).forEach(([season, val]) => {
     if (Array.isArray(val)) {
-      // array of slotIds → count occurrences
       const counts = {};
-      for (const sid of val) {
-        const k = Number(sid);
-        if (!Number.isFinite(k)) continue;
-        counts[k] = (counts[k] || 0) + 1;
+      for (const tok of val) {
+        const sid = __coerceSlotId(tok);
+        if (!Number.isFinite(sid)) continue;
+        counts[sid] = (counts[sid] || 0) + 1;
       }
       out[season] = counts;
     } else if (val && typeof val === "object") {
-      out[season] = val;
+      // also coerce keys if they’re strings like "QB"
+      const counts = {};
+      Object.entries(val).forEach(([k, v]) => {
+        const sid = __coerceSlotId(k);
+        if (!Number.isFinite(sid)) return;
+        counts[sid] = Number(v) || 0;
+      });
+      out[season] = counts;
     } else {
       out[season] = {};
     }
@@ -7918,21 +8097,32 @@ function __firstNonEmpty(...cands) {
   return {};
 }
 
-
-const __entrySlotId = (e) => e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
-const __toFiniteNum = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+const __entrySlotId = (e) => {
+  // ESPN first
+  const espn = e?.lineupSlotId ?? e?.slotId ?? e?.slot ?? null;
+  // Sleeper often uses strings like "RB", "BN"
+  return __coerceSlotId(espn ?? e?.position ?? e?.roster_slot);
 };
 
 const __entryPosId = (e) => {
-  const cand =
+  // ESPN
+  const espn =
     e?.defaultPositionId ??
     e?.playerPoolEntry?.player?.defaultPositionId ??
     e?.player?.defaultPositionId ??
     e?.posId;
-  return __toFiniteNum(cand); // => null unless truly 0/2/4/6/16/17
+  if (espn != null) return __coercePosId(espn);
+
+  // Sleeper: position / fantasy_positions[0]
+  const sl =
+    e?.position ??
+    e?.player?.position ??
+    (Array.isArray(e?.player?.fantasy_positions)
+      ? e.player.fantasy_positions[0]
+      : null);
+  return __coercePosId(sl);
 };
+
 const __entryPts = (e) =>
   __num(
     e?.appliedTotal ??
@@ -8499,26 +8689,31 @@ export function RosterTab({
 }) {
   // —— NEW: accept data from props OR fall back to league.* if props are empty
   const RB = React.useMemo(
-    () => __firstNonEmpty(
-      rostersByYear,
-      league?.espnRostersByYear,
-      league?.rostersByYear
-    ),
+    () =>
+      __firstNonEmpty(
+        rostersByYear,
+        league?.espnRostersByYear,
+        league?.rostersByYear
+      ),
     [rostersByYear, league]
   );
 
   const LSYraw = React.useMemo(
-    () => __firstNonEmpty(
-      lineupSlotsByYear,
-      league?.espnLineupSlotsByYear,
-      league?.lineupSlotsByYear,
-      league?.espnLineupTemplateByYear   // allow ordered template too
-    ),
+    () =>
+      __firstNonEmpty(
+        lineupSlotsByYear,
+        league?.espnLineupSlotsByYear,
+        league?.lineupSlotsByYear,
+        league?.espnLineupTemplateByYear // allow ordered template too
+      ),
     [lineupSlotsByYear, league]
   );
 
   // counts map per season regardless of original shape
-  const LSY = React.useMemo(() => __normalizeLineupCountsPerSeason(LSYraw), [LSYraw]);
+  const LSY = React.useMemo(
+    () => __normalizeLineupCountsPerSeason(LSYraw),
+    [LSYraw]
+  );
 
   const hidden = React.useMemo(() => {
     const fromLeague = Array.isArray(league?.hiddenManagers)
@@ -8536,8 +8731,7 @@ export function RosterTab({
         .sort((a, b) => b - a),
     [RB]
   );
-  
-  
+
   const [season, setSeason] = React.useState(
     seasons[0] || new Date().getFullYear()
   );
@@ -8583,17 +8777,23 @@ export function RosterTab({
     const fromSettings = __buildRowSpecs(LSY?.[season] || {});
     if (fromSettings.length) return fromSettings;
     return __buildRowSpecs({
-      0: 1, 2: 2, 3: 2, 6: 1, 23: 1, 16: 1, 17: 1, 20: 6,
+      0: 1,
+      2: 2,
+      3: 2,
+      6: 1,
+      23: 1,
+      16: 1,
+      17: 1,
+      20: 6,
     });
   }, [LSY, season]);
-  
 
   // starter slots for this season (derived from ESPN lineup settings)
   const startSlots = React.useMemo(
     () => __buildStartSlots(LSY?.[season] || {}),
     [LSY, season]
   );
-  
+
   const startSlotsSet = React.useMemo(() => new Set(startSlots), [startSlots]);
 
   const teamIds = React.useMemo(
@@ -8641,12 +8841,17 @@ export function RosterTab({
       const starts = __buildStartSlots(LSY?.[seasonId] || {});
       const startSet = new Set(starts);
       const actual = __actualStarterPoints(entries, startSet);
-      const potential = __potentialPoints(entries, starts, seasonId, teamId, rosterAcqByYear);
+      const potential = __potentialPoints(
+        entries,
+        starts,
+        seasonId,
+        teamId,
+        rosterAcqByYear
+      );
       return Math.max(0, potential - actual);
     },
     [RB, LSY, rosterAcqByYear]
   );
-  
 
   // ---------- WEEKLY SUMMARY (current `season`) ----------
   const weeklySummary = React.useMemo(() => {
@@ -8695,15 +8900,14 @@ export function RosterTab({
       const perYear = yearsAsc.map((yr) => {
         // Collect teamIds whose resolveOwner(yr, tid) === mgr (use rostersByYear keys for that yr)
         const tids = Object.keys(RB?.[yr] || {})
-        .map(Number)
-        .filter((tid) => resolveOwner(tid) === mgr);
+          .map(Number)
+          .filter((tid) => resolveOwner(tid) === mgr);
 
         if (!tids.length) return 0;
 
         // Weeks in this year (cap by currentWeek if present)
         const wksSet = new Set();
         tids.forEach((tid) =>
-          
           Object.keys(RB?.[yr]?.[tid] || {}).forEach((w) =>
             wksSet.add(Number(w))
           )
@@ -11504,23 +11708,58 @@ export function WeeklyOutlookTab({
 
   // Pull projections directly from stored rows in localStorage
   const projByOwner = React.useMemo(() => {
+    const STORE_KEY = "FL_STORE_v1";
+
+    const pickStoreObject = () => {
+      if (typeof window === "undefined") return null;
+
+      const parseJSON = (raw) => {
+        if (!raw || typeof raw !== "string") return null;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      };
+
+      try {
+        const fromLocal = parseJSON(localStorage.getItem(STORE_KEY));
+        const fromSession = parseJSON(sessionStorage.getItem(STORE_KEY));
+        const fromVolatile =
+          window.__FL_VOLATILE_STORE__ &&
+          typeof window.__FL_VOLATILE_STORE__ === "object"
+            ? window.__FL_VOLATILE_STORE__
+            : null;
+
+        const nonEmpty = (obj) =>
+          obj && typeof obj === "object" && Object.keys(obj).length > 0;
+
+        if (nonEmpty(fromLocal)) return fromLocal;
+        if (nonEmpty(fromSession)) return fromSession;
+        if (nonEmpty(fromVolatile)) return fromVolatile;
+
+        return fromLocal || fromSession || fromVolatile || null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
-      const STORE_KEY = "FL_STORE_v1";
-      const store = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-      const lid =
-        store.lastSelectedLeagueId || Object.keys(store.leaguesById || {})[0];
-      const L = (store.leaguesById || {})[lid] || {};
+      const store = pickStoreObject() || {};
+      const leagues = store.leaguesById || {};
+      const lid = store.lastSelectedLeagueId || Object.keys(leagues)[0] || null;
+      const leagueStore = (lid && leagues[lid]) || {};
 
       const yr = Number(currentYear) || 0;
       const wk = Number(currentWeek) || 0;
 
-      const rows = (L.rows || []).filter(
+      const rows = (leagueStore.rows || []).filter(
         (r) => Number(r.season) === yr && Number(r.week) === wk
       );
 
       const m = new Map();
       rows.forEach((r) => {
-        const owner = (r.manager || r.owner || "").trim();
+        const owner = canonicalize(r?.manager || r?.owner || "").trim();
         const p = Number(r?.proj_for ?? r?.projFor);
         if (owner && Number.isFinite(p)) m.set(owner, p);
       });
