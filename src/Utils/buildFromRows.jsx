@@ -181,9 +181,32 @@ export function buildFromRows(rowsIn) {
       new Set(rLeague.map((r) => getOwner(r)).filter(Boolean))
     );
 
+    const uniqueMembersCount = owners.length;
+
+    const seasonsDesc = [...seasonsAll].sort((a, b) => a - b);
+    const latestSeason = seasonsDesc.length
+      ? seasonsDesc[seasonsDesc.length - 1]
+      : null;
+    const currentSeasonOwners = new Set();
+    if (latestSeason != null) {
+      rLeague.forEach((r) => {
+        const seasonNum = Number(r.season);
+        if (Number.isFinite(seasonNum) && seasonNum === latestSeason) {
+          const owner = getOwner(r);
+          if (owner) currentSeasonOwners.add(owner);
+        }
+      });
+    }
+
+    const sizeFromRows = rLeague.reduce(
+      (s, r) => Math.max(s, Number(r.league_size) || 0),
+      0
+    );
+    const currentSize = currentSeasonOwners.size
+      ? currentSeasonOwners.size
+      : 0;
     const sizeGuess =
-      rLeague.reduce((s, r) => Math.max(s, Number(r.league_size) || 0), 0) ||
-      owners.length;
+      currentSize || sizeFromRows || uniqueMembersCount || owners.length;
 
     // capture stable id + human name in meta
     const leagueId = String(
@@ -198,18 +221,24 @@ export function buildFromRows(rowsIn) {
       rLeague.find((r) => r.espn_league)?.espn_league ||
       (leagueId ? `League ${leagueId}` : "League 1");
 
+    const scoringValues = rLeague
+      .map((r) => r.scoring)
+      .filter((v) => v != null && String(v).trim() !== "");
+
     const meta = {
       id: leagueId || null,
       key: lg,
       name: nameCandidate,
       size: sizeGuess,
+      uniqueMembers: uniqueMembersCount,
+      sizeHistoricalMax: Math.max(sizeFromRows, uniqueMembersCount, currentSize),
       startSeason: seasonsAll[0] || null,
       yearsRunning: seasonsAll.length,
       platform:
         rLeague.find((r) => r.platform)?.platform ||
         rLeague.find((r) => r.site)?.site ||
         "ESPN",
-      scoring: rLeague.find((r) => r.scoring)?.scoring || "Standard",
+      scoring: mostRecent(scoringValues) || "Standard",
       // Optional: playoffStartWeek[BySeason] can be attached later if computed elsewhere
     };
 
