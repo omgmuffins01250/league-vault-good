@@ -534,26 +534,6 @@ export function SetupTab({
     () => buildRosterSlots(lineupCounts),
     [lineupCounts]
   );
-  const positionsSummary = useMemo(() => {
-    if (!rosterSlots.length) return "—";
-    return rosterSlots.map((slot) => `${slot.count} ${slot.label}`).join(", ");
-  }, [rosterSlots]);
-  const uniqueMembersCount = useMemo(() => {
-    const metaValue = Number(league?.meta?.uniqueMembers);
-    if (Number.isFinite(metaValue) && metaValue > 0) {
-      return metaValue;
-    }
-    if (Array.isArray(league?.owners)) return league.owners.length;
-    return null;
-  }, [league]);
-  const leagueSizeDisplay = useMemo(() => {
-    const metaValue = Number(league?.meta?.size);
-    if (Number.isFinite(metaValue) && metaValue > 0) {
-      return metaValue;
-    }
-    if (uniqueMembersCount != null) return uniqueMembersCount;
-    return null;
-  }, [league, uniqueMembersCount]);
   const extraGeneralInfos = useMemo(
     () => [
       { label: "Waiver Type", value: waiverLabel || "—" },
@@ -733,13 +713,11 @@ export function SetupTab({
         <Card title="League details">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
             <Info label="League Name" value={league.meta.name} />
-            <Info label="League Size" value={leagueSizeDisplay} />
-            <Info label="Unique Members" value={uniqueMembersCount} />
+            <Info label="League Size" value={league.meta.size} />
             <Info label="Start Season" value={league.meta.startSeason} />
             <Info label="Years Running" value={league.meta.yearsRunning} />
             <Info label="Platform" value={league.meta.platform} />
             <Info label="Scoring" value={scoringDisplay || "Standard"} />
-            <Info label="Positions" value={positionsSummary} />
           </div>
           {hasExtras && (
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
@@ -11628,8 +11606,7 @@ export function WeeklyOutlookTab({
     try {
       const store = pickStoreObject() || {};
       const leagues = store.leaguesById || {};
-      const lid =
-        store.lastSelectedLeagueId || Object.keys(leagues)[0] || null;
+      const lid = store.lastSelectedLeagueId || Object.keys(leagues)[0] || null;
       const leagueStore = (lid && leagues[lid]) || {};
 
       const yr = Number(currentYear) || 0;
