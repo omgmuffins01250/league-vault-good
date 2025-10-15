@@ -1,6 +1,7 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState } from "react";
+import html2canvas from "html2canvas";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
 import {
