@@ -853,11 +853,11 @@ export function MembersTab({ league }) {
                   ))}
                 </tr>
               </thead>
-              <tbody className="[&>tr:nth-child(odd)]:bg-white/60 dark:[&>tr:nth-child(odd)]:bg-white/5 [&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
+              <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
                 {league.members.map((m) => (
                   <tr
                     key={m.id}
-                    className="transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
+                    className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
                   >
                     {/* OWNER (manager) NAME */}
                     <td className="px-3 py-2 text-left">
