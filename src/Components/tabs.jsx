@@ -11949,60 +11949,74 @@ export function WeeklyOutlookTab({
       const chunks = [];
       const offsets = [];
       let length = 0;
+      const EOL = "\r\n";
 
       const pushChunk = (chunk) => {
         chunks.push(chunk);
         length += chunk.length;
       };
       const pushString = (str) => pushChunk(encoder.encode(str));
+      const pushLine = (str = "") => pushString(`${str}${EOL}`);
       const pushBinary = (arr) => pushChunk(arr);
       const startObject = (id) => {
         offsets[id] = length;
-        pushString(`${id} 0 obj\n`);
+        pushLine(`${id} 0 obj`);
       };
-      const endObject = () => pushString("endobj\n");
+      const endObject = () => pushLine("endobj");
 
-      pushString("%PDF-1.3\n");
+      pushLine("%PDF-1.3");
 
       startObject(1);
-      pushString("<< /Type /Catalog /Pages 2 0 R >>\n");
+      pushLine("<< /Type /Catalog /Pages 2 0 R >>");
       endObject();
 
       startObject(2);
-      pushString("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
+      pushLine("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
       endObject();
 
       startObject(3);
-      pushString(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>\n`
+      pushLine(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>`
       );
       endObject();
 
       startObject(4);
-      pushString(
-        `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`
+      pushLine(
+        `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`
       );
+      pushLine("stream");
       pushBinary(imageBytes);
-      pushString("\nendstream\n");
+      pushLine();
+      pushLine("endstream");
       endObject();
 
-      const contentStream = `q\n${width} 0 0 ${height} 0 0 cm\n/Im0 Do\nQ\n`;
+      const contentStream = [
+        "q",
+        `${width} 0 0 ${height} 0 0 cm`,
+        "/Im0 Do",
+        "Q",
+        "",
+      ].join(EOL);
       startObject(5);
-      pushString(
-        `<< /Length ${contentStream.length} >>\nstream\n${contentStream}endstream\n`
-      );
+      pushLine(`<< /Length ${contentStream.length} >>`);
+      pushLine("stream");
+      pushString(contentStream);
+      pushLine("endstream");
       endObject();
 
       const xrefOffset = length;
-      pushString("xref\n0 6\n");
-      pushString("0000000000 65535 f \n");
+      pushLine("xref");
+      pushLine("0 6");
+      pushLine("0000000000 65535 f ");
       for (let i = 1; i <= 5; i += 1) {
         const offset = offsets[i] ?? 0;
-        pushString(`${offset.toString().padStart(10, "0")} 00000 n \n`);
+        pushLine(`${offset.toString().padStart(10, "0")} 00000 n `);
       }
-      pushString(
-        `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
-      );
+      pushLine("trailer");
+      pushLine("<< /Size 6 /Root 1 0 R >>");
+      pushLine("startxref");
+      pushLine(String(xrefOffset));
+      pushLine("%%EOF");
 
       const pdfBytes = new Uint8Array(length);
       let position = 0;
