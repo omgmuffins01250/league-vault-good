@@ -13292,11 +13292,20 @@ export function WeeklyOutlookTab({
                   </div>
 
                   {displayFacts.length > 0 && (
-                    <div className="mt-4 text-left">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                        Key Facts
+                    <div className="mt-4">
+                      <div className="flex justify-center">
+                        <span
+                          className="
+        text-base font-black uppercase tracking-[0.18em]
+        bg-gradient-to-br from-orange-400 via-yellow-300 to-red-400
+        bg-clip-text text-transparent drop-shadow-[0_1px_0_rgba(0,0,0,0.4)]
+      "
+                          style={{ letterSpacing: "0.08em" }}
+                        >
+                          Key Facts
+                        </span>
                       </div>
-                      <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+                      <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-left">
                         {displayFacts.map((fact, idx) => (
                           <li key={fact.key || idx} className="leading-snug text-zinc-700 dark:text-zinc-200">
                             {fact.text}
