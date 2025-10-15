@@ -8748,20 +8748,29 @@ export function RosterTab({
   // Central owner resolver (tries ownerName, falls back to window.__ownerMaps.name, else Team X)
   const resolveOwner = React.useCallback(
     (teamId) => {
+      const teamKey = Number.isFinite(Number(teamId)) ? Number(teamId) : teamId;
+
       try {
         if (typeof ownerName === "function") {
-          return ownerName(season, teamId) || `Team ${teamId}`;
+          const viaOwnerMaps = ownerName(season, teamKey);
+          if (viaOwnerMaps) return canonicalizeOwner(viaOwnerMaps);
         }
       } catch {}
+
       try {
         const nm = window?.__ownerMaps?.name;
         if (typeof nm === "function") {
-          return nm(season, teamId) || `Team ${teamId}`;
+          const viaWindow = nm(season, teamKey);
+          if (viaWindow) return canonicalizeOwner(viaWindow);
         }
       } catch {}
+
+      const viaLeague = __resolveOwnerName(league, season, teamKey);
+      if (viaLeague) return canonicalizeOwner(viaLeague);
+
       return `Team ${teamId}`;
     },
-    [season]
+    [league, season]
   );
 
   const weekCap = React.useMemo(
