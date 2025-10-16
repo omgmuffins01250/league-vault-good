@@ -7251,7 +7251,16 @@ export function TradesTab({
 
   // Prefer explicit prop if present; else use window.name harvest
   // Prefer explicit prop if present; else use window.name harvest
-  const activityBySeasonRaw = activityFromWindow;
+  const activityBySeasonRaw = React.useMemo(() => {
+    const hasPropData =
+      activityFromProp && Object.keys(activityFromProp || {}).length > 0;
+    const hasWindowData =
+      activityFromWindow && Object.keys(activityFromWindow || {}).length > 0;
+
+    if (hasPropData) return activityFromProp;
+    if (hasWindowData) return activityFromWindow;
+    return {};
+  }, [activityFromProp, activityFromWindow]);
 
   // ✅ Re-key to canonical and accumulate (protects against any stray raw names)
   // Names coming from ownerByTeamByYear are already correct.
