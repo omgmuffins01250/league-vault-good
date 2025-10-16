@@ -12014,35 +12014,37 @@ export function WeeklyOutlookTab({
 
   const downloadPdf = React.useCallback(async () => {
     try {
+      // 1) Capture snapshot -> dataURL (PNG/JPEG)
       const dataUrl = await captureWeeklyOutlookImage();
-      const base64 = (dataUrl.split(",")[1] || "").trim();
-      if (!base64) throw new Error("Unable to read snapshot data");
+      if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+        throw new Error("Snapshot failed or not an image data URL");
+      }
 
-      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+      // 2) Convert dataURL to bytes without atob (more reliable for large images)
+      const resp = await fetch(dataUrl);
+      const bytesU8 = new Uint8Array(await resp.arrayBuffer());
 
+      // 3) Build PDF and embed the image at its intrinsic size
       const pdfDoc = await PDFDocument.create();
       const isPng = dataUrl.startsWith("data:image/png");
-      const embeddedImage = isPng
-        ? await pdfDoc.embedPng(bytes)
-        : await pdfDoc.embedJpg(bytes);
-      const { width, height } = embeddedImage.scale(1);
-      const page = pdfDoc.addPage([width, height]);
-      page.drawImage(embeddedImage, {
-        x: 0,
-        y: 0,
-        width,
-        height,
-      });
+      const embedded = isPng
+        ? await pdfDoc.embedPng(bytesU8)
+        : await pdfDoc.embedJpg(bytesU8);
 
+      const { width, height } = embedded; // intrinsic dims
+      const page = pdfDoc.addPage([width, height]);
+      page.drawImage(embedded, { x: 0, y: 0, width, height });
+
+      // 4) Save and trigger download
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileNameFor("pdf");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileNameFor("pdf");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("PDF export failed:", err);
@@ -13330,29 +13332,7 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onMouseDown={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setDownloadMenuOpen(false);
-                      await downloadSnapshot();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 01-2-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
-                    </svg>
-                    <span>Snapshot (PNG)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onMouseDown={async (e) => {
+                    onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       setDownloadMenuOpen(false);
@@ -13763,13 +13743,17 @@ export function WeeklyOutlookTab({
                 if (pctA >= 70)
                   pushFact(
                     `h2h-dominance-${pairKey}`,
-                    `${m.aName} looks to parent their son, ${m.bName} again, winning ${Math.round(pctA)}% of their H2H games.`,
+                    `${m.aName} looks to parent their son, ${
+                      m.bName
+                    } again, winning ${Math.round(pctA)}% of their H2H games.`,
                     [m.aName, m.bName]
                   );
                 else if (pctB >= 70)
                   pushFact(
                     `h2h-dominance-${pairKey}`,
-                    `${m.bName} looks to parent their son, ${m.aName} again, winning ${Math.round(pctB)}% of their H2H games.`,
+                    `${m.bName} looks to parent their son, ${
+                      m.aName
+                    } again, winning ${Math.round(pctB)}% of their H2H games.`,
                     [m.aName, m.bName]
                   );
               }
@@ -14030,7 +14014,9 @@ export function WeeklyOutlookTab({
                 });
 
               if (highRankEntries.length >= 2) {
-                const ordered = [...highRankEntries].sort((a, b) => a.rank - b.rank);
+                const ordered = [...highRankEntries].sort(
+                  (a, b) => a.rank - b.rank
+                );
                 const [first, second] = ordered;
                 const firstWord = rankWord(first.rank, "high");
                 const secondWord = rankWord(second.rank, "high");
@@ -14064,7 +14050,9 @@ export function WeeklyOutlookTab({
                 });
 
               if (lowRankEntries.length >= 2) {
-                const ordered = [...lowRankEntries].sort((a, b) => a.rank - b.rank);
+                const ordered = [...lowRankEntries].sort(
+                  (a, b) => a.rank - b.rank
+                );
                 const [first, second] = ordered;
                 const firstWord = rankWord(first.rank, "low");
                 const secondWord = rankWord(second.rank, "low");
