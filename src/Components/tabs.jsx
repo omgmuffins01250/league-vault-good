@@ -11991,26 +11991,20 @@ export function WeeklyOutlookTab({
     try {
       const dataUrl = await captureWeeklyOutlookImage();
 
-      const imageElement = await new Promise((resolve, reject) => {
+      const probe = await new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
-        img.onerror = (error) => reject(error);
+        img.onerror = reject;
         img.src = dataUrl;
       });
 
       const width = Math.max(
         1,
-        imageElement.naturalWidth ||
-          imageElement.width ||
-          imageElement.clientWidth ||
-          0
+        probe.naturalWidth || probe.width || probe.clientWidth || 0
       );
       const height = Math.max(
         1,
-        imageElement.naturalHeight ||
-          imageElement.height ||
-          imageElement.clientHeight ||
-          0
+        probe.naturalHeight || probe.height || probe.clientHeight || 0
       );
 
       const canvas = document.createElement("canvas");
@@ -12018,14 +12012,16 @@ export function WeeklyOutlookTab({
       canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas context unavailable");
-      ctx.drawImage(imageElement, 0, 0, width, height);
-      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      const base64 = (jpegDataUrl.split(",")[1] || "").trim();
-      if (!base64) throw new Error("Unable to encode JPEG data");
+      ctx.drawImage(probe, 0, 0, width, height);
 
-      const imageBytes = Uint8Array.from(atob(base64), (char) =>
-        char.charCodeAt(0)
+      const jpegBlob = await new Promise((resolve, reject) =>
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("JPEG encode failed"))),
+          "image/jpeg",
+          0.95
+        )
       );
+      const imageBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
       const encoder = new TextEncoder();
       const chunks = [];
@@ -12080,7 +12076,8 @@ export function WeeklyOutlookTab({
         "",
       ].join(EOL);
       startObject(5);
-      pushLine(`<< /Length ${contentStream.length} >>`);
+      const contentLen = encoder.encode(contentStream).length;
+      pushLine(`<< /Length ${contentLen} >>`);
       pushLine("stream");
       pushString(contentStream);
       pushLine("endstream");
@@ -13346,16 +13343,14 @@ export function WeeklyOutlookTab({
               {downloadMenuOpen && (
                 <div
                   role="menu"
-                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                   onTouchStart={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    onMouseDown={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
                       await downloadSnapshot();
                     }}
@@ -13375,9 +13370,7 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onMouseDown={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    onClick={async () => {
                       setDownloadMenuOpen(false);
                       await downloadPdf();
                     }}
