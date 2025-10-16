@@ -29,6 +29,7 @@ import {
   DEFAULT_LEAGUE_ICONS,
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
+import { normalizeNicknameMap } from "/project/workspace/src/Utils/nicknames.js";
 const LS_KEY = "FL_STORE_v1";
 const DEFAULT_LEAGUE_ICON_GLYPH = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
 const DEFAULT_LEAGUE_ICON_OBJECT = {
@@ -250,6 +251,7 @@ function makeDefaultLeagueIcon() {
         espnRostersByYear        // { [year]: { [teamId]: { [week]: [{pid,name,posId,slotId,pts,projStart?}] } } }
         espnPlayoffTeamsBySeason // { [year]: number }
         hiddenManagers            // [ "Name A", "Name B", ... ] — globally hidden in UI
+        managerNicknames          // { [ownerName]: ["Nickname", ...] }
         leagueIcon                // { type: 'preset' | 'upload', value, previousPreset?, name? }
 
       }
@@ -473,6 +475,7 @@ function upsertLeague({
   espnCurrentWeekBySeason,
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
+  managerNicknames,
   leagueIcon,
 }) {
   const store = readStore();
@@ -481,6 +484,11 @@ function upsertLeague({
     next && typeof next === "object" && Object.keys(next).length > 0
       ? next
       : prevVal;
+  const prevNicknames = normalizeNicknameMap(prev.managerNicknames || {});
+  const nicknamesToPersist =
+    managerNicknames === undefined
+      ? prevNicknames
+      : normalizeNicknameMap(managerNicknames);
   store.leaguesById[leagueId] = {
     leagueId,
     leagueKey,
@@ -516,6 +524,7 @@ function upsertLeague({
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
       : Array.from(prev.hiddenManagers || []),
+    managerNicknames: nicknamesToPersist,
     playoffTeamsOverrides:
       playoffTeamsOverrides || prev.playoffTeamsOverrides || {},
     espnCurrentWeekBySeason: keepIfNonEmpty(
@@ -1732,6 +1741,7 @@ export default function App() {
   const [selectedLeagueId, setSelectedLeagueId] = useState("");
   const [selectedLeagueKey, setSelectedLeagueKey] = useState("");
   const [selectedLeague, setSelectedLeague] = useState("");
+  const [managerNicknames, setManagerNicknames] = useState({});
   const [moneyInputs, setMoneyInputs] = useState({});
   const [error, setError] = useState("");
   const [rawRows, setRawRows] = useState([]);
@@ -1846,6 +1856,7 @@ export default function App() {
       setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
       setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
       setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+      setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
       const sched =
         rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
           ? rec.espnScheduleByYear
@@ -1871,6 +1882,7 @@ export default function App() {
       setCurrentWeekBySeason({});
       setScheduleByYear({});
       setLeagueIcon(makeDefaultLeagueIcon());
+      setManagerNicknames({});
     }
   }
 
@@ -1902,6 +1914,7 @@ export default function App() {
     setTeamNamesByOwner(rec?.espnTeamNamesByOwner || {});
     setLineupSlotsByYear(rec?.espnLineupSlotsByYear || {});
     setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
+    setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
     setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
     setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
@@ -1934,6 +1947,7 @@ export default function App() {
     rebuildFromStore();
     setLineupSlotsByYear({});
     setHiddenManagers(new Set());
+    setManagerNicknames({});
     try {
       sessionStorage.removeItem("FL_HANDOFF_RAW");
     } catch {}
@@ -1981,9 +1995,42 @@ export default function App() {
         espnCurrentWeekBySeason: currentWeekBySeason,
         espnScheduleByYear: scheduleByYear,
         hiddenManagers: Array.from(hiddenManagers),
+        managerNicknames,
         leagueIcon,
       });
       return next;
+    });
+  }
+
+  function handleManagerNicknamesChange(next) {
+    const normalized = normalizeNicknameMap(next);
+    setManagerNicknames(normalized);
+    const { leagueId, leagueName, platform, scoring } =
+      getCurrentLeagueIdentity();
+    upsertLeague({
+      leagueId,
+      leagueKey: selectedLeague,
+      name: leagueName,
+      platform,
+      scoring,
+      rows: rawRows,
+      draftByYear,
+      adpSourceByYear,
+      moneyInputs,
+      activityBySeason,
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+      espnTeamNamesByOwner: teamNamesByOwner,
+      espnRostersByYear: rostersByYear,
+      espnLineupSlotsByYear: lineupSlotsByYear,
+      espnRosterAcqByYear: rosterAcqByYear,
+      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+      playoffTeamsOverrides: playoffTeamsOverrides,
+      espnCurrentWeekBySeason: currentWeekBySeason,
+      espnScheduleByYear: scheduleByYear,
+      hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames: normalized,
+      leagueIcon,
     });
   }
   // ---------------- BOOTSTRAP --------------------
@@ -2615,6 +2662,7 @@ export default function App() {
           espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
           espnCurrentWeekBySeason: currentWeekBySeasonMap,
           espnScheduleByYear: scheduleForSave,
+          managerNicknames,
           leagueIcon,
         });
 
@@ -2716,8 +2764,12 @@ export default function App() {
       : null;
   const leagueWithHidden = React.useMemo(() => {
     if (!league) return null;
-    return { ...league, hiddenManagers: Array.from(hiddenManagers) }; // ← NEW
-  }, [league, hiddenManagers]);
+    return {
+      ...league,
+      hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames: normalizeNicknameMap(managerNicknames),
+    };
+  }, [league, hiddenManagers, managerNicknames]);
 
   const currentWeekResolved = React.useMemo(() => {
     const wk = currentWeekBySeason?.[currentYear];
@@ -2739,7 +2791,7 @@ export default function App() {
         },
       },
     };
-  }, [league, currentWeekResolved]);
+  }, [leagueWithHidden, currentWeekResolved]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -2990,6 +3042,7 @@ export default function App() {
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames,
       leagueIcon,
     });
   }
@@ -3021,6 +3074,7 @@ export default function App() {
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames,
       leagueIcon,
     });
   }
@@ -3050,6 +3104,7 @@ export default function App() {
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
       hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames,
       leagueIcon: normalized,
     });
   }
@@ -3304,9 +3359,12 @@ export default function App() {
                       espnCurrentWeekBySeason: currentWeekBySeason,
                       espnScheduleByYear: scheduleByYear,
                       hiddenManagers: nextArr,
+                      managerNicknames,
                       leagueIcon,
                     });
                   }}
+                  managerNicknames={managerNicknames}
+                  onChangeManagerNicknames={handleManagerNicknamesChange}
                   leagueIcon={leagueIcon}
                   onLeagueIconChange={handleLeagueIconChange}
                 />
@@ -3327,6 +3385,7 @@ export default function App() {
                     playoffTeamsOverrides={playoffTeamsOverrides}
                     seasonThisYear={seasonThisYear}
                     scheduleThisYear={scheduleThisYearNormalized}
+                    managerNicknames={managerNicknames}
                   />
                 )}
 
