@@ -12727,6 +12727,48 @@ export function WeeklyOutlookTab({
     return totals;
   }, [gamesBeforeThisWeek]);
 
+  const standingsNow = React.useMemo(() => {
+    const ownersSet = new Set();
+    (league?.owners || []).forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) ownersSet.add(canon);
+    });
+    seasonTotalsByOwner.forEach((_, owner) => ownersSet.add(owner));
+    matchupsThisWeek.forEach((m) => {
+      if (m?.aName) ownersSet.add(m.aName);
+      if (m?.bName) ownersSet.add(m.bName);
+    });
+
+    const rows = [];
+    ownersSet.forEach((owner) => {
+      if (!owner) return;
+      const totals = seasonTotalsByOwner.get(owner) || {};
+      const wins = Number(totals?.wins) || 0;
+      const losses = Number(totals?.losses) || 0;
+      const games = Number(totals?.games) || wins + losses;
+      const winPct = games > 0 ? wins / games : 0;
+      const pf = Number(totals?.pf) || 0;
+      rows.push({ owner, wins, losses, games, winPct, pf });
+    });
+
+    rows.sort((a, b) => {
+      if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      if (b.pf !== a.pf) return b.pf - a.pf;
+      return a.owner.localeCompare(b.owner);
+    });
+
+    const byOwner = new Map();
+    const list = rows.map((row, idx) => {
+      const withRank = { ...row, rank: idx + 1 };
+      byOwner.set(row.owner, withRank);
+      return withRank;
+    });
+
+    return { list, byOwner };
+  }, [league?.owners, canonicalize, seasonTotalsByOwner, matchupsThisWeek]);
+
   const streakByOwner = React.useMemo(() => {
     const grouped = new Map();
     gamesBeforeThisWeek.forEach((g) => {
@@ -13075,6 +13117,13 @@ export function WeeklyOutlookTab({
     });
     return out;
   }, [seasonsAll, playoffTeamsBase, playoffTeamsOverrides]);
+
+  const playoffTeamsThisSeason = React.useMemo(() => {
+    const direct = mergedPlayoffTeams?.[currentYear];
+    const fallback = mergedPlayoffTeams?.[String(currentYear)];
+    const val = Number(direct ?? fallback);
+    return Number.isFinite(val) && val > 0 ? val : null;
+  }, [mergedPlayoffTeams, currentYear]);
 
   const { recProbByWeekStrict, ownerRecordNow } = React.useMemo(() => {
     // completed seasons, only those with known # playoff teams
@@ -13788,6 +13837,25 @@ export function WeeklyOutlookTab({
                 facts.push({ key, text, owners: ownersInvolved });
               };
 
+              const pairKey = pairKeyOf(m.aName, m.bName);
+              const standingsA = standingsNow.byOwner.get(m.aName);
+              const standingsB = standingsNow.byOwner.get(m.bName);
+              const priorMeetings = priorMatchupsThisSeason.get(pairKey) || [];
+
+              if (streakA?.type === "loss" && streakA.length >= 2)
+                pushFact(
+                  `streak-stop-${m.aName}`,
+                  `${m.aName} looks to stop the bleeding after ${streakA.length} straight losses.`,
+                  [m.aName]
+                );
+
+              if (streakB?.type === "loss" && streakB.length >= 2)
+                pushFact(
+                  `streak-stop-${m.bName}`,
+                  `${m.bName} looks to stop the bleeding after ${streakB.length} straight losses.`,
+                  [m.bName]
+                );
+
               if (streakA?.type === "win" && streakA.length >= 3)
                 pushFact(
                   `streak-${m.aName}-win`,
@@ -13816,12 +13884,84 @@ export function WeeklyOutlookTab({
                   [m.bName]
                 );
 
+              if (
+                playoffTeamsThisSeason &&
+                standingsA?.rank &&
+                standingsB?.rank
+              ) {
+                if (
+                  standingsA.rank === playoffTeamsThisSeason &&
+                  standingsB.rank === playoffTeamsThisSeason + 1
+                ) {
+                  pushFact(
+                    `bubble-${pairKey}`,
+                    `${m.aName} looks to hold their current playoff position against ${m.bName}.`,
+                    [m.aName, m.bName]
+                  );
+                } else if (
+                  standingsB.rank === playoffTeamsThisSeason &&
+                  standingsA.rank === playoffTeamsThisSeason + 1
+                ) {
+                  pushFact(
+                    `bubble-${pairKey}`,
+                    `${m.bName} looks to hold their current playoff position against ${m.aName}.`,
+                    [m.aName, m.bName]
+                  );
+                }
+              }
+
+              if (standingsA?.rank && standingsB?.rank) {
+                const ranks = [standingsA.rank, standingsB.rank].sort(
+                  (a, b) => a - b
+                );
+                if (ranks[0] === 1 && ranks[1] === 2) {
+                  const topDogFirst = standingsA.rank === 1 ? m.aName : m.bName;
+                  const topDogSecond = topDogFirst === m.aName ? m.bName : m.aName;
+                  pushFact(
+                    `topdog-${pairKey}`,
+                    `${topDogFirst} and ${topDogSecond} battle it out for top dog.`,
+                    [m.aName, m.bName]
+                  );
+                }
+              }
+
               if (hStreak)
                 pushFact(
                   `h2h-${m.aName}-${m.bName}`,
                   `${hStreak.winner} has dominated ${hStreak.loser}, winning their last ${hStreak.count} matchups.`,
                   [m.aName, m.bName]
                 );
+
+              if (priorMeetings.length === 1) {
+                const prev = priorMeetings[0];
+                if (
+                  prev?.winner &&
+                  prev?.loser &&
+                  Number.isFinite(Number(prev.week))
+                ) {
+                  pushFact(
+                    `sweep-${pairKey}`,
+                    `${prev.winner} looks to sweep ${prev.loser} after taking the W in Week ${prev.week}.`,
+                    [prev.winner, prev.loser]
+                  );
+                }
+              }
+
+              if (
+                largestProjectionGap &&
+                largestProjectionGap.key === pairKey &&
+                Number.isFinite(Number(largestProjectionGap.diff))
+              ) {
+                pushFact(
+                  `projgap-${pairKey}`,
+                  `${largestProjectionGap.leader} with a ${formatProjectionDiff(
+                    largestProjectionGap.diff
+                  )} projected point differential over ${
+                    largestProjectionGap.trailer
+                  }, the largest of the week.`,
+                  [largestProjectionGap.leader, largestProjectionGap.trailer]
+                );
+              }
 
               const diffPF = pfA - pfB;
               if (Math.abs(diffPF) >= 75)
