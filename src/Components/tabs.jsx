@@ -2,6 +2,7 @@
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import html2canvas from "html2canvas";
+import { PDFDocument } from "pdf-lib";
 
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
@@ -12015,124 +12016,26 @@ export function WeeklyOutlookTab({
   const downloadPdf = React.useCallback(async () => {
     try {
       const dataUrl = await captureWeeklyOutlookImage();
+      const base64 = (dataUrl.split(",")[1] || "").trim();
+      if (!base64) throw new Error("Unable to read snapshot data");
 
-      const imageElement = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = (error) => reject(error);
-        img.src = dataUrl;
+      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+
+      const pdfDoc = await PDFDocument.create();
+      const isPng = dataUrl.startsWith("data:image/png");
+      const embeddedImage = isPng
+        ? await pdfDoc.embedPng(bytes)
+        : await pdfDoc.embedJpg(bytes);
+      const { width, height } = embeddedImage.scale(1);
+      const page = pdfDoc.addPage([width, height]);
+      page.drawImage(embeddedImage, {
+        x: 0,
+        y: 0,
+        width,
+        height,
       });
 
-      const width = Math.max(
-        1,
-        imageElement.naturalWidth ||
-          imageElement.width ||
-          imageElement.clientWidth ||
-          0
-      );
-      const height = Math.max(
-        1,
-        imageElement.naturalHeight ||
-          imageElement.height ||
-          imageElement.clientHeight ||
-          0
-      );
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context unavailable");
-      ctx.drawImage(imageElement, 0, 0, width, height);
-      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      const base64 = (jpegDataUrl.split(",")[1] || "").trim();
-      if (!base64) throw new Error("Unable to encode JPEG data");
-
-      const imageBytes = Uint8Array.from(atob(base64), (char) =>
-        char.charCodeAt(0)
-      );
-
-      const encoder = new TextEncoder();
-      const chunks = [];
-      const offsets = [];
-      let length = 0;
-      const EOL = "\r\n";
-
-      const pushChunk = (chunk) => {
-        chunks.push(chunk);
-        length += chunk.length;
-      };
-      const pushString = (str) => pushChunk(encoder.encode(str));
-      const pushLine = (str = "") => pushString(`${str}${EOL}`);
-      const pushBinary = (arr) => pushChunk(arr);
-      const startObject = (id) => {
-        offsets[id] = length;
-        pushLine(`${id} 0 obj`);
-      };
-      const endObject = () => pushLine("endobj");
-
-      pushLine("%PDF-1.3");
-
-      startObject(1);
-      pushLine("<< /Type /Catalog /Pages 2 0 R >>");
-      endObject();
-
-      startObject(2);
-      pushLine("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-      endObject();
-
-      startObject(3);
-      pushLine(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>`
-      );
-      endObject();
-
-      startObject(4);
-      pushLine(
-        `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`
-      );
-      pushLine("stream");
-      pushBinary(imageBytes);
-      pushLine();
-      pushLine("endstream");
-      endObject();
-
-      const contentStream = [
-        "q",
-        `${width} 0 0 ${height} 0 0 cm`,
-        "/Im0 Do",
-        "Q",
-        "",
-      ].join(EOL);
-      startObject(5);
-      pushLine(`<< /Length ${contentStream.length} >>`);
-      pushLine("stream");
-      pushString(contentStream);
-      pushLine("endstream");
-      endObject();
-
-      const xrefOffset = length;
-      pushLine("xref");
-      pushLine("0 6");
-      pushLine("0000000000 65535 f ");
-      for (let i = 1; i <= 5; i += 1) {
-        const offset = offsets[i] ?? 0;
-        pushLine(`${offset.toString().padStart(10, "0")} 00000 n `);
-      }
-
-      pushLine("trailer");
-      pushLine("<< /Size 6 /Root 1 0 R >>");
-      pushLine("startxref");
-      pushLine(String(xrefOffset));
-      pushLine("%%EOF");
-
-      const pdfBytes = new Uint8Array(length);
-      let position = 0;
-      chunks.forEach((chunk) => {
-        pdfBytes.set(chunk, position);
-        position += chunk.length;
-      });
-
+      const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
