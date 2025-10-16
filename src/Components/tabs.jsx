@@ -6151,33 +6151,77 @@ export function RecordsTab({ league }) {
 
   const highestScoringPlayersAll = React.useMemo(() => {
     const out = [];
-    const seasonsObj =
-      league?.seasonsByYear ||
-      (typeof window !== "undefined"
-        ? window.__FL_SOURCES?.seasonsByYear
-        : {}) ||
-      {};
-    for (const [yearStr, seasonObj] of Object.entries(seasonsObj || {})) {
-      const year = Number(seasonObj?.seasonId ?? yearStr);
-      const rbtbw =
-        seasonObj?.rostersByTeamByWeek || seasonObj?.rostersByTeamWeek || {};
-      for (const [teamIdStr, byWeek] of Object.entries(rbtbw || {})) {
-        const teamId = Number(teamIdStr);
-        const manager =
-          ownerName(year, teamId) || teamNameById[teamId] || `Team ${teamId}`;
-        for (const [weekStr, roster] of Object.entries(byWeek || {})) {
-          const week = Number(weekStr);
-          (roster || []).forEach((p) => {
-            const pts = Number(p?.pts);
-            if (!Number.isFinite(pts)) return;
-            const name = p?.name || p?.playerName || "Unknown";
-            out.push({ owner: manager, player: name, pts, season: year, week });
-          });
+    const addRosterEntries = (seasonKey, teamKey, weekKey, roster) => {
+      const season = Number(
+        seasonKey?.seasonId ?? seasonKey ?? roster?.season ?? roster?.year
+      );
+      const teamId = Number(teamKey);
+      const week = Number(weekKey);
+      const manager =
+        ownerName(season, teamId) ||
+        teamNameById[teamId] ||
+        `Team ${teamId || "?"}`;
+      (Array.isArray(roster) ? roster : roster?.entries || []).forEach((p) => {
+        const pts = pickNum(
+          p?.pts,
+          p?.totalPoints,
+          p?.points,
+          p?.fpts,
+          p?.score
+        );
+        if (!Number.isFinite(pts)) return;
+        const name =
+          p?.name ||
+          p?.playerName ||
+          p?.player?.fullName ||
+          p?.player?.name ||
+          "Unknown";
+        out.push({ owner: manager, player: name, pts, season, week });
+      });
+    };
+
+    const rosterSources = [];
+    const rosterCandidates = [
+      league?.rostersByYear,
+      typeof window !== "undefined" ? window.__sources?.rostersByYear : null,
+      typeof window !== "undefined" ? window.__FL_SOURCES?.rostersByYear : null,
+    ];
+    rosterCandidates.forEach((src) => {
+      if (!src || !Object.keys(src || {}).length) return;
+      if (!rosterSources.includes(src)) rosterSources.push(src);
+    });
+
+    if (rosterSources.length) {
+      rosterSources.forEach((source) => {
+        for (const [seasonKey, byTeam] of Object.entries(source || {})) {
+          for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
+            for (const [weekKey, roster] of Object.entries(byWeek || {})) {
+              addRosterEntries(seasonKey, teamKey, weekKey, roster);
+            }
+          }
+        }
+      });
+    } else {
+      const seasonsObj =
+        league?.seasonsByYear ||
+        (typeof window !== "undefined"
+          ? window.__FL_SOURCES?.seasonsByYear
+          : {}) ||
+        {};
+      for (const [yearStr, seasonObj] of Object.entries(seasonsObj || {})) {
+        const year = Number(seasonObj?.seasonId ?? yearStr);
+        const rbtbw =
+          seasonObj?.rostersByTeamByWeek || seasonObj?.rostersByTeamWeek || {};
+        for (const [teamIdStr, byWeek] of Object.entries(rbtbw || {})) {
+          for (const [weekStr, roster] of Object.entries(byWeek || {})) {
+            addRosterEntries({ seasonId: year }, teamIdStr, weekStr, roster);
+          }
         }
       }
     }
+
     return out.sort(byDesc((r) => r.pts));
-  }, [teamNameById, league?.seasonsByYear]);
+  }, [teamNameById, league?.rostersByYear, league?.seasonsByYear]);
 
   // Longest win streak top list (already computed)
   const topWinStreaksAll = longestStreaks;
