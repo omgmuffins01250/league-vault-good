@@ -8831,14 +8831,26 @@ export function RosterTab({
 
   // Keep mergeMap in sync if it's changed in another tab
   useEffect(() => {
+    const refresh = () => setMergeMap(loadMergeMap(leagueId));
     const onStorage = (e) => {
       if (!e) return;
       if (e.key === MERGE_KEY(leagueId)) {
-        setMergeMap(loadMergeMap(leagueId));
+        refresh();
       }
     };
+    const onMergeUpdate = (event) => {
+      try {
+        const targetId = event?.detail?.leagueId;
+        if (targetId && String(targetId) !== String(leagueId)) return;
+      } catch {}
+      refresh();
+    };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("fl-manager-merge-update", onMergeUpdate);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("fl-manager-merge-update", onMergeUpdate);
+    };
   }, [leagueId]);
 
   // —— NEW: accept data from props OR fall back to league.* if props are empty
