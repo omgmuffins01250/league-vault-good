@@ -19,8 +19,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   display: block;
-  background: #ffffff; /* light background */
-  color: #213547; /* dark text */
+  background: #ffffff; /* fallback light background */
+  background-color: hsl(var(--b1) / 1);
+  color: #213547; /* fallback dark text */
+  color: hsl(var(--bc) / 1);
 }
 
 /* Optional: keep your link/button tweaks or remove them if you prefer Tailwind */
