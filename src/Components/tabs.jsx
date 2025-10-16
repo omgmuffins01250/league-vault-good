@@ -6493,7 +6493,7 @@ export function RecordsTab({ league }) {
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
-            {r.team}
+            {r.owner ?? r.team ?? "Unknown manager"}
           </span>
           <span className="text-slate-500 dark:text-slate-300">
             — {r.player} — {Math.round(r.pts)} pts (S{r.season} W
