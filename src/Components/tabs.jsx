@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import html2canvas from "html2canvas";
 import { PDFDocument } from "pdf-lib";
-
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
 import {
