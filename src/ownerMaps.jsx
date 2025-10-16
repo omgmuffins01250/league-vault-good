@@ -6,6 +6,73 @@ let _seasonCache = [];
 let _manualAliasHistory = {};
 let _manualAliasDatasetKey = "";
 
+const OWNERMAPS_STORAGE_KEY = "fl_ownerMaps::state::v1";
+
+function _safeJsonParse(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function _persistOwnerMapsState() {
+  if (typeof window === "undefined") return;
+  try {
+    const payload = {
+      cache: _cache,
+      aliasEntries: Array.from((_aliasMap || new Map()).entries()),
+      lastKey: _lastKey,
+      seasonCache: Array.isArray(_seasonCache) ? _seasonCache : [],
+      manualAliasHistory:
+        _manualAliasHistory && typeof _manualAliasHistory === "object"
+          ? _manualAliasHistory
+          : {},
+      manualAliasDatasetKey: _manualAliasDatasetKey,
+    };
+    window.localStorage?.setItem(OWNERMAPS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn("ownerMaps persist failed", err);
+  }
+}
+
+function _hydrateOwnerMapsState() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage?.getItem(OWNERMAPS_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = _safeJsonParse(raw, null);
+    if (!parsed || typeof parsed !== "object") return;
+    if (parsed.cache && typeof parsed.cache === "object") {
+      _cache = parsed.cache;
+    }
+    if (Array.isArray(parsed.aliasEntries)) {
+      _aliasMap = new Map(parsed.aliasEntries);
+    } else if (_aliasMap == null) {
+      _aliasMap = new Map();
+    }
+    if (typeof parsed.lastKey === "string") {
+      _lastKey = parsed.lastKey;
+    }
+    if (Array.isArray(parsed.seasonCache)) {
+      _seasonCache = parsed.seasonCache.slice();
+    }
+    if (
+      parsed.manualAliasHistory &&
+      typeof parsed.manualAliasHistory === "object"
+    ) {
+      _manualAliasHistory = parsed.manualAliasHistory;
+    }
+    if (typeof parsed.manualAliasDatasetKey === "string") {
+      _manualAliasDatasetKey = parsed.manualAliasDatasetKey;
+    }
+  } catch (err) {
+    console.warn("ownerMaps hydrate failed", err);
+  }
+}
+
+_hydrateOwnerMapsState();
+
 // ----------------------- helpers ------------------------------
 const _norm = (s) =>
   String(s || "")
@@ -428,6 +495,8 @@ export function primeOwnerMaps({
       });
     }
   }
+
+  _persistOwnerMapsState();
 }
 
 /** Resolve one owner name (season + teamId) – always canonicalize on read */
