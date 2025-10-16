@@ -245,6 +245,7 @@ function _buildSeasonMap({
   espnOwnerByTeamByYear,
   canonOwner,
   espnSeasons,
+  existingSeasonMap,
 }) {
   const s = Number(season);
   const out = {};
@@ -348,6 +349,52 @@ function _buildSeasonMap({
       if (out[teamId].handle == null) {
         // leave as null; handle should come from ownerByTeamByYear
       }
+    });
+  }
+
+  const previousEntries = existingSeasonMap && typeof existingSeasonMap === "object"
+    ? existingSeasonMap
+    : null;
+  if (previousEntries) {
+    Object.entries(previousEntries).forEach(([tid, prevRaw]) => {
+      if (!prevRaw || typeof prevRaw !== "object") return;
+      const prev = {
+        name: prevRaw.name || null,
+        handle: prevRaw.handle || null,
+        ownerId: prevRaw.ownerId || null,
+        teamId: Number(prevRaw.teamId ?? tid),
+      };
+
+      const current = out[tid];
+      if (!current) {
+        out[tid] = { ...prev };
+        return;
+      }
+
+      const merged = { ...current };
+      const prevName = typeof prev.name === "string" ? prev.name.trim() : "";
+      const hasPrevName = !!prevName;
+      const currentName = typeof merged.name === "string" ? merged.name.trim() : "";
+      const currentHandle = typeof merged.handle === "string" ? merged.handle.trim() : "";
+
+      if (
+        hasPrevName &&
+        (!currentName ||
+          currentName.toLowerCase() === "unknown" ||
+          (currentName && currentName === currentHandle))
+      ) {
+        merged.name = prevName;
+      }
+
+      if (!merged.ownerId && prev.ownerId) {
+        merged.ownerId = prev.ownerId;
+      }
+
+      if ((merged.handle == null || merged.handle === "") && prev.handle) {
+        merged.handle = prev.handle;
+      }
+
+      out[tid] = merged;
     });
   }
 
@@ -473,6 +520,7 @@ export function primeOwnerMaps({
       seasonsToBuild.add(Number(s))
     );
 
+    const previousCache = _cache || {};
     const next = {};
     for (const s of seasonsToBuild) {
       next[s] = _buildSeasonMap({
@@ -482,6 +530,7 @@ export function primeOwnerMaps({
         espnOwnerByTeamByYear,
         canonOwner,
         espnSeasons: seasons,
+        existingSeasonMap: previousCache?.[Number(s)],
       });
     }
 
