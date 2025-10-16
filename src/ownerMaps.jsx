@@ -1,5 +1,6 @@
 let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
 let _aliasMap = null; // Map<normalized alias, "Owner Name"> (global canonicalizer)
+let _canonMergeFns = []; // Array<function(name) -> canonical name|null>
 let _lastKey = "";
 let _seasonCache = [];
 let _manualAliasHistory = {};
@@ -148,10 +149,25 @@ function _buildAliasMap({
 
 // exported
 export function canonicalizeOwner(raw) {
-  const k = _norm(raw);
-  if (!k) return String(raw || "").trim();
-  if (_aliasMap && _aliasMap.has(k)) return _aliasMap.get(k);
-  return String(raw || "").trim();
+  let value = String(raw || "").trim();
+  if (!value) return value;
+
+  if (Array.isArray(_canonMergeFns) && _canonMergeFns.length) {
+    for (const fn of _canonMergeFns) {
+      if (typeof fn !== "function") continue;
+      try {
+        const merged = fn(value);
+        if (merged && typeof merged === "string") {
+          const trimmed = merged.trim();
+          if (trimmed) value = trimmed;
+        }
+      } catch {}
+    }
+  }
+
+  const k = _norm(value);
+  if (k && _aliasMap && _aliasMap.has(k)) return _aliasMap.get(k);
+  return value;
 }
 
 // ----------------------- season map builder -------------------
@@ -331,6 +347,11 @@ export function primeOwnerMaps({
     .map(([alias, target]) => `${_norm(alias)}=>${String(target || "").trim()}`)
     .sort()
     .join("|");
+
+  const canonMergeFns = [];
+  if (league) canonMergeFns.push(_canonFromMergeHelpers(league));
+  if (selectedLeague) canonMergeFns.push(_canonFromMergeHelpers(selectedLeague));
+  _canonMergeFns = canonMergeFns;
 
   const canonByMergeLeague = _canonFromMergeHelpers(
     league || selectedLeague || {}
