@@ -8835,22 +8835,12 @@ export function RosterTab({
     const onStorage = (e) => {
       if (!e) return;
       if (e.key === MERGE_KEY(leagueId)) {
-        refresh();
+        setMergeMap(loadMergeMap(leagueId));
       }
     };
-    const onMergeUpdate = (event) => {
-      try {
-        const targetId = event?.detail?.leagueId;
-        if (targetId && String(targetId) !== String(leagueId)) return;
-      } catch {}
-      refresh();
-    };
+
     window.addEventListener("storage", onStorage);
-    window.addEventListener("fl-manager-merge-update", onMergeUpdate);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("fl-manager-merge-update", onMergeUpdate);
-    };
+    return () => window.removeEventListener("storage", onStorage);
   }, [leagueId]);
 
   // —— NEW: accept data from props OR fall back to league.* if props are empty
