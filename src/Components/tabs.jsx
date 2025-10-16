@@ -13120,6 +13120,43 @@ export function WeeklyOutlookTab({
     canonicalize,
   ]);
 
+  const standingsNow = React.useMemo(() => {
+    const seen = new Set();
+    const rows = [];
+
+    const addOwner = (name) => {
+      const canon = canonicalize(name || "").trim();
+      if (!canon || seen.has(canon)) return;
+      seen.add(canon);
+      const rec = ownerRecordNow.get(canon) || { W: 0, L: 0 };
+      const totals = seasonTotalsByOwner.get(canon) || {};
+      const wins = Number(rec?.W) || 0;
+      const losses = Number(rec?.L) || 0;
+      const games = wins + losses;
+      const pct = games > 0 ? wins / games : 0;
+      const pf = Number(totals?.pf) || 0;
+      rows.push({ owner: canon, wins, losses, pct, pf });
+    };
+
+    (owners || []).forEach(addOwner);
+    ownerRecordNow.forEach((_, owner) => addOwner(owner));
+    seasonTotalsByOwner.forEach((_, owner) => addOwner(owner));
+
+    rows.sort((a, b) =>
+      b.pct - a.pct ||
+      b.wins - a.wins ||
+      b.pf - a.pf ||
+      a.owner.localeCompare(b.owner)
+    );
+
+    const rankByOwner = new Map();
+    rows.forEach((row, idx) => {
+      rankByOwner.set(row.owner, idx + 1);
+    });
+
+    return { rows, rankByOwner };
+  }, [owners, ownerRecordNow, seasonTotalsByOwner, canonicalize]);
+
   const probAt = React.useCallback(
     (week, W, L) => {
       const map = recProbByWeekStrict.get(Number(week));
