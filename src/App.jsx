@@ -3427,7 +3427,11 @@ export default function App() {
                   })()}
 
                 {league && section === "draft" && (
-                  <DraftTab draftByYear={draftByYear} />
+                  <DraftTab
+                    draftByYear={draftByYear}
+                    hiddenManagers={leagueWithHidden?.hiddenManagers}
+                    ownerByTeamByYear={ownerByTeamByYear}
+                  />
                 )}
               </>
             )}
