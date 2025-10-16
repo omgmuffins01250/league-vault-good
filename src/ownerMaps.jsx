@@ -6,6 +6,73 @@ let _seasonCache = [];
 let _manualAliasHistory = {};
 let _manualAliasDatasetKey = "";
 
+const OWNERMAPS_STORAGE_KEY = "fl_ownerMaps::state::v1";
+
+function _safeJsonParse(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function _persistOwnerMapsState() {
+  if (typeof window === "undefined") return;
+  try {
+    const payload = {
+      cache: _cache,
+      aliasEntries: Array.from((_aliasMap || new Map()).entries()),
+      lastKey: _lastKey,
+      seasonCache: Array.isArray(_seasonCache) ? _seasonCache : [],
+      manualAliasHistory:
+        _manualAliasHistory && typeof _manualAliasHistory === "object"
+          ? _manualAliasHistory
+          : {},
+      manualAliasDatasetKey: _manualAliasDatasetKey,
+    };
+    window.localStorage?.setItem(OWNERMAPS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn("ownerMaps persist failed", err);
+  }
+}
+
+function _hydrateOwnerMapsState() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage?.getItem(OWNERMAPS_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = _safeJsonParse(raw, null);
+    if (!parsed || typeof parsed !== "object") return;
+    if (parsed.cache && typeof parsed.cache === "object") {
+      _cache = parsed.cache;
+    }
+    if (Array.isArray(parsed.aliasEntries)) {
+      _aliasMap = new Map(parsed.aliasEntries);
+    } else if (_aliasMap == null) {
+      _aliasMap = new Map();
+    }
+    if (typeof parsed.lastKey === "string") {
+      _lastKey = parsed.lastKey;
+    }
+    if (Array.isArray(parsed.seasonCache)) {
+      _seasonCache = parsed.seasonCache.slice();
+    }
+    if (
+      parsed.manualAliasHistory &&
+      typeof parsed.manualAliasHistory === "object"
+    ) {
+      _manualAliasHistory = parsed.manualAliasHistory;
+    }
+    if (typeof parsed.manualAliasDatasetKey === "string") {
+      _manualAliasDatasetKey = parsed.manualAliasDatasetKey;
+    }
+  } catch (err) {
+    console.warn("ownerMaps hydrate failed", err);
+  }
+}
+
+_hydrateOwnerMapsState();
+
 // ----------------------- helpers ------------------------------
 const _norm = (s) =>
   String(s || "")
@@ -178,6 +245,7 @@ function _buildSeasonMap({
   espnOwnerByTeamByYear,
   canonOwner,
   espnSeasons,
+  existingSeasonMap,
 }) {
   const s = Number(season);
   const out = {};
@@ -281,6 +349,52 @@ function _buildSeasonMap({
       if (out[teamId].handle == null) {
         // leave as null; handle should come from ownerByTeamByYear
       }
+    });
+  }
+
+  const previousEntries = existingSeasonMap && typeof existingSeasonMap === "object"
+    ? existingSeasonMap
+    : null;
+  if (previousEntries) {
+    Object.entries(previousEntries).forEach(([tid, prevRaw]) => {
+      if (!prevRaw || typeof prevRaw !== "object") return;
+      const prev = {
+        name: prevRaw.name || null,
+        handle: prevRaw.handle || null,
+        ownerId: prevRaw.ownerId || null,
+        teamId: Number(prevRaw.teamId ?? tid),
+      };
+
+      const current = out[tid];
+      if (!current) {
+        out[tid] = { ...prev };
+        return;
+      }
+
+      const merged = { ...current };
+      const prevName = typeof prev.name === "string" ? prev.name.trim() : "";
+      const hasPrevName = !!prevName;
+      const currentName = typeof merged.name === "string" ? merged.name.trim() : "";
+      const currentHandle = typeof merged.handle === "string" ? merged.handle.trim() : "";
+
+      if (
+        hasPrevName &&
+        (!currentName ||
+          currentName.toLowerCase() === "unknown" ||
+          (currentName && currentName === currentHandle))
+      ) {
+        merged.name = prevName;
+      }
+
+      if (!merged.ownerId && prev.ownerId) {
+        merged.ownerId = prev.ownerId;
+      }
+
+      if ((merged.handle == null || merged.handle === "") && prev.handle) {
+        merged.handle = prev.handle;
+      }
+
+      out[tid] = merged;
     });
   }
 
@@ -406,6 +520,7 @@ export function primeOwnerMaps({
       seasonsToBuild.add(Number(s))
     );
 
+    const previousCache = _cache || {};
     const next = {};
     for (const s of seasonsToBuild) {
       next[s] = _buildSeasonMap({
@@ -415,6 +530,7 @@ export function primeOwnerMaps({
         espnOwnerByTeamByYear,
         canonOwner,
         espnSeasons: seasons,
+        existingSeasonMap: previousCache?.[Number(s)],
       });
     }
 
@@ -428,6 +544,8 @@ export function primeOwnerMaps({
       });
     }
   }
+
+  _persistOwnerMapsState();
 }
 
 /** Resolve one owner name (season + teamId) – always canonicalize on read */
