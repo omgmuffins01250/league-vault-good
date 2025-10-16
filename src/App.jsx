@@ -25,6 +25,7 @@ import {
   WeeklyOutlookTab,
   ScenarioTab,
   LuckIndexTab,
+  YearlyRecapTab,
   DEFAULT_LEAGUE_ICONS,
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
@@ -3178,6 +3179,13 @@ export default function App() {
               Placements
             </SidebarButton>
             <SidebarButton
+              active={section === "recap"}
+              onClick={() => setSection("recap")}
+              disabled={!league}
+            >
+              Yearly Recap
+            </SidebarButton>
+            <SidebarButton
               active={section === "money"}
               onClick={() => setSection("money")}
               disabled={!league}
@@ -3315,6 +3323,15 @@ export default function App() {
                     playoffTeamsBase={playoffTeamsBySeason}
                     playoffTeamsOverrides={playoffTeamsOverrides}
                     onSavePlayoffOverrides={savePlayoffOverrides}
+                  />
+                )}
+                {leagueWithHidden && section === "recap" && (
+                  <YearlyRecapTab
+                    league={leagueWithHidden}
+                    rostersByYear={rostersByYear}
+                    lineupSlotsByYear={lineupSlotsByYear}
+                    ownerByTeamByYear={ownerByTeamByYear}
+                    currentWeekByYear={currentWeekBySeason}
                   />
                 )}
 
