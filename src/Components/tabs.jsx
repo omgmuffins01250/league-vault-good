@@ -1,6 +1,6 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import html2canvas from "html2canvas";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
@@ -8106,7 +8106,32 @@ export function TradesTab({
 }
 
 /* ---------------- RosterTab — per-week lineups by team --------------- */
-/** ESPN lineup slot ids -> row label */
+const canonicalize = (s) => (s == null ? "" : String(s).trim());
+
+// --- Manager merge helpers (shared with ManagerMergeControl) ---
+const MERGE_KEY = (leagueId) =>
+  `fl_merge_map::${String(leagueId || "").trim()}`;
+function loadMergeMap(leagueId) {
+  try {
+    const raw = localStorage.getItem(MERGE_KEY(leagueId));
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+// follow A->B->C chains
+function applyMergeAlias(name, map) {
+  let cur = (name || "").trim();
+  if (!cur) return cur;
+  const seen = new Set();
+  while (map[cur] && !seen.has(cur)) {
+    seen.add(cur);
+    cur = String(map[cur] || "").trim();
+  }
+  return cur || name;
+}
+
 const __SLOT_LABEL = {
   0: "QB",
   2: "RB",
@@ -8432,31 +8457,6 @@ function __resolveProTeamsForSeason(seasonKey, league) {
 
   if (__hasAnyEntries(league?.proTeams)) return league.proTeams;
 
-  try {
-    const payload = parsePayloadString(window.name) || {};
-    const payloadByYear = pick(payload?.proTeamsByYear);
-    if (__hasAnyEntries(payloadByYear)) return payloadByYear;
-
-    if (Array.isArray(payload?.seasons)) {
-      const seasonNum = Number(seasonKey);
-      const seasonFromPayload = payload.seasons.find((s) => {
-        const sid = Number(s?.seasonId);
-        if (Number.isFinite(seasonNum)) return sid === seasonNum;
-        return variants.some((key) => String(sid) === String(key));
-      });
-      if (__hasAnyEntries(seasonFromPayload)) {
-        const nested =
-          seasonFromPayload?.proTeams ??
-          seasonFromPayload?.proTeamsById ??
-          seasonFromPayload?.proTeamsMap ??
-          seasonFromPayload?.proTeamInfo;
-        if (__hasAnyEntries(nested)) return nested;
-      }
-    }
-
-    if (__hasAnyEntries(payload?.proTeams)) return payload.proTeams;
-  } catch {}
-
   return null;
 }
 
@@ -8662,35 +8662,13 @@ function __redScale(n) {
   });
 }
 
-// Build manager display names per teamId for the chosen season.
+// Build manager display names per teamId for the chosen season (from league only).
 function __managerMapForSeason(season, providedByYear = {}) {
   const direct = providedByYear?.[season];
-  if (direct && Object.keys(direct).length) return direct;
-
-  try {
-    const payload = parsePayloadString(window.name) || {};
-    const seasonObj = (payload?.seasons || []).find(
-      (s) => Number(s?.seasonId) === Number(season)
-    );
-    if (!seasonObj) return {};
-    const nameByMemberId = {};
-    (seasonObj.members || []).forEach((m) => {
-      const dn = m?.displayName || "";
-      const fn = m?.firstName || "";
-      const ln = m?.lastName || "";
-      const full = [fn, ln].filter(Boolean).join(" ").trim();
-      const best = full || dn || "Unknown";
-      if (m?.id != null) nameByMemberId[m.id] = best;
-    });
-    const out = {};
-    (seasonObj.teams || []).forEach((t) => {
-      const ownerId = t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-      if (t?.id != null) out[t.id] = nameByMemberId[ownerId] || `Team ${t.id}`;
-    });
-    return out;
-  } catch {
-    return {};
+  if (direct && typeof direct === "object" && Object.keys(direct).length) {
+    return direct;
   }
+  return {};
 }
 
 /**
@@ -8836,10 +8814,33 @@ export function RosterTab({
   lineupSlotsByYear = {},
   currentWeekByYear = {},
   rosterAcqByYear = {},
-  ownerByTeamByYear = {},
   league,
   hiddenManagers,
 }) {
+  // Load ManagerMergeControl's map from localStorage for this league
+  const leagueId = useMemo(
+    () =>
+      String(league?.id || "").trim() ||
+      String(league?.name || "league").trim(),
+    [league]
+  );
+  const [mergeMap, setMergeMap] = useState({});
+  useEffect(() => {
+    setMergeMap(loadMergeMap(leagueId));
+  }, [leagueId]);
+
+  // Keep mergeMap in sync if it's changed in another tab
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (!e) return;
+      if (e.key === MERGE_KEY(leagueId)) {
+        setMergeMap(loadMergeMap(leagueId));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [leagueId]);
+
   // —— NEW: accept data from props OR fall back to league.* if props are empty
   const RB = React.useMemo(
     () =>
@@ -8873,8 +8874,7 @@ export function RosterTab({
       ? league.hiddenManagers
       : null;
     const fromProp = Array.isArray(hiddenManagers) ? hiddenManagers : null;
-    const list = fromLeague || fromProp || [];
-    return new Set(list.map((name) => canonicalizeOwner(name)));
+    return new Set(fromLeague || fromProp || []);
   }, [league?.hiddenManagers, hiddenManagers]);
 
   const seasons = React.useMemo(
@@ -8895,50 +8895,18 @@ export function RosterTab({
   }, [seasons]);
   const byTeam = RB?.[season] || {};
 
-  const ownerMapForSeason = React.useMemo(() => {
-    const seasonKeyNum = Number(season);
-    const seasonKeyStr = String(season);
-    const fromProp =
-      ownerByTeamByYear?.[seasonKeyNum] ||
-      ownerByTeamByYear?.[seasonKeyStr] ||
-      {};
-    const fromLeague =
-      league?.ownerByTeamByYear?.[seasonKeyNum] ||
-      league?.ownerByTeamByYear?.[seasonKeyStr] ||
-      {};
-    return { ...fromLeague, ...fromProp };
-  }, [ownerByTeamByYear, league?.ownerByTeamByYear, season]);
+  const nameByTeamId = useMemo(
+    () => __managerMapForSeason(season, league?.ownerByTeamByYear || {}),
+    [season, league]
+  );
 
-  // Central owner resolver (tries ownerName, falls back to window.__ownerMaps.name, else Team X)
-  const resolveOwner = React.useCallback(
+  const resolveOwner = useCallback(
     (teamId) => {
-      const tidNum = Number(teamId);
-      const tidStr = String(teamId);
-      const fromMap =
-        ownerMapForSeason?.[tidNum] || ownerMapForSeason?.[tidStr] || null;
-      if (fromMap) return canonicalizeOwner(fromMap);
-
-      const viaHelper =
-        __resolveOwnerName({ ownerByTeamByYear }, season, tidNum) ||
-        __resolveOwnerName(league, season, tidNum);
-      if (viaHelper) return canonicalizeOwner(viaHelper);
-
-      try {
-        if (typeof ownerName === "function") {
-          const resolved = ownerName(season, tidNum);
-          if (resolved) return canonicalizeOwner(resolved);
-        }
-      } catch {}
-      try {
-        const nm = window?.__ownerMaps?.name;
-        if (typeof nm === "function") {
-          const resolved = nm(season, tidNum);
-          if (resolved) return canonicalizeOwner(resolved);
-        }
-      } catch {}
-      return `Team ${teamId}`;
+      const base = canonicalize(nameByTeamId?.[teamId] || `Team ${teamId}`);
+      const merged = applyMergeAlias(base, mergeMap); // A->B chain flattening from your ManagerMerge
+      return merged || base;
     },
-    [ownerMapForSeason, ownerByTeamByYear, league, season]
+    [nameByTeamId, mergeMap]
   );
 
   const weekCap = React.useMemo(
@@ -9114,7 +9082,7 @@ export function RosterTab({
     });
 
     return { years: yearsAsc, rows };
-  }, [seasons, rostersByYear, resolveOwner, currentWeekByYear, __benchLeftFor]);
+  }, [seasons, rostersByYear, resolveOwner, currentWeekByYear, __benchLeftFor]); // +tick
   // ---- sorting helpers/state ----
   const SortHeader = ({ label, active, dir, onClick, className = "" }) => (
     <th className={className}>
@@ -9753,11 +9721,7 @@ export function RosterTab({
   );
 }
 /* DraftTab — per-year draft picks grouped by manager (owner names canonicalized on read) */
-export function DraftTab({
-  draftByYear,
-  hiddenManagers,
-  ownerByTeamByYear = {},
-}) {
+export function DraftTab({ draftByYear, hiddenManagers }) {
   const draftWithFinish = React.useMemo(
     () =>
       window.FL_attachFinishPosFromLocal
@@ -9766,22 +9730,20 @@ export function DraftTab({
     [draftByYear]
   );
 
-  const canonicalizeStable = React.useCallback((value) => {
-    const raw = String(value || "").trim();
-    if (!raw) return "";
-    try {
-      if (
-        typeof window !== "undefined" &&
-        window.__ownerMaps &&
-        typeof window.__ownerMaps.canon === "function"
-      ) {
-        const mapped = window.__ownerMaps.canon(raw);
-        if (mapped) return mapped;
-      }
-    } catch {}
-    return canonicalizeOwner(raw);
-  }, []);
+  const canonicalize =
+    (typeof window !== "undefined" &&
+      window.__ownerMaps &&
+      typeof window.__ownerMaps.canon === "function" &&
+      window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
+    ((s) => (s == null ? "" : String(s)));
 
+  // canonical hidden managers set (compare using canonicalize)
+  const hiddenSet = React.useMemo(() => {
+    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
+    return new Set(list.map((n) => canonicalize(n)));
+  }, [hiddenManagers, canonicalize]);
+
+  // also keep a normalized (case/spacing/punct stripped) set for robustness
   const normName = React.useCallback(
     (s) =>
       String(s || "")
@@ -9791,59 +9753,10 @@ export function DraftTab({
         .trim(),
     []
   );
-
-  const ownerNameByNorm = React.useMemo(() => {
-    const map = new Map();
-    Object.values(ownerByTeamByYear || {}).forEach((teams) => {
-      Object.values(teams || {}).forEach((name) => {
-        const canonical = canonicalizeStable(name);
-        const trimmed = canonical || String(name || "").trim();
-        [name, trimmed, canonical].forEach((candidate) => {
-          const normed = normName(candidate);
-          if (normed && trimmed && !map.has(normed)) {
-            map.set(normed, trimmed);
-          }
-        });
-      });
-    });
-    return map;
-  }, [ownerByTeamByYear, canonicalizeStable, normName]);
-
-  const ownerDisplay = React.useCallback(
-    (value) => {
-      const raw = String(value || "").trim();
-      if (!raw) return "—";
-      const normRaw = normName(raw);
-      if (ownerNameByNorm.has(normRaw)) return ownerNameByNorm.get(normRaw);
-      const canonical = canonicalizeStable(raw);
-      if (!canonical) return raw;
-      const normCanonical = normName(canonical);
-      if (ownerNameByNorm.has(normCanonical))
-        return ownerNameByNorm.get(normCanonical);
-      return canonical || raw;
-    },
-    [canonicalizeStable, normName, ownerNameByNorm]
-  );
-
-  // canonical hidden managers set (compare using canonical names)
-  const hiddenSet = React.useMemo(() => {
-    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(
-      list
-        .map((name) => ownerDisplay(name))
-        .filter((name) => name && name !== "—")
-    );
-  }, [hiddenManagers, ownerDisplay]);
-
-  // also keep a normalized (case/spacing/punct stripped) set for robustness
   const hiddenNormSet = React.useMemo(() => {
     const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(
-      list
-        .map((n) => normName(ownerDisplay(n)))
-        .filter((val) => val && val !== "")
-    );
-  }, [hiddenManagers, ownerDisplay, normName]);
+    return new Set(list.map((n) => normName(canonicalize(n))));
+  }, [hiddenManagers, canonicalize, normName]);
 
   function groupByOwner(rows = []) {
     const m = new Map();
@@ -9855,7 +9768,7 @@ export function DraftTab({
         r?.ownerName ??
         r?.owner_full ??
         "";
-      const owner = ownerDisplay(rawOwner) || "—";
+      const owner = canonicalize(rawOwner) || "—";
       const ownerNorm = normName(rawOwner) || normName(owner);
       if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return; // skip hidden
       if (!m.has(owner)) m.set(owner, []);
@@ -9999,6 +9912,8 @@ export function DraftTab({
     const cap = currentWeekByYear[Number(dpYear)];
     return Number.isFinite(cap) ? weeks.filter((w) => w <= cap) : weeks;
   }, [dpYear, dpIsAllYears, currentWeekByYear]);
+
+  const ownerDisplay = React.useCallback((s) => canonicalize(s) || "—", []);
 
   const rows = React.useMemo(() => {
     const arr = draftWithFinish?.[year] || [];
@@ -11991,20 +11906,26 @@ export function WeeklyOutlookTab({
     try {
       const dataUrl = await captureWeeklyOutlookImage();
 
-      const probe = await new Promise((resolve, reject) => {
+      const imageElement = await new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onerror = (error) => reject(error);
         img.src = dataUrl;
       });
 
       const width = Math.max(
         1,
-        probe.naturalWidth || probe.width || probe.clientWidth || 0
+        imageElement.naturalWidth ||
+          imageElement.width ||
+          imageElement.clientWidth ||
+          0
       );
       const height = Math.max(
         1,
-        probe.naturalHeight || probe.height || probe.clientHeight || 0
+        imageElement.naturalHeight ||
+          imageElement.height ||
+          imageElement.clientHeight ||
+          0
       );
 
       const canvas = document.createElement("canvas");
@@ -12012,16 +11933,14 @@ export function WeeklyOutlookTab({
       canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas context unavailable");
-      ctx.drawImage(probe, 0, 0, width, height);
+      ctx.drawImage(imageElement, 0, 0, width, height);
+      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      const base64 = (jpegDataUrl.split(",")[1] || "").trim();
+      if (!base64) throw new Error("Unable to encode JPEG data");
 
-      const jpegBlob = await new Promise((resolve, reject) =>
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("JPEG encode failed"))),
-          "image/jpeg",
-          0.95
-        )
+      const imageBytes = Uint8Array.from(atob(base64), (char) =>
+        char.charCodeAt(0)
       );
-      const imageBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
       const encoder = new TextEncoder();
       const chunks = [];
@@ -12076,8 +11995,7 @@ export function WeeklyOutlookTab({
         "",
       ].join(EOL);
       startObject(5);
-      const contentLen = encoder.encode(contentStream).length;
-      pushLine(`<< /Length ${contentLen} >>`);
+      pushLine(`<< /Length ${contentStream.length} >>`);
       pushLine("stream");
       pushString(contentStream);
       pushLine("endstream");
@@ -13343,14 +13261,16 @@ export function WeeklyOutlookTab({
               {downloadMenuOpen && (
                 <div
                   role="menu"
-                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                   onTouchStart={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={async () => {
+                    onMouseDown={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setDownloadMenuOpen(false);
                       await downloadSnapshot();
                     }}
@@ -13370,7 +13290,9 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={async () => {
+                    onMouseDown={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setDownloadMenuOpen(false);
                       await downloadPdf();
                     }}
