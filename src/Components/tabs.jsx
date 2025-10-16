@@ -13853,14 +13853,22 @@ export function WeeklyOutlookTab({
               const standingsB = standingsNow.byOwner.get(m.bName);
               const priorMeetings = priorMatchupsThisSeason.get(pairKey) || [];
 
-              if (streakA?.type === "loss" && streakA.length >= 2)
+              if (
+                streakA?.type === "loss" &&
+                streakA.length >= 2 &&
+                streakA.length <= 3
+              )
                 pushFact(
                   `streak-stop-${m.aName}`,
                   `${m.aName} looks to stop the bleeding after ${streakA.length} straight losses.`,
                   [m.aName]
                 );
 
-              if (streakB?.type === "loss" && streakB.length >= 2)
+              if (
+                streakB?.type === "loss" &&
+                streakB.length >= 2 &&
+                streakB.length <= 3
+              )
                 pushFact(
                   `streak-stop-${m.bName}`,
                   `${m.bName} looks to stop the bleeding after ${streakB.length} straight losses.`,
@@ -13874,7 +13882,7 @@ export function WeeklyOutlookTab({
                   [m.aName]
                 );
 
-              if (streakA?.type === "loss" && streakA.length >= 3)
+              if (streakA?.type === "loss" && streakA.length >= 4)
                 pushFact(
                   `streak-${m.aName}-loss`,
                   `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`,
@@ -13888,7 +13896,7 @@ export function WeeklyOutlookTab({
                   [m.bName]
                 );
 
-              if (streakB?.type === "loss" && streakB.length >= 3)
+              if (streakB?.type === "loss" && streakB.length >= 4)
                 pushFact(
                   `streak-${m.bName}-loss`,
                   `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`,
@@ -13980,7 +13988,7 @@ export function WeeklyOutlookTab({
                   `pf-diff-${m.aName}-${m.bName}`,
                   `${
                     diffPF >= 0 ? m.aName : m.bName
-                  } comes in as a huge favorite, outscoring ${
+                  } comes in with a superior offense, outscoring ${
                     diffPF >= 0 ? m.bName : m.aName
                   } by ${formatPointsValue(
                     Math.abs(diffPF)
@@ -14160,17 +14168,6 @@ export function WeeklyOutlookTab({
                   m.bName,
                 ]);
               }
-
-              if (facts.length < 3)
-                pushFact(
-                  `points-summary-${m.aName}-${m.bName}`,
-                  `${m.aName} has scored ${formatPointsValue(
-                    pfA
-                  )} points this season compared to ${formatPointsValue(
-                    pfB
-                  )} for ${m.bName}.`,
-                  [m.aName, m.bName]
-                );
 
               const displayFacts = facts.slice(0, 5);
               const nicknameCounters = new Map();
