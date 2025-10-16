@@ -30,8 +30,6 @@ function firstNonEmpty(obj, keys) {
 function guessManagerField(obj) {
   const explicit = [
     "manager_name",
-    "manager_full_name",
-    "manager_full",
     "manager",
     "manager_names",
     "managername",
@@ -40,18 +38,10 @@ function guessManagerField(obj) {
     "team_manager",
     "team_managers",
     "team_manager(s)",
-    "team_manager_full",
-    "team_manager_full_name",
     "owner_name",
-    "owner_full_name",
-    "owner_full",
     "owner",
     "team_owner",
-    "team_owner_full",
-    "team_owner_full_name",
     "member_name",
-    "member_full_name",
-    "member_full",
     "member",
   ];
   const v = firstNonEmpty(obj, explicit);
@@ -71,15 +61,9 @@ function guessManagerField(obj) {
 function guessOpponentManagerField(obj) {
   const explicit = [
     "opponent_manager_name",
-    "opponent_manager_full_name",
-    "opponent_manager_full",
     "opponent_manager",
     "opponent_owner",
-    "opponent_owner_full",
-    "opponent_owner_full_name",
     "opponent_member",
-    "opponent_member_full",
-    "opponent_member_full_name",
     "opponent",
     "opp",
     "opponent_manager(s)",
@@ -218,9 +202,7 @@ export function buildFromRows(rowsIn) {
       (s, r) => Math.max(s, Number(r.league_size) || 0),
       0
     );
-    const currentSize = currentSeasonOwners.size
-      ? currentSeasonOwners.size
-      : 0;
+    const currentSize = currentSeasonOwners.size ? currentSeasonOwners.size : 0;
     const sizeGuess =
       currentSize || sizeFromRows || uniqueMembersCount || owners.length;
 
@@ -247,7 +229,11 @@ export function buildFromRows(rowsIn) {
       name: nameCandidate,
       size: sizeGuess,
       uniqueMembers: uniqueMembersCount,
-      sizeHistoricalMax: Math.max(sizeFromRows, uniqueMembersCount, currentSize),
+      sizeHistoricalMax: Math.max(
+        sizeFromRows,
+        uniqueMembersCount,
+        currentSize
+      ),
       startSeason: seasonsAll[0] || null,
       yearsRunning: seasonsAll.length,
       platform:
