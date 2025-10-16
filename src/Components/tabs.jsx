@@ -13831,6 +13831,17 @@ export function WeeklyOutlookTab({
               const nowPctB = pctNum(Bo.now);
 
               const facts = [];
+              const formatList = (arr = []) => {
+                const names = (Array.isArray(arr) ? arr : [])
+                  .map((name) => String(name || "").trim())
+                  .filter(Boolean);
+                if (!names.length) return "";
+                if (names.length === 1) return names[0];
+                if (names.length === 2) return `${names[0]} and ${names[1]}`;
+                return `${names.slice(0, -1).join(", ")}, and ${
+                  names[names.length - 1]
+                }`;
+              };
               const pushFact = (key, text, ownersInvolved = []) => {
                 if (!text) return;
                 if (facts.some((f) => f.text === text)) return;
@@ -13977,6 +13988,50 @@ export function WeeklyOutlookTab({
                   [m.aName, m.bName]
                 );
 
+              const totalOwners = standingsNow?.list?.length || 0;
+
+              if (
+                totalOwners >= 2 &&
+                standingsA?.rank &&
+                standingsB?.rank &&
+                ((standingsA.rank === totalOwners &&
+                  standingsB.rank === totalOwners - 1) ||
+                  (standingsB.rank === totalOwners &&
+                    standingsA.rank === totalOwners - 1))
+              )
+                pushFact(
+                  `cellar-${pairKey}`,
+                  `${m.aName} and ${m.bName} play to see who is the worst of the worst.`,
+                  [m.aName, m.bName]
+                );
+
+              const byePlayersA = playersOnByeByOwner.get(m.aName) || [];
+              if (byePlayersA.length >= 3)
+                pushFact(
+                  `bye-${m.aName}`,
+                  `${m.aName} looks to survive with ${formatList(
+                    byePlayersA
+                  )} on bye.`,
+                  [m.aName]
+                );
+
+              const byePlayersB = playersOnByeByOwner.get(m.bName) || [];
+              if (byePlayersB.length >= 3)
+                pushFact(
+                  `bye-${m.bName}`,
+                  `${m.bName} looks to survive with ${formatList(
+                    byePlayersB
+                  )} on bye.`,
+                  [m.bName]
+                );
+
+              if (isRecord500(winsA, lossesA) && isRecord500(winsB, lossesB))
+                pushFact(
+                  `battle500-${pairKey}`,
+                  `${m.aName} and ${m.bName} fight it out in the battle of the 500's.`,
+                  [m.aName, m.bName]
+                );
+
               if (winsA - lossesA === 1)
                 pushFact(
                   `above500-${m.aName}`,
@@ -14105,13 +14160,6 @@ export function WeeklyOutlookTab({
                   m.bName,
                 ]);
               }
-
-              if (facts.length < 3)
-                pushFact(
-                  `records-${m.aName}-${m.bName}`,
-                  `${m.aName} enters at ${winsA}-${lossesA} while ${m.bName} sits at ${winsB}-${lossesB}.`,
-                  [m.aName, m.bName]
-                );
 
               if (facts.length < 3)
                 pushFact(
