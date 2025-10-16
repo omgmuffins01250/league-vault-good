@@ -2852,6 +2852,11 @@ export default function App() {
       });
     }
 
+    // Flatten seasonsByYear (object → array) if needed
+    const espnSeasons = Array.isArray(seasonsByYear)
+      ? seasonsByYear
+      : Object.values(seasonsByYear || {});
+
     primeOwnerMaps({
       league: {
         owners: leagueObj.owners || [],
@@ -2860,14 +2865,23 @@ export default function App() {
         ownerByTeamByYear,
       },
       espnOwnerByTeamByYear: ownerByTeamByYear,
-      manualAliases, // 👈 auto-built from ESPN data; no typing needed
+      manualAliases: manualAliases || {}, // or {} if you want no overrides
+      espnSeasons: Array.isArray(seasonsByYear)
+        ? seasonsByYear
+        : Object.values(seasonsByYear || {}),
     });
 
-    if (typeof window !== "undefined") {
-      console.debug("Owner map sources ready", {
-        league: leagueObj?.meta,
-        ownerByTeamByYear,
-        manualAliases,
+    // 🔎 USE THE OWNERMAP to log
+    if (typeof window !== "undefined" && window.__ownerMaps) {
+      const sampleSeason = 2018; // or whichever you want
+      const m = window.__ownerMaps.mapFor(sampleSeason);
+      console.debug("Owner map sources ready", m);
+      // For a single team:
+      console.debug({
+        teamId: 2,
+        name: window.__ownerMaps.name(sampleSeason, 2),
+        handle: window.__ownerMaps.handle?.(sampleSeason, 2),
+        ownerId: window.__ownerMaps.id(sampleSeason, 2),
       });
     }
   }, [

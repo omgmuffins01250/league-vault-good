@@ -1,4 +1,4 @@
-let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", ownerId: string|null, teamId: number } } }
+let _cache = {}; // { [season:number]: { [teamId:number|string]: { name: "Owner Name", handle?: string|null, ownerId: string|null, teamId: number } } }
 let _aliasMap = null; // Map<normalized alias, "Owner Name"> (global canonicalizer)
 let _canonMergeFns = []; // Array<function(name) -> canonical name|null>
 let _lastKey = "";
@@ -186,7 +186,12 @@ function _buildSeasonMap({
   const direct = espnOwnerByTeamByYear?.[s];
   if (direct && Object.keys(direct).length) {
     Object.entries(direct).forEach(([tid, nm]) => {
-      out[tid] = { name: canonOwner(nm), ownerId: null, teamId: Number(tid) };
+      out[tid] = {
+        name: canonOwner(nm),
+        handle: String(nm || null), // ← keep the ESPN handle
+        ownerId: null,
+        teamId: Number(tid),
+      };
     });
   }
 
@@ -200,8 +205,14 @@ function _buildSeasonMap({
   for (const cand of reuse) {
     if (!cand) continue;
     Object.entries(cand).forEach(([tid, nm]) => {
-      if (!out[tid])
-        out[tid] = { name: canonOwner(nm), ownerId: null, teamId: Number(tid) };
+      if (!out[tid]) {
+        out[tid] = {
+          name: canonOwner(nm),
+          handle: String(nm || null), // ← preserve handle
+          ownerId: null,
+          teamId: Number(tid),
+        };
+      }
     });
   }
 
@@ -256,9 +267,19 @@ function _buildSeasonMap({
 
       // Fill/merge name and ownerId without nuking a better existing name
       if (guid && !out[teamId].ownerId) out[teamId].ownerId = guid;
-      if (!out[teamId].name) {
-        const fallback = t?.name ? String(t.name) : `Team ${teamId}`;
-        out[teamId].name = canonOwner(bestName || fallback);
+
+      // prefer member real/display name, but always keep any existing handle
+      const fallback = t?.name ? String(t.name) : `Team ${teamId}`;
+      const preferred = bestName || fallback;
+
+      // name becomes the nice/canonical name…
+      out[teamId].name = canonOwner(preferred);
+
+      // …and DO NOT overwrite handle if we already set it earlier.
+      // If you also want a fallback handle from team name, you could set it here,
+      // but usually we only set handle from ownerByTeamByYear.
+      if (out[teamId].handle == null) {
+        // leave as null; handle should come from ownerByTeamByYear
       }
     });
   }
@@ -350,7 +371,8 @@ export function primeOwnerMaps({
 
   const canonMergeFns = [];
   if (league) canonMergeFns.push(_canonFromMergeHelpers(league));
-  if (selectedLeague) canonMergeFns.push(_canonFromMergeHelpers(selectedLeague));
+  if (selectedLeague)
+    canonMergeFns.push(_canonFromMergeHelpers(selectedLeague));
   _canonMergeFns = canonMergeFns;
 
   const canonByMergeLeague = _canonFromMergeHelpers(
@@ -426,6 +448,11 @@ export function ownerId(season, teamId) {
 export function ownerMapFor(season) {
   return _cache?.[Number(season)] || {};
 }
+export function ownerHandle(season, teamId) {
+  const m = _cache?.[Number(season)];
+  const raw = m ? m[teamId] || m[String(teamId)] : null;
+  return raw ? raw.handle || null : null;
+}
 
 if (typeof window !== "undefined") {
   window.__ownerMaps = {
@@ -433,6 +460,7 @@ if (typeof window !== "undefined") {
     mapFor: ownerMapFor,
     name: ownerName,
     id: ownerId, // Returns the GUID (ownerId)
+    handle: ownerHandle,
     canon: canonicalizeOwner,
     // show which teamIds still don't resolve to a real name
     diff(season) {

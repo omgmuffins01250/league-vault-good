@@ -761,19 +761,46 @@ export function SetupTab({
   // 👇 ADD THIS EFFECT (keeps ownerMaps in sync with the selected league)
   React.useEffect(() => {
     if (!league) return;
-    const aliases = window.__FL_ALIASES || {};
+
+    // pick a real season number (prefer latest available in ownerByTeamByYear)
+    const seasonsFromTeams = Object.keys(league?.ownerByTeamByYear || {}).map(
+      Number
+    );
+    const seasonsFromEspn = (
+      Array.isArray(league?.seasons) ? league.seasons : []
+    )
+      .map((s) => Number(s?.seasonId))
+      .filter(Boolean);
+    const latestSeason = Math.max(
+      ...(seasonsFromTeams.length ? seasonsFromTeams : seasonsFromEspn),
+      0
+    );
+
+    // prime owner maps with seasons so names resolve, but keep manualAliases OFF
     primeOwnerMaps({
       league,
       selectedLeague: league,
       espnOwnerByTeamByYear: league.ownerByTeamByYear || {},
-      manualAliases: aliases,
+      manualAliases: {}, // ← no manual mapping
+      espnSeasons: Array.isArray(league?.seasons)
+        ? league.seasons
+        : Object.values(league?.seasonsByYear || {}), // pass seasons if present
     });
-    // Optional sanity log:
-    console.log(
-      "Owner map sources ready",
-      window.__ownerMaps?.mapFor?.(Number(league?.seasonsAll?.slice?.(-1)?.[0]))
-    );
+
+    // log the actual built map (will include `handle` if you added it in ownerMaps.jsx)
+    if (typeof window !== "undefined" && window.__ownerMaps) {
+      const m = window.__ownerMaps.mapFor(latestSeason);
+      console.debug("Owner map sources ready", m);
+      // Single team example (2):
+      console.debug({
+        teamId: 2,
+        name: window.__ownerMaps.name(latestSeason, 2),
+        handle: window.__ownerMaps.handle?.(latestSeason, 2),
+        ownerId: window.__ownerMaps.id(latestSeason, 2),
+      });
+    }
   }, [league]);
+
   const keys = derivedAll.leagues;
   const [wantLegacy, setWantLegacy] = useState(false);
   const inferredId = (league?.meta?.id && String(league.meta.id)) || "";
@@ -8106,7 +8133,15 @@ export function TradesTab({
 }
 
 /* ---------------- RosterTab — per-week lineups by team --------------- */
-const canonicalize = (s) => (s == null ? "" : String(s).trim());
+// Always resolve latest manager name map — dynamic, not snapshotted
+const canonicalize = (s) => {
+  const w = typeof window !== "undefined" ? window : {};
+  const m = w.__ownerMaps;
+  if (m && typeof m.canon === "function") {
+    return m.canon(s == null ? "" : String(s));
+  }
+  return s == null ? "" : String(s);
+};
 
 // --- Manager merge helpers (shared with ManagerMergeControl) ---
 const MERGE_KEY = (leagueId) =>
@@ -8897,18 +8932,17 @@ export function RosterTab({
   }, [seasons]);
   const byTeam = RB?.[season] || {};
 
-  const nameByTeamId = useMemo(
-    () => __managerMapForSeason(season, league?.ownerByTeamByYear || {}),
-    [season, league]
-  );
-
   const resolveOwner = useCallback(
     (teamId) => {
-      const base = canonicalize(nameByTeamId?.[teamId] || `Team ${teamId}`);
-      const merged = applyMergeAlias(base, mergeMap); // A->B chain flattening from your ManagerMerge
-      return merged || base;
+      const nameFromMap =
+        (typeof window !== "undefined" &&
+          window.__ownerMaps?.name?.(season, Number(teamId))) ||
+        ""; // use name from ownerMaps
+      const base = canonicalize(nameFromMap);
+      const merged = applyMergeAlias(base, mergeMap);
+      return merged || base; // e.g., "Michael Doto"
     },
-    [nameByTeamId, mergeMap]
+    [season, mergeMap]
   );
 
   const weekCap = React.useMemo(
