@@ -69,10 +69,24 @@ export default function ManagerMergeControl({
   }, [leagueId]);
 
   // Save flattened map each change
+  const broadcastMergeChange = () => {
+    if (typeof window === "undefined") return;
+    try {
+      const detail = { leagueId };
+      window.dispatchEvent(
+        new CustomEvent("fl-manager-merge-update", { detail })
+      );
+      if (typeof window.FL_applyOwnerMergesNow === "function") {
+        window.FL_applyOwnerMergesNow(leagueId);
+      }
+    } catch {}
+  };
+
   const save = (next) => {
     const flat = flattenMergeMap(next);
     saveMergeMap(leagueId, flat);
     setMergeMap(flat);
+    broadcastMergeChange();
     // optional immediate refresh callback
     if (typeof onChanged === "function") onChanged();
   };
