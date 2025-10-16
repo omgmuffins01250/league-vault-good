@@ -8836,6 +8836,7 @@ export function RosterTab({
   lineupSlotsByYear = {},
   currentWeekByYear = {},
   rosterAcqByYear = {},
+  ownerByTeamByYear = {},
   league,
   hiddenManagers,
 }) {
@@ -8872,7 +8873,8 @@ export function RosterTab({
       ? league.hiddenManagers
       : null;
     const fromProp = Array.isArray(hiddenManagers) ? hiddenManagers : null;
-    return new Set(fromLeague || fromProp || []);
+    const list = fromLeague || fromProp || [];
+    return new Set(list.map((name) => canonicalizeOwner(name)));
   }, [league?.hiddenManagers, hiddenManagers]);
 
   const seasons = React.useMemo(
@@ -8893,23 +8895,50 @@ export function RosterTab({
   }, [seasons]);
   const byTeam = RB?.[season] || {};
 
+  const ownerMapForSeason = React.useMemo(() => {
+    const seasonKeyNum = Number(season);
+    const seasonKeyStr = String(season);
+    const fromProp =
+      ownerByTeamByYear?.[seasonKeyNum] ||
+      ownerByTeamByYear?.[seasonKeyStr] ||
+      {};
+    const fromLeague =
+      league?.ownerByTeamByYear?.[seasonKeyNum] ||
+      league?.ownerByTeamByYear?.[seasonKeyStr] ||
+      {};
+    return { ...fromLeague, ...fromProp };
+  }, [ownerByTeamByYear, league?.ownerByTeamByYear, season]);
+
   // Central owner resolver (tries ownerName, falls back to window.__ownerMaps.name, else Team X)
   const resolveOwner = React.useCallback(
     (teamId) => {
+      const tidNum = Number(teamId);
+      const tidStr = String(teamId);
+      const fromMap =
+        ownerMapForSeason?.[tidNum] || ownerMapForSeason?.[tidStr] || null;
+      if (fromMap) return canonicalizeOwner(fromMap);
+
+      const viaHelper =
+        __resolveOwnerName({ ownerByTeamByYear }, season, tidNum) ||
+        __resolveOwnerName(league, season, tidNum);
+      if (viaHelper) return canonicalizeOwner(viaHelper);
+
       try {
         if (typeof ownerName === "function") {
-          return ownerName(season, teamId) || `Team ${teamId}`;
+          const resolved = ownerName(season, tidNum);
+          if (resolved) return canonicalizeOwner(resolved);
         }
       } catch {}
       try {
         const nm = window?.__ownerMaps?.name;
         if (typeof nm === "function") {
-          return nm(season, teamId) || `Team ${teamId}`;
+          const resolved = nm(season, tidNum);
+          if (resolved) return canonicalizeOwner(resolved);
         }
       } catch {}
       return `Team ${teamId}`;
     },
-    [season]
+    [ownerMapForSeason, ownerByTeamByYear, league, season]
   );
 
   const weekCap = React.useMemo(
@@ -9724,7 +9753,11 @@ export function RosterTab({
   );
 }
 /* DraftTab — per-year draft picks grouped by manager (owner names canonicalized on read) */
-export function DraftTab({ draftByYear, hiddenManagers }) {
+export function DraftTab({
+  draftByYear,
+  hiddenManagers,
+  ownerByTeamByYear = {},
+}) {
   const draftWithFinish = React.useMemo(
     () =>
       window.FL_attachFinishPosFromLocal
@@ -9733,20 +9766,22 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     [draftByYear]
   );
 
-  const canonicalize =
-    (typeof window !== "undefined" &&
-      window.__ownerMaps &&
-      typeof window.__ownerMaps.canon === "function" &&
-      window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
-    ((s) => (s == null ? "" : String(s)));
+  const canonicalizeStable = React.useCallback((value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      if (
+        typeof window !== "undefined" &&
+        window.__ownerMaps &&
+        typeof window.__ownerMaps.canon === "function"
+      ) {
+        const mapped = window.__ownerMaps.canon(raw);
+        if (mapped) return mapped;
+      }
+    } catch {}
+    return canonicalizeOwner(raw);
+  }, []);
 
-  // canonical hidden managers set (compare using canonicalize)
-  const hiddenSet = React.useMemo(() => {
-    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(list.map((n) => canonicalize(n)));
-  }, [hiddenManagers, canonicalize]);
-
-  // also keep a normalized (case/spacing/punct stripped) set for robustness
   const normName = React.useCallback(
     (s) =>
       String(s || "")
@@ -9756,10 +9791,59 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         .trim(),
     []
   );
+
+  const ownerNameByNorm = React.useMemo(() => {
+    const map = new Map();
+    Object.values(ownerByTeamByYear || {}).forEach((teams) => {
+      Object.values(teams || {}).forEach((name) => {
+        const canonical = canonicalizeStable(name);
+        const trimmed = canonical || String(name || "").trim();
+        [name, trimmed, canonical].forEach((candidate) => {
+          const normed = normName(candidate);
+          if (normed && trimmed && !map.has(normed)) {
+            map.set(normed, trimmed);
+          }
+        });
+      });
+    });
+    return map;
+  }, [ownerByTeamByYear, canonicalizeStable, normName]);
+
+  const ownerDisplay = React.useCallback(
+    (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "—";
+      const normRaw = normName(raw);
+      if (ownerNameByNorm.has(normRaw)) return ownerNameByNorm.get(normRaw);
+      const canonical = canonicalizeStable(raw);
+      if (!canonical) return raw;
+      const normCanonical = normName(canonical);
+      if (ownerNameByNorm.has(normCanonical))
+        return ownerNameByNorm.get(normCanonical);
+      return canonical || raw;
+    },
+    [canonicalizeStable, normName, ownerNameByNorm]
+  );
+
+  // canonical hidden managers set (compare using canonical names)
+  const hiddenSet = React.useMemo(() => {
+    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
+    return new Set(
+      list
+        .map((name) => ownerDisplay(name))
+        .filter((name) => name && name !== "—")
+    );
+  }, [hiddenManagers, ownerDisplay]);
+
+  // also keep a normalized (case/spacing/punct stripped) set for robustness
   const hiddenNormSet = React.useMemo(() => {
     const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(list.map((n) => normName(canonicalize(n))));
-  }, [hiddenManagers, canonicalize, normName]);
+    return new Set(
+      list
+        .map((n) => normName(ownerDisplay(n)))
+        .filter((val) => val && val !== "")
+    );
+  }, [hiddenManagers, ownerDisplay, normName]);
 
   function groupByOwner(rows = []) {
     const m = new Map();
@@ -9771,7 +9855,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         r?.ownerName ??
         r?.owner_full ??
         "";
-      const owner = canonicalize(rawOwner) || "—";
+      const owner = ownerDisplay(rawOwner) || "—";
       const ownerNorm = normName(rawOwner) || normName(owner);
       if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return; // skip hidden
       if (!m.has(owner)) m.set(owner, []);
@@ -9915,8 +9999,6 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     const cap = currentWeekByYear[Number(dpYear)];
     return Number.isFinite(cap) ? weeks.filter((w) => w <= cap) : weeks;
   }, [dpYear, dpIsAllYears, currentWeekByYear]);
-
-  const ownerDisplay = React.useCallback((s) => canonicalize(s) || "—", []);
 
   const rows = React.useMemo(() => {
     const arr = draftWithFinish?.[year] || [];
