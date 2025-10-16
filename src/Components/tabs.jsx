@@ -13758,6 +13758,23 @@ export function WeeklyOutlookTab({
               const standingsB = standingsNow.byOwner.get(m.bName);
               const priorMeetings = priorMatchupsThisSeason.get(pairKey) || [];
 
+              if (h.total > 0) {
+                const pctA = (h.wA / h.total) * 100;
+                const pctB = (h.wB / h.total) * 100;
+                if (pctA >= 70)
+                  pushFact(
+                    `h2h-dominance-${pairKey}`,
+                    `${m.aName} looks to parent their son, ${m.bName} again, winning ${Math.round(pctA)}% of their H2H games.`,
+                    [m.aName, m.bName]
+                  );
+                else if (pctB >= 70)
+                  pushFact(
+                    `h2h-dominance-${pairKey}`,
+                    `${m.bName} looks to parent their son, ${m.aName} again, winning ${Math.round(pctB)}% of their H2H games.`,
+                    [m.aName, m.bName]
+                  );
+              }
+
               if (
                 streakA?.type === "loss" &&
                 streakA.length >= 2 &&
@@ -14001,39 +14018,71 @@ export function WeeklyOutlookTab({
                   );
               }
 
-              if (rankA?.highRank && rankA.highRank <= 3) {
-                const word = rankWord(rankA.highRank, "high");
-                if (word)
+              const highRankEntries = [];
+              if (rankA?.highRank && rankA.highRank <= 3)
+                highRankEntries.push({
+                  owner: m.aName,
+                  rank: rankA.highRank,
+                });
+              if (rankB?.highRank && rankB.highRank <= 3)
+                highRankEntries.push({
+                  owner: m.bName,
+                  rank: rankB.highRank,
+                });
+
+              if (highRankEntries.length >= 2) {
+                const ordered = [...highRankEntries].sort((a, b) => a.rank - b.rank);
+                const [first, second] = ordered;
+                const firstWord = rankWord(first.rank, "high");
+                const secondWord = rankWord(second.rank, "high");
+                if (firstWord && secondWord)
                   pushFact(
-                    `rank-high-${m.aName}`,
-                    `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`,
-                    [m.aName]
+                    `rank-high-pair-${pairKey}`,
+                    `Take the over, ${first.owner} is the ${firstWord} scoring team in the league while ${second.owner} is not far behind as the ${secondWord} scoring team.`,
+                    [first.owner, second.owner]
                   );
-              } else if (rankA?.lowRank && rankA.lowRank <= 3) {
-                const word = rankWord(rankA.lowRank, "low");
+              } else if (highRankEntries.length === 1) {
+                const [entry] = highRankEntries;
+                const word = rankWord(entry.rank, "high");
                 if (word)
                   pushFact(
-                    `rank-low-${m.aName}`,
-                    `${m.aName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
-                    [m.aName]
+                    `rank-high-${entry.owner}`,
+                    `${entry.owner} looks to continue pouring on points as the ${word} scoring team in the league.`,
+                    [entry.owner]
                   );
               }
 
-              if (rankB?.highRank && rankB.highRank <= 3) {
-                const word = rankWord(rankB.highRank, "high");
-                if (word)
+              const lowRankEntries = [];
+              if (rankA?.lowRank && rankA.lowRank <= 3)
+                lowRankEntries.push({
+                  owner: m.aName,
+                  rank: rankA.lowRank,
+                });
+              if (rankB?.lowRank && rankB.lowRank <= 3)
+                lowRankEntries.push({
+                  owner: m.bName,
+                  rank: rankB.lowRank,
+                });
+
+              if (lowRankEntries.length >= 2) {
+                const ordered = [...lowRankEntries].sort((a, b) => a.rank - b.rank);
+                const [first, second] = ordered;
+                const firstWord = rankWord(first.rank, "low");
+                const secondWord = rankWord(second.rank, "low");
+                if (firstWord && secondWord)
                   pushFact(
-                    `rank-high-${m.bName}`,
-                    `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`,
-                    [m.bName]
+                    `rank-low-pair-${pairKey}`,
+                    `Take the under, ${first.owner} is the ${firstWord} scoring team in the league while ${second.owner} is not far behind as the ${secondWord} scoring team.`,
+                    [first.owner, second.owner]
                   );
-              } else if (rankB?.lowRank && rankB.lowRank <= 3) {
-                const word = rankWord(rankB.lowRank, "low");
+              } else if (lowRankEntries.length === 1) {
+                const [entry] = lowRankEntries;
+                const word = rankWord(entry.rank, "low");
                 if (word)
                   pushFact(
-                    `rank-low-${m.bName}`,
-                    `${m.bName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
-                    [m.bName]
+                    `rank-low-${entry.owner}`,
+                    `${entry.owner} desperately needs to spark the offense as the ${word} scoring team in the league.`,
+                    [entry.owner]
                   );
               }
 
@@ -14041,7 +14090,7 @@ export function WeeklyOutlookTab({
                 pushFact(
                   `low-odds-${m.aName}`,
                   nowPctA === 0
-                    ? `${m.aName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsA}-${lossesA} record.`
+                    ? `${m.aName} is in a tough spot with no team ever making the playoffs after starting ${winsA}-${lossesA}.`
                     : `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`,
                   [m.aName]
                 );
@@ -14050,7 +14099,7 @@ export function WeeklyOutlookTab({
                 pushFact(
                   `low-odds-${m.bName}`,
                   nowPctB === 0
-                    ? `${m.bName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsB}-${lossesB} record.`
+                    ? `${m.bName} is in a tough spot with no team ever making the playoffs after starting ${winsB}-${lossesB}.`
                     : `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`,
                   [m.bName]
                 );
