@@ -237,6 +237,8 @@ function makeDefaultLeagueIcon() {
   Storage shape:
   {
     leaguesById: {
+      // Keys are ALWAYS platform-prefixed to keep leagues separate
+      // e.g. "ESPN:123456", "SLEEPER:987654", or "ESPN:my_custom_key"
       [leagueId]: {
         leagueId, leagueKey, name, platform, scoring, lastUpdated,
         rows, draftByYear, adpSourceByYear, moneyInputs,
@@ -255,6 +257,7 @@ function makeDefaultLeagueIcon() {
     lastSelectedLeagueId
   }
 */
+
 function _emptyStore() {
   return { leaguesById: {}, lastSelectedLeagueId: "" };
 }
@@ -272,7 +275,7 @@ function ensureUniqueLeagueId(
   const normalizedPlat = String(platform || "ESPN")
     .trim()
     .toUpperCase();
-  const preferred = String(preferredId || "").trim();
+  const preferredRaw = String(preferredId || "").trim();
 
   // Helper to test identity (strictly same league)
   const isSameLeague = (rec) => {
@@ -283,43 +286,41 @@ function ensureUniqueLeagueId(
     const recPlat = String(rec.platform || "ESPN")
       .trim()
       .toUpperCase();
-    // If we don't have a normalizedName, treat as NOT the same league (force unique ID)
     if (!normalizedName) return false;
     return recName === normalizedName && recPlat === normalizedPlat;
   };
 
-  // 1) If a preferred ID is supplied
-  if (preferred) {
+  // ALWAYS namespace keys by platform to avoid cross-provider collisions
+  const withPlat = (id) => `${normalizedPlat}:${String(id || "").trim()}`;
+
+  // 1) If a preferred (provider) ID is supplied, use "<PLAT>:<ID>"
+  if (preferredRaw) {
+    const preferred = withPlat(preferredRaw);
     const existing = byId[preferred];
     if (!existing) return preferred;
 
-    // Reuse only if it truly matches the same logical league
     if (isSameLeague(existing)) return preferred;
 
-    // Otherwise create a unique variant off the preferred ID
     let idx = 2;
     while (byId[`${preferred}__${idx}`]) idx += 1;
     return `${preferred}__${idx}`;
   }
 
-  // 2) No preferred ID. If a league with the same name+platform exists, reuse its ID
+  // 2) No preferred provider ID. If a league with the same name+platform exists, reuse its ID
   if (normalizedName) {
     const match = Object.entries(byId).find(([, rec]) => isSameLeague(rec));
     if (match) return match[0];
   }
 
-  // 3) Build a base from name (or timestamp) and ensure uniqueness
-  const baseName =
+  // 3) Build a platform-prefixed base from name (or timestamp) and ensure uniqueness
+  const baseNameRaw =
     normalizedName.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
     `league_${Date.now()}`;
+  const base = withPlat(baseNameRaw);
 
-  let base = baseName;
   if (!byId[base]) return base;
-
-  // If the 'base' entry actually is the same league, reuse it
   if (isSameLeague(byId[base])) return base;
 
-  // Otherwise suffix until unique
   let idx = 2;
   while (byId[`${base}__${idx}`]) idx += 1;
   return `${base}__${idx}`;
@@ -2900,7 +2901,12 @@ export default function App() {
 
   function getCurrentLeagueIdentity() {
     const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
-    const leagueId =
+
+    // Always prefer the currently-selected persisted ID (already platform-prefixed)
+    const persistedId =
+      (selectedLeagueId && String(selectedLeagueId).trim()) || "";
+
+    const fallbackId =
       String(
         meta.id ??
           meta.leagueId ??
@@ -2911,6 +2917,9 @@ export default function App() {
       )
         .trim()
         .replace(/\s+/g, "_") || `league_${Date.now()}`;
+
+    const leagueId = persistedId || fallbackId;
+
     const leagueName = meta.name || "Your Fantasy League";
     const firstRowPlatform = (rawRows?.[0]?.platform || "").toUpperCase();
     const platform = meta.platform || firstRowPlatform || "ESPN";
