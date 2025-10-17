@@ -7324,8 +7324,8 @@ export function TradingTab({
   };
 
   // ---- PPG since trade ----------------------------------------------------
-  const ppgSince = (year, playerId, weekStart) => {
-    if (!isFiniteNum(playerId) || !isFiniteNum(weekStart)) return null;
+  const ppgInRange = (year, playerId, startWeek, endWeek = null) => {
+    if (!isFiniteNum(playerId)) return null;
     const wMap = espnWeeklyPtsByYear?.[year] || null;
     if (!wMap) return null;
 
@@ -7333,19 +7333,29 @@ export function TradingTab({
     if (!forPlayer) return null;
 
     const lastWeek = regSeasonEndWeek(year);
+    const start = Math.max(1, toInt(startWeek, 1));
+    const end = Math.min(
+      lastWeek,
+      endWeek == null ? lastWeek : toInt(endWeek, lastWeek)
+    );
+
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+      return null;
+    }
+
     let total = 0;
     let games = 0;
 
     if (Array.isArray(forPlayer)) {
-      for (let w = weekStart; w <= lastWeek && w < forPlayer.length; w++) {
+      for (let w = start; w <= end && w < forPlayer.length; w++) {
         const v = Number(forPlayer[w] ?? 0);
         if (Number.isFinite(v)) {
           total += v;
           games += 1;
         }
       }
-    } else if (typeof forPlayer === "object") {
-      for (let w = weekStart; w <= lastWeek; w++) {
+    } else if (typeof forPlayer === "object" && forPlayer !== null) {
+      for (let w = start; w <= end; w++) {
         const v = Number(forPlayer[w]);
         if (Number.isFinite(v)) {
           total += v;
@@ -7538,9 +7548,13 @@ export function TradingTab({
           <li className="text-xs opacity-60 italic">None</li>
         ) : (
           list.map((p, i) => {
-            const ppg =
+            const prePpg =
               isFiniteNum(p?.pid) && isFiniteNum(week)
-                ? ppgSince(year, p.pid, week)
+                ? ppgInRange(year, p.pid, 1, week - 1)
+                : null;
+            const postPpg =
+              isFiniteNum(p?.pid) && isFiniteNum(week)
+                ? ppgInRange(year, p.pid, week)
                 : null;
             return (
               <li key={i} className="text-sm">
@@ -7552,9 +7566,10 @@ export function TradingTab({
                   {sign}
                 </span>{" "}
                 <span className="font-medium">{p?.name}</span>
-                {ppg != null ? (
+                {prePpg != null || postPpg != null ? (
                   <span className="ml-2 text-xs opacity-70">
-                    ({ppg.toFixed(2)} PPG)
+                    (pre: {prePpg != null ? prePpg.toFixed(2) : "n/a"}, post:{" "}
+                    {postPpg != null ? postPpg.toFixed(2) : "n/a"} PPG)
                   </span>
                 ) : (
                   <span className="ml-2 text-xs opacity-50">(PPG n/a)</span>
