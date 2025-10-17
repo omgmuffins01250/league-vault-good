@@ -7347,8 +7347,11 @@ export function TradingTab({
     let games = 0;
 
     if (Array.isArray(forPlayer)) {
-      for (let w = start; w <= end && w < forPlayer.length; w++) {
-        const v = Number(forPlayer[w] ?? 0);
+      for (let w = start; w <= end; w++) {
+        const idx = w - 1; // arrays are 0-indexed (week 1 -> index 0)
+        if (idx < 0 || idx >= forPlayer.length) continue;
+        const raw = forPlayer[idx];
+        const v = Number(raw);
         if (Number.isFinite(v)) {
           total += v;
           games += 1;
@@ -7356,7 +7359,14 @@ export function TradingTab({
       }
     } else if (typeof forPlayer === "object" && forPlayer !== null) {
       for (let w = start; w <= end; w++) {
-        const v = Number(forPlayer[w]);
+        const prevKey = w - 1;
+        const raw =
+          forPlayer[w] ??
+          forPlayer[String(w)] ??
+          (prevKey >= 0
+            ? forPlayer[prevKey] ?? forPlayer[String(prevKey)]
+            : null);
+        const v = Number(raw);
         if (Number.isFinite(v)) {
           total += v;
           games += 1;
