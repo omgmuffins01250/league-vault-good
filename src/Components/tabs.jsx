@@ -4559,7 +4559,9 @@ export function YearlyRecapTab({
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-center">
           {topThree.map((entry) => {
             const isActive = entry.owner === selectedOwner;
-            const { order: orderClass, height: heightClass } = __podiumLayout(entry.place);
+            const { order: orderClass, height: heightClass } = __podiumLayout(
+              entry.place
+            );
             return (
               <button
                 key={entry.owner}
@@ -4567,11 +4569,7 @@ export function YearlyRecapTab({
                 onClick={() => setSelectedOwner(entry.owner)}
                 className={`relative flex w-full flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
                   entry.place
-                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform md:min-w-[200px] ${
-                  orderClass
-                } ${
-                  heightClass
-                } ${
+                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform md:min-w-[200px] ${orderClass} ${heightClass} ${
                   isActive ? "ring-2 ring-amber-400" : "hover:-translate-y-1"
                 }`}
               >
@@ -7041,15 +7039,15 @@ export function RecordsTab({ league }) {
 export function TradingTab({
   league, // { owners, hiddenManagers }
   selectedLeague,
-  espnTradesDetailedBySeason = {},     // { [year]: Trade[] }
-  espnOwnerByTeamByYear = {},          // { [year]: { [teamId]: ownerName } }
-  espnOwnerFullByTeamByYear = {},      // { [year]: { [teamId]: ownerFullName } }
-  espnTeamNamesByOwner = {},           // { [ownerName]: "Team Nickname" }
-  espnRostersByYear = {},              // rosters used for inference + orientation
-  espnRosterAcqByYear = {},            // used to seed inference only when acquisitionType === "TRADE"
-  currentWeekBySeason = {},            // { [year]: number } (helps define “regular season”)
-  fallbackTransactionsByYear = {},     // (unused here)
-  espnWeeklyPtsByYear = {},            // { [year]: { [playerId]: { [week]: pts } or number[] } }
+  espnTradesDetailedBySeason = {}, // { [year]: Trade[] }
+  espnOwnerByTeamByYear = {}, // { [year]: { [teamId]: ownerName } }
+  espnOwnerFullByTeamByYear = {}, // { [year]: { [teamId]: ownerFullName } }
+  espnTeamNamesByOwner = {}, // { [ownerName]: "Team Nickname" }
+  espnRostersByYear = {}, // not required for this tab
+  espnRosterAcqByYear = {}, // not required for this tab
+  currentWeekBySeason = {}, // { [year]: number } (helps define “regular season”)
+  fallbackTransactionsByYear = {}, // optional backup for very old seasons
+  espnWeeklyPtsByYear = {}, // { [year]: { [playerId]: { [week]: pts } or number[] } }
 }) {
   // -- helpers --------------------------------------------------------------
   const safeArr = (v) => (Array.isArray(v) ? v : []);
@@ -7062,13 +7060,9 @@ export function TradingTab({
 
   const hidden = new Set(league?.hiddenManagers || []);
   const ownerNameOf = (year, teamId) =>
-    (espnOwnerFullByTeamByYear?.[year]?.[teamId]) ||
-    (espnOwnerByTeamByYear?.[year]?.[teamId]) ||
+    espnOwnerFullByTeamByYear?.[year]?.[teamId] ||
+    espnOwnerByTeamByYear?.[year]?.[teamId] ||
     `Team ${teamId}`;
-
-  // Regular season end guess
-  const regSeasonEndWeek = (year) =>
-    toInt(currentWeekBySeason?.[year]) || 14;
 
   // ---- playerId -> name index for a year (acq + roster names) -------------
   const buildNameIndexForYear = (year) => {
@@ -7102,41 +7096,40 @@ export function TradingTab({
     return idx;
   };
 
-  // quick ownership lookup: who owns pid at given week (null if unknown)
-  const ownerOfAt = (year, pid, week) => {
-    const id = toInt(pid);
-    if (!Number.isFinite(id)) return null;
-    const rosters = espnRostersByYear?.[year] || {};
-    const teamIds = Object.keys(rosters).map(Number).filter(Number.isFinite);
-    for (const tid of teamIds) {
-      const list = rosters[tid]?.[week] || [];
-      if (list.some(e => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === id)) {
-        return tid;
-      }
-    }
-    return null;
-  };
+  // Regular season end guess
+  const regSeasonEndWeek = (year) => toInt(currentWeekBySeason?.[year]) || 14;
 
   // ---- INFERENCE: seed-from-TRADE and expand by roster diffs --------------
-  // For every player whose acquisitionType === "TRADE", find the week + teams (A,B)
-  // where ownership flips, then expand the package by including *all* players that
-  // moved from A→B or B→A across that week boundary (regardless of their acq type).
   const inferTradesByRosterDiff = (year) => {
     const rosters = espnRostersByYear?.[year] || {};
     const teamIds = Object.keys(rosters).map(Number).filter(Number.isFinite);
     const endWeek = regSeasonEndWeek(year);
 
+    const ownerOf = (pid, w) => {
+      const id = toInt(pid);
+      if (!Number.isFinite(id)) return null;
+      for (const tid of teamIds) {
+        const list = rosters[tid]?.[w] || [];
+        if (
+          list.some((e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === id)
+        ) {
+          return tid;
+        }
+      }
+      return null;
+    };
+
     const idsAt = (tid, wk) =>
       new Set(
-        (rosters[tid]?.[wk] || []).map(
-          e => toInt(e?.pid ?? e?.playerId ?? e?.player?.id)
-        ).filter(Number.isFinite)
+        (rosters[tid]?.[wk] || [])
+          .map((e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id))
+          .filter(Number.isFinite)
       );
 
     // seed pids from acquisitions marked TRADE
     const seeds = [];
     const acq = espnRosterAcqByYear?.[year] || {};
-    Object.values(acq).forEach(teamMap => {
+    Object.values(acq).forEach((teamMap) => {
       Object.entries(teamMap || {}).forEach(([pidRaw, meta]) => {
         if (String(meta?.acquisitionType).toUpperCase() === "TRADE") {
           const pid = toInt(pidRaw);
@@ -7145,14 +7138,19 @@ export function TradingTab({
       });
     });
 
+    const nameIdx = buildNameIndexForYear(year);
+    const nm = (pid) => nameIdx.get(toInt(pid)) || `#${pid}`;
+
     const out = [];
+    const seen = new Set(); // signature de-dupe
 
     for (const pid of seeds) {
-      // find first ownership change (week, fromTeam, toTeam)
-      let changeWeek = null, fromTeam = null, toTeam = null;
+      let changeWeek = null,
+        fromTeam = null,
+        toTeam = null;
       for (let w = 2; w <= endWeek; w++) {
-        const prev = ownerOfAt(year, pid, w - 1);
-        const curr = ownerOfAt(year, pid, w);
+        const prev = ownerOf(pid, w - 1);
+        const curr = ownerOf(pid, w);
         if (prev && curr && prev !== curr) {
           changeWeek = w;
           fromTeam = prev;
@@ -7162,32 +7160,50 @@ export function TradingTab({
       }
       if (!changeWeek) continue;
 
-      // expand: everyone who moved between these two teams across (w-1 -> w)
       const Aprev = idsAt(fromTeam, changeWeek - 1);
       const Aafter = idsAt(fromTeam, changeWeek);
-      const Bprev  = idsAt(toTeam,   changeWeek - 1);
-      const Bafter = idsAt(toTeam,   changeWeek);
+      const Bprev = idsAt(toTeam, changeWeek - 1);
+      const Bafter = idsAt(toTeam, changeWeek);
 
-      const AtoB = [...Aprev].filter(id => !Aafter.has(id) && Bafter.has(id));
-      const BtoA = [...Bprev].filter(id => !Bafter.has(id) && Aafter.has(id));
+      const AtoB = [...Aprev].filter((id) => !Aafter.has(id) && Bafter.has(id));
+      const BtoA = [...Bprev].filter((id) => !Bafter.has(id) && Aafter.has(id));
 
-      out.push({
+      const trade = {
         year,
         week: changeWeek,
         leftTeamId: fromTeam,
         rightTeamId: toTeam,
-        // temp — we’ll re-orient after merging using ownerAt()
-        leftGets:  BtoA.map(id => ({ pid: id })),
-        rightGets: AtoB.map(id => ({ pid: id })),
-      });
+        leftGets: BtoA.map((id) => ({ pid: id, name: nm(id) })), // what fromTeam receives
+        rightGets: AtoB.map((id) => ({ pid: id, name: nm(id) })), // what toTeam receives
+      };
+
+      const L = trade.leftGets
+        .map((p) => p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      const R = trade.rightGets
+        .map((p) => p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      const s1 = `${trade.week}|${trade.leftTeamId}|${trade.rightTeamId}|${L}|${R}`;
+      const s2 = `${trade.week}|${trade.rightTeamId}|${trade.leftTeamId}|${R}|${L}`;
+      if (
+        !seen.has(s1) &&
+        !seen.has(s2) &&
+        trade.leftGets.length &&
+        trade.rightGets.length
+      ) {
+        seen.add(s1);
+        seen.add(s2);
+        out.push(trade);
+      }
     }
 
     return out;
   };
 
-  // ---- normalize any built-in trade shapes we already have ----------------
-  // => { year, week, leftTeamId, rightTeamId, leftGets:[{pid,name}], rightGets:[{pid,name}] }
-  const normalizeTrade = (year, tr) => {
+  // ---- Normalize detailed (Kona) shapes to common trade object ------------
+  const normalizeTrade = (year, tr, pname) => {
     if (!tr || typeof tr !== "object") return null;
 
     const week =
@@ -7207,8 +7223,10 @@ export function TradingTab({
           const nm =
             p?.name ||
             p?.fullName ||
-            (p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : p?.displayName);
-          return { pid, name: nm };
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
         });
 
       return {
@@ -7231,8 +7249,10 @@ export function TradingTab({
           const nm =
             p?.name ||
             p?.fullName ||
-            (p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : p?.displayName);
-          return { pid, name: nm };
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
         });
       return {
         year,
@@ -7252,8 +7272,10 @@ export function TradingTab({
           const nm =
             p?.name ||
             p?.fullName ||
-            (p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : p?.displayName);
-          return { pid, name: nm };
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
         });
       return {
         year,
@@ -7265,20 +7287,27 @@ export function TradingTab({
       };
     }
 
-    // shape D: ESPN “detailed trade”: { items:[{type:'TRADE', playerId, fromTeamId, toTeamId}], teamActions:{...} }
+    // shape D: ESPN/Kona detailed: { items:[{type:'TRADE', playerId, fromTeamId, toTeamId}], teamActions:{...} }
     if (Array.isArray(tr.items)) {
-      const items = tr.items.filter((i) => (i?.type || "").toUpperCase().includes("TRADE"));
+      const items = tr.items.filter((i) =>
+        (i?.type || "").toUpperCase().includes("TRADE")
+      );
 
       const teamsFromItems = Array.from(
-        new Set(items.flatMap((i) => [i?.fromTeamId, i?.toTeamId]).filter((x) => x != null))
+        new Set(
+          items
+            .flatMap((i) => [i?.fromTeamId, i?.toTeamId])
+            .filter((x) => x != null)
+        )
       );
       const teamsFromActions = Object.keys(tr.teamActions || {}).map(Number);
-      const [A, B] = teamsFromItems.length === 2 ? teamsFromItems : teamsFromActions;
+      const [A, B] =
+        teamsFromItems.length === 2 ? teamsFromItems : teamsFromActions;
 
       const toPkg = (pred) =>
         items.filter(pred).map((i) => {
           const pid = toInt(i?.playerId);
-          return { pid };
+          return { pid, name: pname(year, pid) };
         });
 
       return {
@@ -7331,111 +7360,164 @@ export function TradingTab({
     return total / games;
   };
 
-  // years to render: union of (detailed trades) and (any acq entries)
-  const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map((y) => Number(y));
-  const yearsFromAcq      = Object.keys(espnRosterAcqByYear || {}).map((y) => Number(y));
-
+  const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map(
+    (y) => Number(y)
+  );
+  const yearsFromAcq = Object.keys(espnRosterAcqByYear || {}).map((y) =>
+    Number(y)
+  );
   const yearList = uniq([...yearsFromDetailed, ...yearsFromAcq])
     .filter(Number.isFinite)
     .sort((a, b) => b - a);
 
-  // name index + inline helper
+  // ---- name index + helper ----
   const playerNameIndexByYear = {};
-  yearList.forEach((yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr)));
+  yearList.forEach(
+    (yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr))
+  );
   const pname = (year, pid) => {
     const id = toInt(pid);
     if (!Number.isFinite(id)) return `#${pid}`;
     return playerNameIndexByYear[year]?.get(id) || `#${id}`;
   };
 
-  // ---- Build final year -> trades list (normalize + infer, then MERGE) ----
+  // ---- Build (detailed + inferred), then MERGE inferred into detailed when overlapping ----
   const byYear = {};
   yearList.forEach((yr) => {
-    // detailed (normalize multiple shapes)
     const raw = espnTradesDetailedBySeason?.[yr];
     const arr = Array.isArray(raw) ? raw : Object.values(raw || {});
-    const detailed = arr.map((tr) => normalizeTrade(yr, tr)).filter(Boolean);
+    const detailed = arr
+      .map((tr) => normalizeTrade(yr, tr, pname))
+      .filter(Boolean);
 
-    // seeded inference (fills missing pieces in the package)
-    const inferred = inferTradesByRosterDiff(yr);
+    const inferred = inferTradesByRosterDiff(yr).filter(
+      (t) =>
+        Number.isFinite(t?.leftTeamId) &&
+        Number.isFinite(t?.rightTeamId) &&
+        (t.leftGets?.length || 0) > 0 &&
+        (t.rightGets?.length || 0) > 0
+    );
 
-    // candidates together
-    const cand = [...detailed, ...inferred];
+    // index detailed by (week|sortedTeams) for quick merge
+    const keyFor = (t) => {
+      const wk = toInt(t?.week, -1);
+      const a = toInt(t?.leftTeamId);
+      const b = toInt(t?.rightTeamId);
+      const [x, y] = [a, b].sort((m, n) => m - n);
+      return `${wk}|${x}-${y}`;
+    };
+    const detMap = new Map();
+    detailed.forEach((t, i) => {
+      const k = keyFor(t);
+      if (!detMap.has(k)) detMap.set(k, []);
+      detMap.get(k).push({ idx: i, t });
+    });
 
-    // group by unordered teams per week, then UNION players based on which
-    // side received them in the detailed/inferred payloads.
-    const groups = new Map();
-    const keyOf = (t) => {
-      const a = toInt(t.leftTeamId), b = toInt(t.rightTeamId);
-      const lo = Math.min(a, b), hi = Math.max(a, b);
-      return `${t.week}|${lo}|${hi}`;
+    // helper to union players by pid
+    const unionPlayers = (listA = [], listB = []) => {
+      const by = new Map();
+      [...listA, ...listB].forEach((p) => {
+        if (!Number.isFinite(+p?.pid)) return;
+        const pid = +p.pid;
+        if (!by.has(pid)) by.set(pid, { pid, name: p?.name });
+      });
+      return Array.from(by.values());
     };
 
-    const addPkgToGroup = (group, teamId, pkg) => {
-      const tid = toInt(teamId);
-      if (!Number.isFinite(tid)) return;
-      if (tid !== group.a && tid !== group.b) return;
-      if (!group.receives.has(tid)) group.receives.set(tid, new Map());
-      const bucket = group.receives.get(tid);
-      safeArr(pkg).forEach((p) => {
-        const pid = toInt(p?.pid);
-        if (!Number.isFinite(pid)) return;
-        if (!bucket.has(pid)) {
-          bucket.set(pid, { pid, name: p?.name || null });
-        } else if (!bucket.get(pid).name && p?.name) {
-          bucket.get(pid).name = p.name;
+    // Merge: for each inferred trade, if there is a detailed trade in same (week, teams) and any pid overlaps,
+    // align orientation and union player sets into the detailed one; then drop the inferred copy.
+    const consumedInf = new Set();
+    inferred.forEach((inf) => {
+      const k = keyFor(inf);
+      const cands = detMap.get(k);
+      if (!cands || !cands.length) return;
+
+      // choose the detailed candidate with max overlap
+      let best = null;
+      let bestOverlap = 0;
+
+      cands.forEach(({ idx, t }) => {
+        // try orientation A: inf.left == det.left
+        const overlapA =
+          new Set(t.leftGets.map((p) => +p.pid)).intersection?.(
+            new Set(inf.leftGets.map((p) => +p.pid))
+          ).size ??
+          t.leftGets.filter((lp) =>
+            inf.leftGets.some((ip) => +ip.pid === +lp.pid)
+          ).length;
+
+        const overlapB =
+          new Set(t.rightGets.map((p) => +p.pid)).intersection?.(
+            new Set(inf.rightGets.map((p) => +p.pid))
+          ).size ??
+          t.rightGets.filter((rp) =>
+            inf.rightGets.some((ip) => +ip.pid === +rp.pid)
+          ).length;
+
+        const over = overlapA + overlapB;
+        if (over > bestOverlap) {
+          bestOverlap = over;
+          best = { idx, t, orientation: "same" };
+        }
+
+        // try swapped orientation if same not overlapping
+        const overlapSwA = t.leftGets.filter((lp) =>
+          inf.rightGets.some((ip) => +ip.pid === +lp.pid)
+        ).length;
+        const overlapSwB = t.rightGets.filter((rp) =>
+          inf.leftGets.some((ip) => +ip.pid === +rp.pid)
+        ).length;
+        const overSw = overlapSwA + overlapSwB;
+        if (overSw > bestOverlap) {
+          bestOverlap = overSw;
+          best = { idx, t, orientation: "swap" };
         }
       });
+
+      if (!best || bestOverlap === 0) return; // only merge when there is at least one overlapping player
+
+      const det = best.t;
+      const same = best.orientation === "same";
+      const detLeft = det.leftGets;
+      const detRight = det.rightGets;
+      const infLeft = same ? inf.leftGets : inf.rightGets;
+      const infRight = same ? inf.rightGets : inf.leftGets;
+
+      det.leftGets = unionPlayers(detLeft, infLeft);
+      det.rightGets = unionPlayers(detRight, infRight);
+      consumedInf.add(inf);
+    });
+
+    // Now de-dupe (detailed first, then any remaining inferred that weren't merged)
+    const out = [];
+    const seen = new Set();
+    const sig = (t) => {
+      const L = (t.leftGets || [])
+        .map((p) => +p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      const R = (t.rightGets || [])
+        .map((p) => +p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      return [
+        `${t.week}|${t.leftTeamId}|${t.rightTeamId}|${L}|${R}`,
+        `${t.week}|${t.rightTeamId}|${t.leftTeamId}|${R}|${L}`,
+      ];
     };
 
-    cand.forEach((t) => {
-      const week = toInt(t?.week);
-      const leftId = toInt(t?.leftTeamId);
-      const rightId = toInt(t?.rightTeamId);
-      if (!Number.isFinite(week)) return;
-      if (!Number.isFinite(leftId) || !Number.isFinite(rightId)) return;
-      const key = keyOf({ week, leftTeamId: leftId, rightTeamId: rightId });
-      if (!groups.has(key)) {
-        const a = Math.min(leftId, rightId);
-        const b = Math.max(leftId, rightId);
-        groups.set(key, { week, a, b, receives: new Map() });
-      }
-      const g = groups.get(key);
-      // Preserve earliest week if conflicting data sneaks in
-      if (!Number.isFinite(g.week) || week < g.week) g.week = week;
+    const pushIfNew = (t) => {
+      const [s1, s2] = sig(t);
+      if (seen.has(s1) || seen.has(s2)) return;
+      seen.add(s1);
+      seen.add(s2);
+      out.push(t);
+    };
 
-      addPkgToGroup(g, leftId, t.leftGets);
-      addPkgToGroup(g, rightId, t.rightGets);
-    });
+    detailed.forEach(pushIfNew);
+    inferred.filter((t) => !consumedInf.has(t)).forEach(pushIfNew);
 
-    const merged = [];
-    groups.forEach((g) => {
-      const listFor = (teamId) => {
-        const bucket = g.receives.get(teamId);
-        if (!bucket) return [];
-        return Array.from(bucket.values()).map((p) => ({
-          pid: p.pid,
-          name: p.name || pname(yr, p.pid),
-        }));
-      };
-
-      const leftGets = listFor(g.a).sort((x, y) => x.name.localeCompare(y.name));
-      const rightGets = listFor(g.b).sort((x, y) => x.name.localeCompare(y.name));
-
-      if (leftGets.length || rightGets.length) {
-        merged.push({
-          year: yr,
-          week: g.week,
-          leftTeamId: g.a,
-          rightTeamId: g.b,
-          leftGets,
-          rightGets,
-        });
-      }
-    });
-
-    // final sort by week
-    byYear[yr] = merged.sort((a,b) => (toInt(a?.week, 0) - toInt(b?.week, 0)));
+    byYear[yr] = out.sort((a, b) => toInt(a?.week, 0) - toInt(b?.week, 0));
   });
 
   // UI bits ---------------------------------------------------------------
@@ -7462,7 +7544,11 @@ export function TradingTab({
                 : null;
             return (
               <li key={i} className="text-sm">
-                <span className={sign === "+" ? "text-emerald-600" : "text-rose-600"}>
+                <span
+                  className={
+                    sign === "+" ? "text-emerald-600" : "text-rose-600"
+                  }
+                >
                   {sign}
                 </span>{" "}
                 <span className="font-medium">{p?.name}</span>
@@ -7485,7 +7571,6 @@ export function TradingTab({
     const leftName = ownerNameOf(t.year, t.leftTeamId);
     const rightName = ownerNameOf(t.year, t.rightTeamId);
 
-    // respect hidden managers: if *both* sides hidden, skip
     const leftHidden = hidden.has(leftName);
     const rightHidden = hidden.has(rightName);
     if (leftHidden && rightHidden) return null;
@@ -7498,8 +7583,15 @@ export function TradingTab({
 
         <div className="grid md:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
           <Box>
-            <div className="text-sm font-semibold mb-2 truncate">{leftName}</div>
-            <PlayerList sign="+" items={t.leftGets} year={t.year} week={t.week ?? 1} />
+            <div className="text-sm font-semibold mb-2 truncate">
+              {leftName}
+            </div>
+            <PlayerList
+              sign="+"
+              items={t.leftGets}
+              year={t.year}
+              week={t.week ?? 1}
+            />
           </Box>
 
           <div className="flex flex-col items-center justify-center">
@@ -7507,8 +7599,15 @@ export function TradingTab({
           </div>
 
           <Box>
-            <div className="text-sm font-semibold mb-2 truncate">{rightName}</div>
-            <PlayerList sign="+" items={t.rightGets} year={t.year} week={t.week ?? 1} />
+            <div className="text-sm font-semibold mb-2 truncate">
+              {rightName}
+            </div>
+            <PlayerList
+              sign="+"
+              items={t.rightGets}
+              year={t.year}
+              week={t.week ?? 1}
+            />
           </Box>
         </div>
       </div>
