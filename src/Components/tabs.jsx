@@ -4107,6 +4107,31 @@ function __podiumColor(place) {
   return "from-slate-200 via-slate-100 to-white";
 }
 
+function __podiumLayout(place) {
+  if (place === 1) {
+    return {
+      order: "md:order-2",
+      height: "md:pt-16 md:pb-8",
+    };
+  }
+  if (place === 2) {
+    return {
+      order: "md:order-1",
+      height: "md:pt-12 md:pb-8",
+    };
+  }
+  if (place === 3) {
+    return {
+      order: "md:order-3",
+      height: "md:pt-10 md:pb-8",
+    };
+  }
+  return {
+    order: "",
+    height: "md:pt-10 md:pb-8",
+  };
+}
+
 const __CONFETTI_COLORS = [
   "#FACC15",
   "#60A5FA",
@@ -4531,17 +4556,22 @@ export function YearlyRecapTab({
         subtitle="Tap a finalist to view their championship roster"
         className="relative overflow-hidden border-white/35 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70"
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-center">
           {topThree.map((entry) => {
             const isActive = entry.owner === selectedOwner;
+            const { order: orderClass, height: heightClass } = __podiumLayout(entry.place);
             return (
               <button
                 key={entry.owner}
                 type="button"
                 onClick={() => setSelectedOwner(entry.owner)}
-                className={`relative flex flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
+                className={`relative flex w-full flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
                   entry.place
-                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform ${
+                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform md:min-w-[200px] ${
+                  orderClass
+                } ${
+                  heightClass
+                } ${
                   isActive ? "ring-2 ring-amber-400" : "hover:-translate-y-1"
                 }`}
               >
