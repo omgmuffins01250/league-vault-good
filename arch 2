@@ -1,7 +1,8 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import html2canvas from "html2canvas";
+import { PDFDocument } from "pdf-lib";
 import { Card, TableBox } from "./ui.jsx";
 import ManagerMergeControl from "./ManagerMergeControl.jsx";
 import {
@@ -761,19 +762,46 @@ export function SetupTab({
   // 👇 ADD THIS EFFECT (keeps ownerMaps in sync with the selected league)
   React.useEffect(() => {
     if (!league) return;
-    const aliases = window.__FL_ALIASES || {};
+
+    // pick a real season number (prefer latest available in ownerByTeamByYear)
+    const seasonsFromTeams = Object.keys(league?.ownerByTeamByYear || {}).map(
+      Number
+    );
+    const seasonsFromEspn = (
+      Array.isArray(league?.seasons) ? league.seasons : []
+    )
+      .map((s) => Number(s?.seasonId))
+      .filter(Boolean);
+    const latestSeason = Math.max(
+      ...(seasonsFromTeams.length ? seasonsFromTeams : seasonsFromEspn),
+      0
+    );
+
+    // prime owner maps with seasons so names resolve, but keep manualAliases OFF
     primeOwnerMaps({
       league,
       selectedLeague: league,
       espnOwnerByTeamByYear: league.ownerByTeamByYear || {},
-      manualAliases: aliases,
+      manualAliases: {}, // ← no manual mapping
+      espnSeasons: Array.isArray(league?.seasons)
+        ? league.seasons
+        : Object.values(league?.seasonsByYear || {}), // pass seasons if present
     });
-    // Optional sanity log:
-    console.log(
-      "Owner map sources ready",
-      window.__ownerMaps?.mapFor?.(Number(league?.seasonsAll?.slice?.(-1)?.[0]))
-    );
+
+    // log the actual built map (will include `handle` if you added it in ownerMaps.jsx)
+    if (typeof window !== "undefined" && window.__ownerMaps) {
+      const m = window.__ownerMaps.mapFor(latestSeason);
+      console.debug("Owner map sources ready", m);
+      // Single team example (2):
+      console.debug({
+        teamId: 2,
+        name: window.__ownerMaps.name(latestSeason, 2),
+        handle: window.__ownerMaps.handle?.(latestSeason, 2),
+        ownerId: window.__ownerMaps.id(latestSeason, 2),
+      });
+    }
   }, [league]);
+
   const keys = derivedAll.leagues;
   const [wantLegacy, setWantLegacy] = useState(false);
   const inferredId = (league?.meta?.id && String(league.meta.id)) || "";
@@ -4079,6 +4107,31 @@ function __podiumColor(place) {
   return "from-slate-200 via-slate-100 to-white";
 }
 
+function __podiumLayout(place) {
+  if (place === 1) {
+    return {
+      order: "md:order-2",
+      height: "md:pt-16 md:pb-8",
+    };
+  }
+  if (place === 2) {
+    return {
+      order: "md:order-1",
+      height: "md:pt-12 md:pb-8",
+    };
+  }
+  if (place === 3) {
+    return {
+      order: "md:order-3",
+      height: "md:pt-10 md:pb-8",
+    };
+  }
+  return {
+    order: "",
+    height: "md:pt-10 md:pb-8",
+  };
+}
+
 const __CONFETTI_COLORS = [
   "#FACC15",
   "#60A5FA",
@@ -4503,17 +4556,20 @@ export function YearlyRecapTab({
         subtitle="Tap a finalist to view their championship roster"
         className="relative overflow-hidden border-white/35 dark:border-white/10 bg-white/85 dark:bg-zinc-950/70"
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-center">
           {topThree.map((entry) => {
             const isActive = entry.owner === selectedOwner;
+            const { order: orderClass, height: heightClass } = __podiumLayout(
+              entry.place
+            );
             return (
               <button
                 key={entry.owner}
                 type="button"
                 onClick={() => setSelectedOwner(entry.owner)}
-                className={`relative flex flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
+                className={`relative flex w-full flex-col items-center gap-2 rounded-2xl border border-white/50 dark:border-white/10 bg-gradient-to-t ${__podiumColor(
                   entry.place
-                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform ${
+                )} px-6 py-6 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.8)] transition-transform md:min-w-[200px] ${orderClass} ${heightClass} ${
                   isActive ? "ring-2 ring-amber-400" : "hover:-translate-y-1"
                 }`}
               >
@@ -6123,33 +6179,77 @@ export function RecordsTab({ league }) {
 
   const highestScoringPlayersAll = React.useMemo(() => {
     const out = [];
-    const seasonsObj =
-      league?.seasonsByYear ||
-      (typeof window !== "undefined"
-        ? window.__FL_SOURCES?.seasonsByYear
-        : {}) ||
-      {};
-    for (const [yearStr, seasonObj] of Object.entries(seasonsObj || {})) {
-      const year = Number(seasonObj?.seasonId ?? yearStr);
-      const rbtbw =
-        seasonObj?.rostersByTeamByWeek || seasonObj?.rostersByTeamWeek || {};
-      for (const [teamIdStr, byWeek] of Object.entries(rbtbw || {})) {
-        const teamId = Number(teamIdStr);
-        const manager =
-          ownerName(year, teamId) || teamNameById[teamId] || `Team ${teamId}`;
-        for (const [weekStr, roster] of Object.entries(byWeek || {})) {
-          const week = Number(weekStr);
-          (roster || []).forEach((p) => {
-            const pts = Number(p?.pts);
-            if (!Number.isFinite(pts)) return;
-            const name = p?.name || p?.playerName || "Unknown";
-            out.push({ owner: manager, player: name, pts, season: year, week });
-          });
+    const addRosterEntries = (seasonKey, teamKey, weekKey, roster) => {
+      const season = Number(
+        seasonKey?.seasonId ?? seasonKey ?? roster?.season ?? roster?.year
+      );
+      const teamId = Number(teamKey);
+      const week = Number(weekKey);
+      const manager =
+        ownerName(season, teamId) ||
+        teamNameById[teamId] ||
+        `Team ${teamId || "?"}`;
+      (Array.isArray(roster) ? roster : roster?.entries || []).forEach((p) => {
+        const pts = pickNum(
+          p?.pts,
+          p?.totalPoints,
+          p?.points,
+          p?.fpts,
+          p?.score
+        );
+        if (!Number.isFinite(pts)) return;
+        const name =
+          p?.name ||
+          p?.playerName ||
+          p?.player?.fullName ||
+          p?.player?.name ||
+          "Unknown";
+        out.push({ owner: manager, player: name, pts, season, week });
+      });
+    };
+
+    const rosterSources = [];
+    const rosterCandidates = [
+      league?.rostersByYear,
+      typeof window !== "undefined" ? window.__sources?.rostersByYear : null,
+      typeof window !== "undefined" ? window.__FL_SOURCES?.rostersByYear : null,
+    ];
+    rosterCandidates.forEach((src) => {
+      if (!src || !Object.keys(src || {}).length) return;
+      if (!rosterSources.includes(src)) rosterSources.push(src);
+    });
+
+    if (rosterSources.length) {
+      rosterSources.forEach((source) => {
+        for (const [seasonKey, byTeam] of Object.entries(source || {})) {
+          for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
+            for (const [weekKey, roster] of Object.entries(byWeek || {})) {
+              addRosterEntries(seasonKey, teamKey, weekKey, roster);
+            }
+          }
+        }
+      });
+    } else {
+      const seasonsObj =
+        league?.seasonsByYear ||
+        (typeof window !== "undefined"
+          ? window.__FL_SOURCES?.seasonsByYear
+          : {}) ||
+        {};
+      for (const [yearStr, seasonObj] of Object.entries(seasonsObj || {})) {
+        const year = Number(seasonObj?.seasonId ?? yearStr);
+        const rbtbw =
+          seasonObj?.rostersByTeamByWeek || seasonObj?.rostersByTeamWeek || {};
+        for (const [teamIdStr, byWeek] of Object.entries(rbtbw || {})) {
+          for (const [weekStr, roster] of Object.entries(byWeek || {})) {
+            addRosterEntries({ seasonId: year }, teamIdStr, weekStr, roster);
+          }
         }
       }
     }
+
     return out.sort(byDesc((r) => r.pts));
-  }, [teamNameById, league?.seasonsByYear]);
+  }, [teamNameById, league?.rostersByYear, league?.seasonsByYear]);
 
   // Longest win streak top list (already computed)
   const topWinStreaksAll = longestStreaks;
@@ -6421,7 +6521,7 @@ export function RecordsTab({ league }) {
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
-            {r.team}
+            {r.owner ?? r.team ?? "Unknown manager"}
           </span>
           <span className="text-slate-500 dark:text-slate-300">
             — {r.player} — {Math.round(r.pts)} pts (S{r.season} W
@@ -6935,7 +7035,1814 @@ export function RecordsTab({ league }) {
     </div>
   );
 }
+//----------------------------------------------------------
+//--------------------------------------------------------
+// ---------- TradingTab (year -> trades UI with PPG before/after) ----------
+export function TradingTab({
+  league, // { owners, hiddenManagers }
+  selectedLeague,
 
+  // Data
+  espnTradesDetailedBySeason = {}, // { [year]: Trade[] | {id:Trade} }
+  espnOwnerByTeamByYear = {}, // { [year]: { [teamId]: ownerName } }
+  espnOwnerFullByTeamByYear = {}, // { [year]: { [teamId]: ownerFullName } }
+  espnTeamNamesByOwner = {}, // { [ownerName]: "Team Nickname" }
+  espnRostersByYear = {}, // { [year]: { [teamId]: { [week]: RosterEntry[] } } }
+  espnRosterAcqByYear = {}, // { [year]: { [teamId]: { [playerId]: {acquisitionType, name, ...} } } }
+  espnWeeklyPtsByYear = {}, // { [year]: { [playerId]: Array|Object|{weeks:...} } }
+  currentWeekBySeason = {}, // { [year]: number } (not used for ppg endpoint—see note)
+  fallbackTransactionsByYear = {}, // unused here
+}) {
+  // ---------------- helpers ----------------
+  const safeArr = (v) => (Array.isArray(v) ? v : []);
+  const toInt = (n, d = null) => {
+    const v = Number(n);
+    return Number.isFinite(v) ? v : d;
+  };
+  const uniq = (arr) => Array.from(new Set(arr));
+
+  // ---------------- pro team helpers used throughout (DEFINITIONS ADDED) -----
+  function __hasAnyEntries(src) {
+    if (!src) return false;
+    if (src instanceof Map) return src.size > 0;
+    if (Array.isArray(src)) return src.length > 0;
+    if (typeof src === "object") return Object.keys(src).length > 0;
+    return false;
+  }
+
+  // Normalize the possible team objects into an array of simple {id, abbrev, byeWeek|byeWeeks}
+  function __teamsFromSource(src) {
+    if (!src) return [];
+    let list = [];
+    if (src instanceof Map) {
+      src.forEach((v) => list.push(v));
+    } else if (Array.isArray(src)) {
+      list = src.slice();
+    } else if (typeof src === "object") {
+      list = Object.values(src);
+    }
+    return list
+      .map((t) => ({
+        id: toInt(t?.id ?? t?.teamId ?? t?.proTeamId),
+        abbrev:
+          t?.abbrev ||
+          t?.abbreviation ||
+          t?.teamAbbrev ||
+          t?.teamAbbreviation ||
+          "",
+        byeWeek: toInt(t?.byeWeek),
+        byeWeeks:
+          (Array.isArray(t?.byeWeeks) && t.byeWeeks) ||
+          (Array.isArray(t?.byeWeekSchedule) && t.byeWeekSchedule) ||
+          null,
+      }))
+      .filter((x) => Number.isFinite(x.id));
+  }
+
+  function __resolveProTeamsForSeason(seasonKey, container) {
+    // Priority: explicit proTeamsByYear on inputs -> window sources -> store record
+    const y = toInt(seasonKey);
+    const tryPaths = [];
+
+    if (container) {
+      // some callers pass a league record or store record
+      tryPaths.push(container.proTeamsByYear);
+      tryPaths.push(container.espnProTeamsByYear);
+      tryPaths.push(container?.settings?.proTeamsByYear);
+    }
+
+    if (typeof window !== "undefined") {
+      const src = window.__FL_SOURCES || window.__sources || {};
+      tryPaths.push(src.proTeamsByYear);
+      tryPaths.push(src?.seasonsByYear?.[y]?.proTeams);
+      tryPaths.push(src?.seasonsByYear?.[y]?.settings?.proTeams);
+    }
+
+    for (const node of tryPaths) {
+      if (!node) continue;
+      // node may be a "by year" object, or an array for the given year
+      const yearNode =
+        node[y] ??
+        // sometimes it's already the list for the year:
+        (Array.isArray(node) ? node : null);
+      if (__hasAnyEntries(yearNode)) return yearNode;
+    }
+    return null;
+  }
+
+  function __buildProTeamLookup(source) {
+    const rows = __teamsFromSource(source);
+    const abbrevToId = new Map();
+    const idToTeam = new Map();
+    rows.forEach((t) => {
+      idToTeam.set(t.id, t);
+      const tok = (t.abbrev || "").toUpperCase();
+      if (tok) abbrevToId.set(tok, t.id);
+    });
+    return { abbrevToId, idToTeam };
+  }
+
+  function __teamByeWeekNumbers(team) {
+    // single bye or array of byes
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v) && v > 0) out.add(v);
+    };
+    if (team?.byeWeek != null) tryNum(team.byeWeek);
+    if (Array.isArray(team?.byeWeeks)) team.byeWeeks.forEach(tryNum);
+    if (Array.isArray(team?.byeWeekSchedule))
+      team.byeWeekSchedule.forEach(tryNum);
+    return Array.from(out).sort((a, b) => a - b);
+  }
+
+  function __entryByeWeekNumbers(entry) {
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v) && v > 0) out.add(v);
+    };
+    // common places
+    const cands = [
+      entry?.byeWeek,
+      entry?.player?.byeWeek,
+      entry?.playerPoolEntry?.byeWeek,
+      entry?.proTeamByeWeek,
+      entry?.player?.proTeamByeWeek,
+      entry?.playerPoolEntry?.proTeamByeWeek,
+    ];
+    cands.forEach(tryNum);
+
+    // plural arrays buried in shapes
+    const plural = [
+      entry?.byeWeeks,
+      entry?.player?.byeWeeks,
+      entry?.playerPoolEntry?.byeWeeks,
+      entry?.byeWeekSchedule,
+      entry?.player?.byeWeekSchedule,
+      entry?.playerPoolEntry?.byeWeekSchedule,
+      entry?.proTeamByeWeekSchedule,
+      entry?.player?.proTeamByeWeekSchedule,
+      entry?.playerPoolEntry?.proTeamByeWeekSchedule,
+    ];
+    plural.forEach((arr) => Array.isArray(arr) && arr.forEach(tryNum));
+
+    return Array.from(out).sort((a, b) => a - b);
+  }
+
+  function __entryIsOnByeForWeek(entry, weekNum) {
+    if (entry?.onBye === true || entry?.player?.onBye === true) return true;
+    const nums = __entryByeWeekNumbers(entry);
+    return nums.includes(toInt(weekNum));
+  }
+
+  // ---------------- store helpers ----------------
+  const storeLeagueRecord = React.useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw =
+        window.localStorage?.getItem("FL_STORE_v2") ||
+        window.localStorage?.getItem("FL_STORE_v1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+
+      const ids = [
+        league?.meta?.leagueId,
+        league?.leagueId,
+        selectedLeague?.meta?.leagueId,
+        selectedLeague?.leagueId,
+        parsed?.lastSelectedLeagueId,
+      ]
+        .map((id) =>
+          id != null && id !== ""
+            ? typeof id === "number"
+              ? String(id)
+              : String(id)
+            : null
+        )
+        .filter(Boolean);
+
+      const seen = new Set();
+      for (const lid of ids) {
+        if (seen.has(lid)) continue;
+        seen.add(lid);
+        const rec =
+          parsed?.leaguesById?.[lid] ??
+          (Number.isFinite(Number(lid))
+            ? parsed?.leaguesById?.[Number(lid)]
+            : undefined);
+        if (rec && typeof rec === "object") return rec;
+      }
+    } catch (err) {
+      console.warn("TradingTab: failed to read FL store for bye data", err);
+    }
+    return null;
+  }, [league, selectedLeague]);
+
+  // ---------------- pro team / bye week lookups (now backed by __sources) ---
+  const proTeamSourceCacheRef = React.useRef(new Map());
+  const getProTeamSource = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamSourceCacheRef.current.has(cacheKey)) {
+        return proTeamSourceCacheRef.current.get(cacheKey);
+      }
+
+      const candidates = [
+        __resolveProTeamsForSeason(seasonKey, league),
+        __resolveProTeamsForSeason(seasonKey, selectedLeague),
+        __resolveProTeamsForSeason(seasonKey, storeLeagueRecord),
+      ];
+
+      const source = candidates.find((cand) => __hasAnyEntries(cand)) || null;
+      proTeamSourceCacheRef.current.set(cacheKey, source);
+      return source;
+    },
+    [league, selectedLeague, storeLeagueRecord]
+  );
+
+  const proTeamLookupCacheRef = React.useRef(new Map());
+  const getProTeamLookup = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamLookupCacheRef.current.has(cacheKey)) {
+        return proTeamLookupCacheRef.current.get(cacheKey);
+      }
+      const lookup = __buildProTeamLookup(getProTeamSource(seasonKey));
+      proTeamLookupCacheRef.current.set(cacheKey, lookup);
+      return lookup;
+    },
+    [getProTeamSource]
+  );
+
+  const teamByeCacheRef = React.useRef(new Map());
+  const resolveTeamByeWeeks = React.useCallback(
+    (seasonKey, proTeamId) => {
+      const cacheKey = `${seasonKey}|${proTeamId}`;
+      if (teamByeCacheRef.current.has(cacheKey)) {
+        return teamByeCacheRef.current.get(cacheKey);
+      }
+
+      const weeks = [];
+      const source = getProTeamSource(seasonKey);
+      const targetId = toInt(proTeamId);
+      if (Number.isFinite(targetId) && __hasAnyEntries(source)) {
+        const pushWeeks = (team) => {
+          if (!team) return;
+          const arr = __teamByeWeekNumbers(team);
+          if (arr.length) weeks.push(...arr);
+        };
+
+        if (source instanceof Map) {
+          pushWeeks(source.get(targetId));
+          pushWeeks(source.get(String(targetId)));
+        } else if (Array.isArray(source)) {
+          const found = source.find(
+            (team) =>
+              toInt(team?.id ?? team?.teamId ?? team?.proTeamId) === targetId
+          );
+          pushWeeks(found);
+        } else if (typeof source === "object") {
+          for (const [key, team] of Object.entries(source || {})) {
+            if (
+              toInt(team?.id ?? team?.teamId ?? team?.proTeamId ?? key) ===
+              targetId
+            ) {
+              pushWeeks(team);
+              break;
+            }
+          }
+        }
+      }
+
+      const uniqWeeks = Array.from(new Set(weeks.filter(Number.isFinite))).sort(
+        (a, b) => a - b
+      );
+      teamByeCacheRef.current.set(cacheKey, uniqWeeks);
+      return uniqWeeks;
+    },
+    [getProTeamSource]
+  );
+
+  const playerProTeamCacheRef = React.useRef(new Map());
+  const resolveProTeamId = React.useCallback(
+    (seasonKey, playerId) => {
+      const cacheKey = `${seasonKey}|${playerId}`;
+      if (playerProTeamCacheRef.current.has(cacheKey)) {
+        return playerProTeamCacheRef.current.get(cacheKey);
+      }
+
+      const pid = toInt(playerId);
+      if (!Number.isFinite(pid)) {
+        playerProTeamCacheRef.current.set(cacheKey, null);
+        return null;
+      }
+
+      const lookup = getProTeamLookup(seasonKey);
+      const fromRosters = espnRostersByYear?.[seasonKey] || {};
+      for (const weeks of Object.values(fromRosters || {})) {
+        for (const entries of Object.values(weeks || {})) {
+          for (const entry of safeArr(entries)) {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (entryPid !== pid) continue;
+
+            const directCandidates = [
+              entry?.proTeamId,
+              entry?.teamId,
+              entry?.nflTeamId,
+              entry?.proTeam?.id,
+              entry?.player?.proTeamId,
+              entry?.player?.teamId,
+              entry?.player?.nflTeamId,
+              entry?.playerPoolEntry?.proTeamId,
+              entry?.playerPoolEntry?.teamId,
+              entry?.playerPoolEntry?.player?.proTeamId,
+              entry?.playerPoolEntry?.player?.teamId,
+            ];
+            for (const cand of directCandidates) {
+              const id = toInt(cand);
+              if (Number.isFinite(id)) {
+                playerProTeamCacheRef.current.set(cacheKey, id);
+                return id;
+              }
+            }
+
+            if (lookup?.abbrevToId) {
+              const ids = __entryProTeamIds(entry, lookup.abbrevToId);
+              for (const id of ids) {
+                if (Number.isFinite(id)) {
+                  playerProTeamCacheRef.current.set(cacheKey, id);
+                  return id;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const acqByYear = espnRosterAcqByYear?.[seasonKey] || {};
+      for (const team of Object.values(acqByYear || {})) {
+        if (!team) continue;
+        const rec = team[pid] ?? team[String(pid)];
+        if (!rec || typeof rec !== "object") continue;
+        const candidates = [
+          rec?.proTeamId,
+          rec?.teamId,
+          rec?.nflTeamId,
+          rec?.player?.proTeamId,
+          rec?.player?.teamId,
+          rec?.player?.nflTeamId,
+          rec?.playerPoolEntry?.player?.proTeamId,
+        ];
+        for (const cand of candidates) {
+          const id = toInt(cand);
+          if (Number.isFinite(id)) {
+            playerProTeamCacheRef.current.set(cacheKey, id);
+            return id;
+          }
+        }
+      }
+
+      const candidatePools = [];
+      if (storeLeagueRecord) {
+        candidatePools.push(
+          storeLeagueRecord.playersById,
+          storeLeagueRecord.espnPlayersById,
+          storeLeagueRecord.playerCardsById,
+          storeLeagueRecord.konaPlayersById
+        );
+      }
+      if (typeof window !== "undefined") {
+        const src = window.__FL_SOURCES || window.__sources || {};
+        candidatePools.push(
+          src.playersById,
+          src.espnPlayersById,
+          src.playerCardsById,
+          src.konaPlayersById
+        );
+      }
+
+      for (const pool of candidatePools) {
+        if (!pool) continue;
+        const rec = pool[pid] ?? pool[String(pid)];
+        if (!rec || typeof rec !== "object") continue;
+        const candidates = [
+          rec?.proTeamId,
+          rec?.teamId,
+          rec?.nflTeamId,
+          rec?.pro?.teamId,
+          rec?.player?.proTeamId,
+          rec?.player?.teamId,
+          rec?.player?.nflTeamId,
+          rec?.playerPoolEntry?.player?.proTeamId,
+        ];
+        for (const cand of candidates) {
+          const id = toInt(cand);
+          if (Number.isFinite(id)) {
+            playerProTeamCacheRef.current.set(cacheKey, id);
+            return id;
+          }
+        }
+      }
+
+      playerProTeamCacheRef.current.set(cacheKey, null);
+      return null;
+    },
+    [
+      espnRostersByYear,
+      espnRosterAcqByYear,
+      getProTeamLookup,
+      storeLeagueRecord,
+    ]
+  );
+
+  function __entryProTeamIds(entry, abbrevToIdMap) {
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v)) out.add(v);
+    };
+    const cands = [
+      entry?.proTeamId,
+      entry?.teamId,
+      entry?.nflTeamId,
+      entry?.proTeam?.id,
+      entry?.player?.proTeamId,
+      entry?.player?.teamId,
+      entry?.player?.nflTeamId,
+      entry?.playerPoolEntry?.proTeamId,
+      entry?.playerPoolEntry?.teamId,
+      entry?.playerPoolEntry?.player?.proTeamId,
+      entry?.playerPoolEntry?.player?.teamId,
+    ];
+    cands.forEach(tryNum);
+
+    const strings = [
+      entry?.player?.proTeam,
+      entry?.player?.team,
+      entry?.proTeam,
+      entry?.team,
+      entry?.nflTeam,
+    ]
+      .map((s) => (s || "").toString().toUpperCase())
+      .filter(Boolean);
+
+    strings.forEach((tok) => {
+      const id = abbrevToIdMap?.get(tok);
+      if (Number.isFinite(id)) out.add(id);
+    });
+
+    return Array.from(out);
+  }
+
+  const playerByeCacheRef = React.useRef(new Map());
+  const getPlayerByeWeeks = React.useCallback(
+    (seasonKey, playerId) => {
+      const cacheKey = `${seasonKey}|${playerId}`;
+      if (playerByeCacheRef.current.has(cacheKey)) {
+        return playerByeCacheRef.current.get(cacheKey);
+      }
+
+      const pid = toInt(playerId);
+      if (!Number.isFinite(pid)) {
+        playerByeCacheRef.current.set(cacheKey, []);
+        return [];
+      }
+
+      const weeksSet = new Set();
+      const rosters = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(rosters || {}).forEach(([, byWeek]) => {
+        Object.entries(byWeek || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          safeArr(entries).forEach((entry) => {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (entryPid !== pid) return;
+            __entryByeWeekNumbers(entry).forEach((n) =>
+              Number.isFinite(Number(n)) ? weeksSet.add(Number(n)) : null
+            );
+            if (Number.isFinite(wk) && __entryIsOnByeForWeek(entry, wk)) {
+              weeksSet.add(wk);
+            }
+          });
+        });
+      });
+
+      const proTeamId = resolveProTeamId(seasonKey, pid);
+      if (Number.isFinite(proTeamId)) {
+        resolveTeamByeWeeks(seasonKey, proTeamId).forEach((wk) =>
+          weeksSet.add(wk)
+        );
+      }
+
+      const weeks = Array.from(weeksSet)
+        .filter((wk) => Number.isFinite(wk))
+        .sort((a, b) => a - b);
+      playerByeCacheRef.current.set(cacheKey, weeks);
+      return weeks;
+    },
+    [espnRostersByYear, resolveProTeamId, resolveTeamByeWeeks]
+  );
+
+  // ---------------- identity helpers ----------------
+  const hidden = new Set(league?.hiddenManagers || []);
+  const ownerNameOf = (year, teamId) =>
+    espnOwnerFullByTeamByYear?.[year]?.[teamId] ||
+    espnOwnerByTeamByYear?.[year]?.[teamId] ||
+    `Team ${teamId}`;
+
+  // We want post PPG to include the week of the trade and run through
+  // Week 17 (fantasy playoffs end).
+  const FANTASY_PLAYOFF_END = 17;
+
+  // ---------------- name index ----------------
+  const buildNameIndexForYear = (year) => {
+    const idx = new Map();
+
+    // roster-derived names
+    const ry = espnRostersByYear?.[year] || {};
+    Object.values(ry).forEach((weeks) => {
+      Object.values(weeks || {}).forEach((list) => {
+        safeArr(list).forEach((e) => {
+          const pid = toInt(e?.pid ?? e?.playerId ?? e?.player?.id);
+          const nm =
+            e?.name ||
+            e?.player?.fullName ||
+            e?.player?.name ||
+            e?.player?.displayName ||
+            null;
+          if (Number.isFinite(pid) && nm) idx.set(pid, nm);
+        });
+      });
+    });
+
+    // acquisitions-derived names
+    const aq = espnRosterAcqByYear?.[year] || {};
+    Object.values(aq).forEach((teamMap) => {
+      Object.entries(teamMap || {}).forEach(([pidRaw, meta]) => {
+        const pid = toInt(pidRaw);
+        const nm = meta?.name;
+        if (Number.isFinite(pid) && nm && !idx.has(pid)) idx.set(pid, nm);
+      });
+    });
+
+    return idx;
+  };
+
+  // years we’ll render = union of detailed + any acq entries
+  const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map(
+    (y) => Number(y)
+  );
+  const yearsFromAcq = Object.keys(espnRosterAcqByYear || {}).map((y) =>
+    Number(y)
+  );
+  const yearList = uniq([...yearsFromDetailed, ...yearsFromAcq])
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a);
+
+  const playerNameIndexByYear = {};
+  yearList.forEach(
+    (yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr))
+  );
+  const pname = (year, pid) => {
+    const id = toInt(pid);
+    if (!Number.isFinite(id)) return `#${pid}`;
+    return playerNameIndexByYear[year]?.get(id) || `#${id}`;
+  };
+
+  // ---------------- ownership + trade detection ----------------
+  const ownerOfAtWeek = React.useCallback(
+    (year, pid, week) => {
+      const ry = espnRostersByYear?.[year] || {};
+      for (const [tid, weeks] of Object.entries(ry)) {
+        const list = weeks?.[week] || [];
+        if (
+          safeArr(list).some(
+            (e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === pid
+          )
+        ) {
+          return toInt(tid);
+        }
+      }
+      return null;
+    },
+    [espnRostersByYear]
+  );
+
+  const weeksEndFromRosters = React.useCallback(
+    (year) => {
+      const ry = espnRostersByYear?.[year] || {};
+      let maxWeek = 0;
+      Object.values(ry).forEach((weeks) => {
+        Object.keys(weeks || {}).forEach((w) => {
+          const n = toInt(w);
+          if (Number.isFinite(n)) maxWeek = Math.max(maxWeek, n);
+        });
+      });
+      return Math.max(maxWeek, FANTASY_PLAYOFF_END);
+    },
+    [espnRostersByYear]
+  );
+
+  // first week where owner flips
+  const findTradeWeek = React.useCallback(
+    (year, pid) => {
+      const last = weeksEndFromRosters(year);
+      for (let w = 2; w <= last; w++) {
+        const prev = ownerOfAtWeek(year, pid, w - 1);
+        const curr = ownerOfAtWeek(year, pid, w);
+        if (prev && curr && prev !== curr) return w;
+      }
+      return null;
+    },
+    [ownerOfAtWeek, weeksEndFromRosters]
+  );
+
+  // infer a trade by seeding on players with acquisitionType === 'TRADE' and diffing rosters around the flip
+  const inferTradesByRosterDiff = (year) => {
+    const rosters = espnRostersByYear?.[year] || {};
+    const teamIds = Object.keys(rosters).map(Number).filter(Number.isFinite);
+
+    const idsAt = (tid, wk) =>
+      new Set(
+        (rosters[tid]?.[wk] || [])
+          .map((e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id))
+          .filter(Number.isFinite)
+      );
+
+    // seed: all pids marked TRADE
+    const seeds = [];
+    const acq = espnRosterAcqByYear?.[year] || {};
+    Object.values(acq).forEach((teamMap) => {
+      Object.entries(teamMap || {}).forEach(([pidRaw, meta]) => {
+        if (String(meta?.acquisitionType).toUpperCase() === "TRADE") {
+          const pid = toInt(pidRaw);
+          if (Number.isFinite(pid)) seeds.push(pid);
+        }
+      });
+    });
+
+    const nameIdx = buildNameIndexForYear(year);
+    const nm = (pid) => nameIdx.get(toInt(pid)) || `#${pid}`;
+
+    const out = [];
+    const seen = new Set();
+
+    for (const pid of seeds) {
+      const w = findTradeWeek(year, pid);
+      if (!w) continue;
+
+      const fromTeam = ownerOfAtWeek(year, pid, w - 1);
+      const toTeam = ownerOfAtWeek(year, pid, w);
+      if (!fromTeam || !toTeam || fromTeam === toTeam) continue;
+
+      const Aprev = idsAt(fromTeam, w - 1);
+      const Aafter = idsAt(fromTeam, w);
+      const Bprev = idsAt(toTeam, w - 1);
+      const Bafter = idsAt(toTeam, w);
+
+      const AtoB = [...Aprev].filter((id) => !Aafter.has(id) && Bafter.has(id));
+      const BtoA = [...Bprev].filter((id) => !Bafter.has(id) && Aafter.has(id)); // <- fixed
+
+      const trade = {
+        year,
+        week: w,
+        leftTeamId: fromTeam, // "from" side (sending)
+        rightTeamId: toTeam, // "to" side (receiving)
+        leftGets: BtoA.map((id) => ({ pid: id, name: nm(id) })),
+        rightGets: AtoB.map((id) => ({ pid: id, name: nm(id) })),
+      };
+
+      // order-insensitive signature
+      const L = trade.leftGets
+        .map((p) => +p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      const R = trade.rightGets
+        .map((p) => +p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+      const s1 = `${trade.week}|${Math.min(
+        trade.leftTeamId,
+        trade.rightTeamId
+      )}-${Math.max(trade.leftTeamId, trade.rightTeamId)}|${L}|${R}`;
+      if (!seen.has(s1) && trade.leftGets.length && trade.rightGets.length) {
+        seen.add(s1);
+        out.push(trade);
+      }
+    }
+
+    return out;
+  };
+
+  // ---------------- weekly points reader (robust) ----------------
+  // prefer espnWeeklyPtsByYear (skips byes naturally when keys missing),
+  // fallback to roster points for that week when needed.
+  const ptsFromRosterWeek = (year, pid, week) => {
+    const ry = espnRostersByYear?.[year] || {};
+    for (const weeks of Object.values(ry)) {
+      const list = weeks?.[week] || [];
+      for (const e of safeArr(list)) {
+        const id = toInt(e?.pid ?? e?.playerId ?? e?.player?.id);
+        if (id === pid) {
+          const tries = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "fantasy",
+            "ppr",
+            "pprPts",
+          ];
+          for (const k of tries) {
+            const v = e?.[k];
+            if (Number.isFinite(Number(v))) return Number(v);
+          }
+          const alt = e?.totals || e?.stats || e?.points;
+          if (alt && typeof alt === "object") {
+            for (const v of Object.values(alt)) {
+              if (Number.isFinite(Number(v))) return Number(v);
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const ptsForWeek = (year, playerId, week) => {
+    const map = espnWeeklyPtsByYear?.[year];
+    const row = map?.[playerId];
+    const coerce = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+
+    if (row != null) {
+      // A) flat number[] indexed by (week-1)
+      if (Array.isArray(row)) {
+        const ix = week - 1;
+        if (ix >= 0 && ix < row.length) return coerce(row[ix]);
+      }
+      // B) {weeks:{...}} or plain object keyed by week number/string or "W10"
+      const base =
+        row && typeof row === "object" && row.weeks ? row.weeks : row;
+
+      if (base && typeof base === "object") {
+        const direct = base[week] ?? base[String(week)] ?? base[`W${week}`];
+        if (direct != null) {
+          if (typeof direct === "object") {
+            const tries = [
+              "pts",
+              "points",
+              "total",
+              "appliedTotal",
+              "ppr",
+              "value",
+            ];
+            for (const k of tries) {
+              const v = direct?.[k];
+              const n = coerce(v);
+              if (n != null) return n;
+            }
+          } else {
+            const n = coerce(direct);
+            if (n != null) return n;
+          }
+        }
+
+        if (Array.isArray(base)) {
+          for (const it of base) {
+            if (it && (it.week === week || it.scoringPeriodId === week)) {
+              const tries = [
+                "pts",
+                "points",
+                "total",
+                "appliedTotal",
+                "ppr",
+                "value",
+              ];
+              for (const k of tries) {
+                const n = coerce(it?.[k]);
+                if (n != null) return n;
+              }
+            }
+          }
+        }
+
+        for (const v of Object.values(base)) {
+          if (
+            v &&
+            typeof v === "object" &&
+            (v.week === week || v.scoringPeriodId === week)
+          ) {
+            const tries = [
+              "pts",
+              "points",
+              "total",
+              "appliedTotal",
+              "ppr",
+              "value",
+            ];
+            for (const k of tries) {
+              const n = coerce(v?.[k]);
+              if (n != null) return n;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to roster material
+    return ptsFromRosterWeek(year, playerId, week);
+  };
+
+  // --- Averages that explicitly EXCLUDE bye weeks (mirrors Luck Index bye logic)
+  const avgRange = (year, playerId, startWk, endWk) => {
+    const start = Math.floor(startWk);
+    const end = Math.floor(endWk);
+    if (!(Number.isFinite(start) && Number.isFinite(end) && start <= end))
+      return null;
+
+    const capExclusive = __resolveCurrentWeekExclusiveSimple(
+      league,
+      currentWeekBySeason,
+      year
+    );
+    const completedCap =
+      Number.isFinite(capExclusive) && capExclusive > 0
+        ? capExclusive - 1
+        : null;
+    const effectiveEnd =
+      completedCap != null ? Math.min(end, completedCap) : end;
+    if (!Number.isFinite(effectiveEnd) || start > effectiveEnd) return null;
+
+    let sum = 0,
+      n = 0;
+    const byeSet = new Set(getPlayerByeWeeks(year, playerId));
+    for (let w = start; w <= effectiveEnd; w++) {
+      if (byeSet.has(w)) continue; // ← exclude byes
+      const v = ptsForWeek(year, playerId, w);
+      // Skip if we have no points record (bye/inactive). Count only real weeks.
+      if (Number.isFinite(v)) {
+        sum += v;
+        n++;
+      }
+    }
+    return n ? sum / n : null;
+  };
+
+  // --------- normalize detailed trade shapes (Kona/ESPN) ----------
+  const normalizeTrade = (year, tr) => {
+    if (!tr || typeof tr !== "object") return null;
+
+    const week =
+      toInt(tr.week) ??
+      toInt(tr.matchupPeriodId) ??
+      toInt(tr.scoringPeriodId) ??
+      toInt(tr.period) ??
+      null;
+
+    const txId = tr.relatedTransactionId || tr.id || null; // capture for dedupe
+
+    // A) { teams:[ {teamId, receives:[{playerId,name}]}, ... ] }
+    if (Array.isArray(tr.teams) && tr.teams.length >= 2) {
+      const a = tr.teams[0] || {};
+      const b = tr.teams[1] || {};
+      const getPkg = (x) =>
+        safeArr(x.receives || x.adds || x.to || x.in).map((p) => {
+          const pid = toInt(p?.playerId ?? p?.id);
+          const nm =
+            p?.name ||
+            p?.fullName ||
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
+        });
+
+      return {
+        year,
+        week,
+        txId,
+        leftTeamId: toInt(a.teamId),
+        rightTeamId: toInt(b.teamId),
+        leftGets: getPkg(a),
+        rightGets: getPkg(b),
+      };
+    }
+
+    // B) { a:{teamId, in:[...]}, b:{teamId, in:[...]} }
+    if (tr.a || tr.b) {
+      const A = tr.a || {};
+      const B = tr.b || {};
+      const take = (node) =>
+        safeArr(node.in || node.receives || node.adds).map((p) => {
+          const pid = toInt(p?.playerId ?? p?.id);
+          const nm =
+            p?.name ||
+            p?.fullName ||
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
+        });
+      return {
+        year,
+        week,
+        txId,
+        leftTeamId: toInt(A.teamId),
+        rightTeamId: toInt(B.teamId),
+        leftGets: take(A),
+        rightGets: take(B),
+      };
+    }
+
+    // C) already normalized
+    if (tr.leftGets || tr.rightGets) {
+      const toPkg = (xs) =>
+        safeArr(xs).map((p) => {
+          const pid = toInt(p?.playerId ?? p?.id);
+          const nm =
+            p?.name ||
+            p?.fullName ||
+            (p?.firstName && p?.lastName
+              ? `${p.firstName} ${p.lastName}`
+              : p?.displayName);
+          return { pid, name: nm || pname(year, pid) };
+        });
+      return {
+        year,
+        week,
+        txId,
+        leftTeamId: toInt(tr.leftTeamId),
+        rightTeamId: toInt(tr.rightTeamId),
+        leftGets: toPkg(tr.leftGets),
+        rightGets: toPkg(tr.rightGets),
+      };
+    }
+
+    // D) ESPN/Kona: items[{type:'TRADE', playerId, fromTeamId, toTeamId}], teamActions
+    if (Array.isArray(tr.items)) {
+      const items = tr.items.filter((i) =>
+        (i?.type || "").toUpperCase().includes("TRADE")
+      );
+
+      const teamsFromItems = Array.from(
+        new Set(
+          items
+            .flatMap((i) => [i?.fromTeamId, i?.toTeamId])
+            .filter((x) => x != null)
+        )
+      );
+      const teamsFromActions = Object.keys(tr.teamActions || {}).map(Number);
+      const [A, B] =
+        teamsFromItems.length === 2 ? teamsFromItems : teamsFromActions;
+
+      const toPkg = (pred) =>
+        items.filter(pred).map((i) => {
+          const pid = toInt(i?.playerId);
+          return { pid, name: pname(year, pid) };
+        });
+
+      return {
+        year,
+        week,
+        txId,
+        leftTeamId: toInt(A),
+        rightTeamId: toInt(B),
+        leftGets: toPkg((i) => i?.toTeamId === A),
+        rightGets: toPkg((i) => i?.toTeamId === B),
+      };
+    }
+
+    return null;
+  };
+
+  // ---------------- build trades by year (merge detailed+inferred, dedupe) ----------------
+  const byYear = {};
+  yearList.forEach((yr) => {
+    // detailed
+    const raw = espnTradesDetailedBySeason?.[yr];
+    const arr = Array.isArray(raw) ? raw : Object.values(raw || {});
+    const detailed = arr.map((tr) => normalizeTrade(yr, tr)).filter(Boolean);
+
+    // inferred
+    const inferred = inferTradesByRosterDiff(yr).filter(
+      (t) =>
+        Number.isFinite(t?.leftTeamId) &&
+        Number.isFinite(t?.rightTeamId) &&
+        (t.leftGets?.length || 0) > 0 &&
+        (t.rightGets?.length || 0) > 0
+    );
+
+    // Build strong signatures for dedupe/merge
+    // Build strong signatures for dedupe/merge
+    const canonKeyTeams = (a, b) => {
+      const [x, y] = [toInt(a), toInt(b)].sort((m, n) => m - n);
+      return `${x}-${y}`;
+    };
+    const pidKey = (list = []) =>
+      list
+        .map((p) => +p.pid)
+        .filter(Number.isFinite)
+        .sort((u, v) => u - v)
+        .join(",");
+
+    // NEW: side-agnostic signature: always bind packages to (lowTeam, highTeam)
+    const tradeSig = (t) => {
+      const wk = toInt(t?.week, -1);
+
+      const a = toInt(t?.leftTeamId);
+      const b = toInt(t?.rightTeamId);
+      const [low, high] = [a, b].sort((m, n) => m - n);
+
+      // packages *received by* each canonical side
+      const recvLow = a === low ? t.leftGets : t.rightGets;
+      const recvHigh = b === high ? t.rightGets : t.leftGets;
+
+      const teamsKey = `${low}-${high}`;
+      const L = pidKey(recvLow);
+      const H = pidKey(recvHigh);
+      return `${wk}|${teamsKey}|${L}|${H}`;
+    };
+
+    // Index detailed by (week, teamsKey)
+    const detBucket = new Map();
+    detailed.forEach((t, i) => {
+      const wk = toInt(t?.week, -1);
+      const k = `${wk}|${canonKeyTeams(t.leftTeamId, t.rightTeamId)}`;
+      if (!detBucket.has(k)) detBucket.set(k, []);
+      detBucket.get(k).push({ idx: i, t });
+    });
+
+    // Union players
+    const unionPlayers = (A = [], B = []) => {
+      const map = new Map();
+      [...A, ...B].forEach((p) => {
+        const id = +p?.pid;
+        if (!Number.isFinite(id)) return;
+        if (!map.has(id)) map.set(id, { pid: id, name: p?.name });
+      });
+      return Array.from(map.values());
+    };
+
+    // Merge inferred into matching detailed trade (same week & teams; at least one overlapping pid)
+    const consumedInf = new Set();
+    inferred.forEach((inf) => {
+      const wk = toInt(inf?.week, -1);
+      const k = `${wk}|${canonKeyTeams(inf.leftTeamId, inf.rightTeamId)}`;
+      const cands = detBucket.get(k);
+      if (!cands || !cands.length) return;
+
+      // pick the detailed trade with the largest overlap
+      let best = null,
+        bestOverlap = 0,
+        bestSwap = false;
+      cands.forEach(({ t }) => {
+        const leftOverlap = t.leftGets.filter((lp) =>
+          inf.leftGets.some((ip) => +ip.pid === +lp.pid)
+        ).length;
+        const rightOverlap = t.rightGets.filter((rp) =>
+          inf.rightGets.some((ip) => +ip.pid === +rp.pid)
+        ).length;
+        const same = leftOverlap + rightOverlap;
+
+        const swapLeft = t.leftGets.filter((lp) =>
+          inf.rightGets.some((ip) => +ip.pid === +lp.pid)
+        ).length;
+        const swapRight = t.rightGets.filter((rp) =>
+          inf.leftGets.some((ip) => +ip.pid === +rp.pid)
+        ).length;
+        const swapped = swapLeft + swapRight;
+
+        if (same > bestOverlap) {
+          best = t;
+          bestOverlap = same;
+          bestSwap = false;
+        }
+        if (swapped > bestOverlap) {
+          best = t;
+          bestOverlap = swapped;
+          bestSwap = true;
+        }
+      });
+
+      if (!best || bestOverlap === 0) return;
+
+      const det = best;
+      const addL = bestSwap ? inf.rightGets : inf.leftGets;
+      const addR = bestSwap ? inf.leftGets : inf.rightGets;
+
+      det.leftGets = unionPlayers(det.leftGets, addL);
+      det.rightGets = unionPlayers(det.rightGets, addR);
+      consumedInf.add(inf);
+    });
+
+    // Strong de-dupe:
+    // 1) If txId present on detailed, collapse all with same txId.
+    // 2) Otherwise collapse by canonical trade signature.
+    const out = [];
+    const seenTx = new Set();
+    const seenSig = new Set();
+
+    const push = (t) => {
+      if (!t) return;
+      // canonicalize empty sides are not allowed
+      if (!(t.leftGets?.length && t.rightGets?.length)) return;
+
+      const txId = t.txId && String(t.txId);
+      if (txId) {
+        if (seenTx.has(txId)) return;
+        seenTx.add(txId);
+        out.push(t);
+        return;
+      }
+
+      const sig = tradeSig(t);
+      if (seenSig.has(sig)) return;
+      seenSig.add(sig);
+      out.push(t);
+    };
+
+    detailed.forEach(push);
+    inferred.filter((t) => !consumedInf.has(t)).forEach(push);
+
+    // sort by week
+    byYear[yr] = out.sort((a, b) => toInt(a?.week, 0) - toInt(b?.week, 0));
+  });
+
+  const [collapsedYears, setCollapsedYears] = React.useState(() => new Set());
+  const toggleYear = React.useCallback((year) => {
+    setCollapsedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) next.delete(year);
+      else next.add(year);
+      return next;
+    });
+  }, []);
+
+  // ---------------- PPG (before/after) helpers ----------------
+  // “pre” = avg weeks 1..(week-1), excluding BYE weeks and non-scoring weeks
+  // “post” = avg weeks week..17 (include week of trade), excluding BYE weeks and non-scoring weeks
+  const prePPG = (year, pid, week) =>
+    week > 1 ? avgRange(year, pid, 1, week - 1) : null;
+  const postPPG = (year, pid, week) =>
+    avgRange(year, pid, week, FANTASY_PLAYOFF_END);
+
+  // ---------- Detailed inspector (also excludes BYEs) ----------
+  const weeklyRowsFor = React.useCallback(
+    (seasonKey, playerId) => {
+      const rows = [];
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
+      const ro = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
+        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          if (
+            !Number.isFinite(wk) ||
+            (completedCap != null && wk > completedCap)
+          ) {
+            return;
+          }
+          const entry = safeArr(entries).find(
+            (e) =>
+              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
+          );
+          if (!entry) return;
+          const picks = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "ppr",
+            "pprPts",
+            "value",
+          ];
+          let pts = null;
+          for (const key of picks) {
+            if (Number.isFinite(Number(entry?.[key]))) {
+              pts = Number(entry?.[key]);
+              break;
+            }
+          }
+          rows.push({
+            wk,
+            pts,
+            fantasyTeamId: toInt(teamKey),
+          });
+        });
+      });
+      return rows.sort((a, b) => a.wk - b.wk);
+    },
+    [currentWeekBySeason, espnRostersByYear, league]
+  );
+
+  const tradePPGExcludingBye = React.useCallback(
+    (seasonKey, playerId, tradeWeek) => {
+      const pid = toInt(playerId);
+      const tw = toInt(tradeWeek);
+      if (!Number.isFinite(pid) || !Number.isFinite(tw)) return null;
+
+      const rows = weeklyRowsFor(seasonKey, pid);
+      const byeWeeks = getPlayerByeWeeks(seasonKey, pid);
+      const byeSet = new Set(byeWeeks);
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
+      const capCandidates = [
+        FANTASY_PLAYOFF_END,
+        weeksEndFromRosters(seasonKey),
+      ];
+      if (completedCap != null) capCandidates.push(completedCap);
+      const finiteCaps = capCandidates
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n) && n >= 0);
+      const last = finiteCaps.length ? Math.min(...finiteCaps) : 0;
+
+      const pre = rows.filter((r) => r.wk < tw && !byeSet.has(r.wk));
+      const post = rows.filter(
+        (r) => r.wk >= tw && r.wk <= last && !byeSet.has(r.wk)
+      );
+
+      const sum = (arr) =>
+        arr.reduce((acc, item) => acc + (Number(item.pts) || 0), 0);
+      const preSum = sum(pre);
+      const postSum = sum(post);
+
+      return {
+        season: seasonKey,
+        pid,
+        tradeWeek: tw,
+        byeWeeks,
+        preWeeks: pre.map((r) => r.wk),
+        preSum: +preSum.toFixed(2),
+        prePPG: pre.length ? +(preSum / pre.length).toFixed(4) : null,
+        postWeeks: post.map((r) => r.wk),
+        postSum: +postSum.toFixed(2),
+        postPPG: post.length ? +(postSum / post.length).toFixed(4) : null,
+      };
+    },
+    [
+      currentWeekBySeason,
+      getPlayerByeWeeks,
+      league,
+      weeklyRowsFor,
+      weeksEndFromRosters,
+    ]
+  );
+
+  // Small debug API (handy when verifying bye behavior)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const showByeWeeks = (seasonKey) => {
+      const source = getProTeamSource(seasonKey);
+      const rows = [];
+      if (__hasAnyEntries(source)) {
+        const pushRow = (team, key) => {
+          if (!team || typeof team !== "object") return;
+          const id = toInt(team?.id ?? team?.teamId ?? team?.proTeamId ?? key);
+          const abbrev =
+            team?.abbrev ||
+            team?.abbreviation ||
+            team?.teamAbbrev ||
+            team?.teamAbbreviation ||
+            null;
+          const name =
+            team?.nickname ||
+            team?.nickName ||
+            team?.shortName ||
+            team?.name ||
+            null;
+          const weeks = __teamByeWeekNumbers(team);
+          rows.push({
+            proTeamId: id,
+            Abbrev: abbrev || "",
+            Name: name || "",
+            ByeWeeks: weeks.join(", "),
+          });
+        };
+
+        if (source instanceof Map) {
+          source.forEach((team, key) => pushRow(team, key));
+        } else if (Array.isArray(source)) {
+          source.forEach((team, idx) => pushRow(team, team?.id ?? idx));
+        } else if (typeof source === "object") {
+          Object.entries(source || {}).forEach(([key, team]) =>
+            pushRow(team, key)
+          );
+        }
+      }
+      rows.sort(
+        (a, b) =>
+          (Number(a.ByeWeeks.split(", ")[0]) || 99) -
+            (Number(b.ByeWeeks.split(", ")[0]) || 99) ||
+          String(a.Abbrev).localeCompare(String(b.Abbrev))
+      );
+      console.table(rows);
+      return rows;
+    };
+
+    const byeWeekForPlayer = (seasonKey, playerId) => {
+      const weeks = getPlayerByeWeeks(seasonKey, playerId);
+      const proTeamId = resolveProTeamId(seasonKey, playerId);
+      const lookup = getProTeamLookup(seasonKey);
+      let team = null;
+      if (lookup?.abbrevToId instanceof Map) {
+        for (const [token, id] of lookup.abbrevToId.entries()) {
+          if (id === proTeamId) {
+            team = token;
+            break;
+          }
+        }
+      }
+      return {
+        proTeamId,
+        team,
+        byeWeeks: weeks,
+        byeWeek: weeks[0] ?? null,
+      };
+    };
+
+    const inspectTradePPG = (seasonKey, playerId, forcedTradeWeek) => {
+      const yr = toInt(seasonKey);
+      const pid = toInt(playerId);
+      if (!Number.isFinite(yr) || !Number.isFinite(pid)) {
+        console.warn("inspectTradePPG: year and playerId must be numbers");
+        return null;
+      }
+
+      const ro = espnRostersByYear?.[yr] || {};
+      const nameMap = new Map();
+      Object.values(ro || {}).forEach((weeks) => {
+        Object.values(weeks || {}).forEach((entries) => {
+          safeArr(entries).forEach((entry) => {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (!entryPid || nameMap.has(entryPid)) return;
+            const nm =
+              entry?.name ||
+              entry?.player?.fullName ||
+              entry?.player?.displayName ||
+              entry?.player?.name ||
+              entry?.playerPoolEntry?.player?.fullName ||
+              null;
+            if (nm) nameMap.set(entryPid, nm);
+          });
+        });
+      });
+
+      const tradeWeek = toInt(forcedTradeWeek) ?? findTradeWeek(yr, pid) ?? 10;
+      const byeInfo = byeWeekForPlayer(yr, pid);
+      const rows = weeklyRowsFor(yr, pid);
+      const byeSet = new Set(byeInfo.byeWeeks || []);
+
+      console.log(
+        `Player: ${nameMap.get(pid) || `#${pid}`}, Year ${yr}, proTeam=${
+          byeInfo.team || byeInfo.proTeamId || "?"
+        }, Trade week=${tradeWeek}, Bye weeks=${
+          (byeInfo.byeWeeks || []).join(", ") || "n/a"
+        }`
+      );
+      console.table(
+        rows.map((row) => ({
+          Week: row.wk,
+          Points: row.pts,
+          Counted_in_PRE:
+            row.wk < tradeWeek && !byeSet.has(row.wk) ? "yes" : "no",
+          Counted_in_POST:
+            row.wk >= tradeWeek &&
+            row.wk <= FANTASY_PLAYOFF_END &&
+            !byeSet.has(row.wk)
+              ? "yes"
+              : "no",
+        }))
+      );
+      const result = tradePPGExcludingBye(yr, pid, tradeWeek);
+      console.log(result);
+      return result;
+    };
+
+    const resolvePlayerProTeamId = (seasonKey, playerId) =>
+      resolveProTeamId(seasonKey, playerId);
+
+    const api = {
+      showByeWeeks,
+      inspectTradePPG,
+      byeWeekForPlayer,
+      resolveProTeamId: resolvePlayerProTeamId,
+    };
+
+    Object.assign(window, api);
+    console.log(
+      "✅ Ready: showByeWeeks(year), inspectTradePPG(year,pid[,tradeWeek]), byeWeekForPlayer(year,pid)"
+    );
+
+    return () => {
+      Object.entries(api).forEach(([key, fn]) => {
+        if (window[key] === fn) delete window[key];
+      });
+    };
+  }, [
+    espnRostersByYear,
+    findTradeWeek,
+    getPlayerByeWeeks,
+    getProTeamLookup,
+    getProTeamSource,
+    resolveProTeamId,
+    tradePPGExcludingBye,
+    weeklyRowsFor,
+  ]);
+
+  // ---------------- UI ----------------
+  const Box = ({ title, children }) => (
+    <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-zinc-950/50 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.75)] backdrop-blur">
+      <div className="pointer-events-none absolute inset-0 opacity-75 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(148,163,184,0.22),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(94,234,212,0.16),transparent_60%)]" />
+      <div className="relative p-4 text-sm text-slate-700 dark:text-slate-100">
+        {title ? (
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500/90 dark:text-slate-300/90">
+            {title}
+          </div>
+        ) : null}
+        {children}
+      </div>
+    </div>
+  );
+
+  const PlayerList = ({ sign = "+", items = [], year, week }) => {
+    const list = safeArr(items);
+    const [expanded, setExpanded] = React.useState({});
+
+    const togglePlayer = React.useCallback((key) => {
+      setExpanded((prev) => {
+        const next = { ...prev, [key]: !prev[key] };
+        if (!next[key]) delete next[key];
+        return next;
+      });
+    }, []);
+
+    const formatPoints = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      return num.toFixed(2);
+    };
+
+    const tradeWeek = Number.isFinite(Number(week)) ? Number(week) : null;
+
+    return (
+      <ul className="space-y-1">
+        {list.length === 0 ? (
+          <li className="text-xs opacity-60 italic">None</li>
+        ) : (
+          list.map((p, i) => {
+            const pid = toInt(p?.pid);
+            const key = `${year}-${Number.isFinite(pid) ? pid : i}`;
+            const isOpen = !!expanded[key];
+
+            const pre =
+              Number.isFinite(pid) && Number.isFinite(tradeWeek)
+                ? prePPG(year, pid, tradeWeek)
+                : null;
+            const post =
+              Number.isFinite(pid) && Number.isFinite(tradeWeek)
+                ? postPPG(year, pid, tradeWeek)
+                : null;
+
+            let detail = null;
+            if (isOpen) {
+              if (!Number.isFinite(pid)) {
+                detail = (
+                  <div className="ml-5 mt-2 text-xs opacity-60 italic">
+                    Player details unavailable.
+                  </div>
+                );
+              } else {
+                const rows = weeklyRowsFor(year, pid);
+                const rowByWeek = new Map(rows.map((r) => [r.wk, r]));
+                const byeWeeks = new Set(getPlayerByeWeeks(year, pid));
+                const capExclusive = __resolveCurrentWeekExclusiveSimple(
+                  league,
+                  currentWeekBySeason,
+                  year
+                );
+                const completedCap =
+                  Number.isFinite(capExclusive) && capExclusive > 0
+                    ? capExclusive - 1
+                    : null;
+                const baseSeasonEnd = Math.min(
+                  FANTASY_PLAYOFF_END,
+                  weeksEndFromRosters(year)
+                );
+                const effectiveSeasonEnd =
+                  completedCap != null
+                    ? Math.min(baseSeasonEnd, completedCap)
+                    : baseSeasonEnd;
+                const seasonEnd = Math.max(
+                  0,
+                  Math.floor(effectiveSeasonEnd)
+                );
+                const weeks = Array.from(
+                  { length: seasonEnd },
+                  (_, idx) => idx + 1
+                );
+
+                const renderWeekList = (weekNumbers) => {
+                  if (!weekNumbers.length) {
+                    return (
+                      <div className="mt-1 text-xs opacity-60 italic">
+                        No weeks recorded.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ul className="mt-1 space-y-1">
+                      {weekNumbers.map((wk) => {
+                        const row = rowByWeek.get(wk);
+                        const formatted =
+                          row && formatPoints(row.pts) != null
+                            ? `${formatPoints(row.pts)} pts`
+                            : byeWeeks.has(wk)
+                            ? "BYE"
+                            : "—";
+                        const isTradeWeek =
+                          Number.isFinite(tradeWeek) && wk === tradeWeek;
+                        return (
+                          <li
+                            key={wk}
+                            className={
+                              "flex items-center justify-between rounded-md bg-white/60 px-2 py-1 text-xs text-slate-700 shadow-sm ring-1 ring-inset ring-black/5 dark:bg-white/[0.08] dark:text-slate-200" +
+                              (isTradeWeek
+                                ? " border border-emerald-400/70 dark:border-emerald-500/60"
+                                : " border border-transparent")
+                            }
+                          >
+                            <span className="font-medium">Week {wk}</span>
+                            <span className="font-mono">{formatted}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                };
+
+                const preWeeks = Number.isFinite(tradeWeek)
+                  ? weeks.filter((wk) => wk < tradeWeek)
+                  : [];
+                const postWeeks = Number.isFinite(tradeWeek)
+                  ? weeks.filter((wk) => wk >= tradeWeek)
+                  : weeks;
+
+                detail = (
+                  <div className="ml-5 mt-2 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Pre trade
+                      </div>
+                      {renderWeekList(preWeeks)}
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Post trade
+                      </div>
+                      {renderWeekList(postWeeks)}
+                    </div>
+                  </div>
+                );
+              }
+            }
+
+            const receiving = sign === "+";
+            const basePill =
+              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-tight";
+            const neutralPill = `${basePill} border-white/60 bg-white/85 text-slate-600 dark:text-slate-200 dark:bg-white/[0.06] dark:border-white/10`;
+            const positivePill = `${basePill} border-emerald-400/60 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300`;
+            const negativePill = `${basePill} border-rose-400/60 bg-rose-500/15 text-rose-600 dark:text-rose-300`;
+
+            let prePillClass = neutralPill;
+            let postPillClass = neutralPill;
+            const hasBoth = pre != null && post != null;
+
+            if (receiving && hasBoth) {
+              if (pre > post) {
+                prePillClass = positivePill;
+                postPillClass = negativePill;
+              } else if (pre < post) {
+                prePillClass = negativePill;
+                postPillClass = positivePill;
+              }
+            }
+
+            const preDisplay =
+              pre != null ? `${pre.toFixed(2)} PPG` : "PPG n/a";
+            const postDisplay =
+              post != null ? `${post.toFixed(2)} PPG` : "PPG n/a";
+
+            return (
+              <li key={i} className="text-sm">
+                <div className="flex flex-col">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
+                        sign === "+"
+                          ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                          : "border-rose-400/60 bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                      }`}
+                    >
+                      {sign}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => togglePlayer(key)}
+                      className="text-[15px] font-semibold text-slate-800 transition-colors hover:text-emerald-600 hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:hover:text-emerald-300 dark:focus-visible:ring-offset-slate-950"
+                    >
+                      {p?.name}
+                    </button>
+                    {pre != null || post != null ? (
+                      <div className="ml-1 flex flex-wrap items-center gap-1.5">
+                        <span className={prePillClass}>Pre: {preDisplay}</span>
+                        <span className={postPillClass}>
+                          Post: {postDisplay}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="ml-1 text-xs text-slate-500/70 dark:text-slate-400/80">
+                        PPG unavailable
+                      </span>
+                    )}
+                  </div>
+                  {detail}
+                </div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    );
+  };
+
+  const TradeCard = ({ t }) => {
+    const leftName = ownerNameOf(t.year, t.leftTeamId);
+    const rightName = ownerNameOf(t.year, t.rightTeamId);
+
+    // if both sides are hidden, skip
+    if (hidden.has(leftName) && hidden.has(rightName)) return null;
+
+    const totalPieces = (t.leftGets?.length || 0) + (t.rightGets?.length || 0);
+
+    return (
+      <div className="relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 shadow-[0_26px_60px_-35px_rgba(15,23,42,0.85)] backdrop-blur">
+        <div className="pointer-events-none absolute inset-0 opacity-75 bg-[radial-gradient(115%_150%_at_0%_0%,rgba(56,189,248,0.14),transparent_60%),radial-gradient(140%_120%_at_100%_100%,rgba(16,185,129,0.16),transparent_65%)]" />
+        <div className="relative space-y-4 p-4 sm:p-6 text-sm text-slate-700 dark:text-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
+              Week {t.week ?? "?"}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/85 dark:text-slate-400/85">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
+                <span className="text-[12px] font-bold tracking-tight text-slate-700 dark:text-slate-100">
+                  {totalPieces}
+                </span>
+                Assets
+              </span>
+            </div>
+          </div>
+
+          <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
+            <Box>
+              <div className="mb-3 flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-500/80 dark:text-emerald-300/80">
+                  Receives
+                </span>
+                <span className="truncate text-[15px] font-semibold text-slate-800 dark:text-slate-100">
+                  {leftName}
+                </span>
+              </div>
+              <PlayerList
+                sign="+"
+                items={t.leftGets}
+                year={t.year}
+                week={t.week ?? 1}
+              />
+            </Box>
+
+            <div className="flex flex-col items-center justify-center">
+              <div className="rounded-full border border-white/50 bg-white/80 px-4 py-2 text-2xl font-semibold text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+                ↔
+              </div>
+            </div>
+
+            <Box>
+              <div className="mb-3 flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-500/80 dark:text-emerald-300/80">
+                  Receives
+                </span>
+                <span className="truncate text-[15px] font-semibold text-slate-800 dark:text-slate-100">
+                  {rightName}
+                </span>
+              </div>
+              <PlayerList
+                sign="+"
+                items={t.rightGets}
+                year={t.year}
+                week={t.week ?? 1}
+              />
+            </Box>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ---------------- Render ----------------
+  return (
+    <div className="space-y-6">
+      <Card
+        title="Trades"
+        subtitle="Season-by-season breakdown of completed trades with pre/post production context."
+      >
+        <div className="space-y-5">
+          {yearList.map((yr) => {
+            const list = byYear[yr] || [];
+            const isOpen = !collapsedYears.has(yr);
+            return (
+              <div
+                key={yr}
+                className="relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/75 dark:bg-zinc-950/55 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.8)] backdrop-blur"
+              >
+                <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(129,140,248,0.18),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.16),transparent_65%)]" />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => toggleYear(yr)}
+                    className="flex w-full items-center justify-between gap-3 rounded-3xl px-5 py-4 text-left text-slate-700 transition-colors hover:bg-white/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:hover:bg-white/[0.06] dark:focus-visible:ring-offset-slate-950"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500/80 dark:text-slate-400/80">
+                        Season
+                      </span>
+                      <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">
+                        {yr}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
+                        {list.length} trade{list.length === 1 ? "" : "s"}
+                      </span>
+                      <span
+                        className={`text-lg text-slate-500 transition-transform dark:text-slate-400 ${
+                          isOpen ? "rotate-0" : "-rotate-90"
+                        }`}
+                      >
+                        ▾
+                      </span>
+                    </div>
+                  </button>
+                  {isOpen ? (
+                    <div className="border-t border-white/50 px-5 py-5 dark:border-white/10">
+                      {list.length === 0 ? (
+                        <div className="text-sm italic text-slate-500/80 dark:text-slate-400/80">
+                          No trades recorded for {yr}.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {list.map((t, i) => (
+                            <TradeCard key={`${yr}-${i}`} t={t} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+//------------------------------------------------------------------
+//----------------------------------------------------------------------
+//------------------------------------------------------------------------
 //------------------------trade tab, TradeTab, Tradetab ----------------
 // Helper: load league-specific merge map (Combine Managers)
 function getMergeMap(league) {
@@ -6964,6 +8871,7 @@ export function TradesTab({
 }) {
   const fmt1 = (n) => Number(n || 0).toFixed(1);
   const fmt2 = (n) => Number(n || 0).toFixed(2);
+  const [ownerMapsVersion, setOwnerMapsVersion] = React.useState(0);
 
   React.useEffect(() => {
     if (!league) return;
@@ -6975,6 +8883,7 @@ export function TradesTab({
         espnOwnerByTeamByYear: espnOwnerByTeamByYear || {},
         manualAliases: aliases,
       });
+      setOwnerMapsVersion((v) => v + 1);
     } catch (err) {
       console.warn("primeOwnerMaps failed", err);
     }
@@ -6997,6 +8906,44 @@ export function TradesTab({
     }
     return canonicalizeOwner(name);
   }, []);
+
+  const seasonsWithOwnerMaps = React.useMemo(() => {
+    const seasons = new Set();
+    Object.keys(espnOwnerByTeamByYear || {}).forEach((yr) => {
+      const num = Number(yr);
+      if (Number.isFinite(num)) seasons.add(num);
+    });
+    try {
+      const payload = parsePayloadString(window.name) || {};
+      const allSeasons = [
+        ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
+        ...(Array.isArray(payload?.legacySeasonsLite)
+          ? payload.legacySeasonsLite
+          : []),
+      ];
+      allSeasons.forEach((s) => {
+        const yr = Number(s?.seasonId);
+        if (Number.isFinite(yr)) seasons.add(yr);
+      });
+    } catch {}
+    return Array.from(seasons);
+  }, [espnOwnerByTeamByYear, ownerMapsVersion]);
+
+  const handleToPrettyName = React.useMemo(() => {
+    const map = new Map();
+    seasonsWithOwnerMaps.forEach((season) => {
+      const seasonMap = ownerMapFor(season) || {};
+      Object.values(seasonMap).forEach((entry) => {
+        const handle = String(entry?.handle || "").trim();
+        const pretty = canonicalizeViaOwnerMaps(entry?.name || "");
+        if (!handle || !pretty) return;
+        const key = handle.toLowerCase();
+        if (!map.has(key)) map.set(key, pretty);
+      });
+    });
+    return map;
+  }, [seasonsWithOwnerMaps, canonicalizeViaOwnerMaps]);
+
   // Build an expanded merge map so aliases like "Jacob966788" also match the pretty member name ("Jacob Teitelbaum")
   const expandedMergeMap = React.useMemo(() => {
     const out = new Map();
@@ -7047,8 +8994,19 @@ export function TradesTab({
       console.warn("expandedMergeMap build failed", e);
     }
 
+    try {
+      handleToPrettyName.forEach((pretty, handle) => {
+        const canonical = canonicalizeViaOwnerMaps(pretty);
+        if (!canonical) return;
+        out.set(norm(handle), canonical);
+        out.set(norm(pretty), canonical);
+      });
+    } catch (e) {
+      console.warn("expandedMergeMap handle merge failed", e);
+    }
+
     return out;
-  }, [league]);
+  }, [league, handleToPrettyName, canonicalizeViaOwnerMaps]);
 
   // Canonicalize owner names; honor the merge map if present
   // Canonicalize owner names; honor the merge map if present
@@ -7067,10 +9025,17 @@ export function TradesTab({
       const hit = expandedMergeMap.get(norm);
       if (hit) return canonicalizeViaOwnerMaps(hit);
 
+      const prettyFromHandle = handleToPrettyName.get(name.toLowerCase());
+      if (prettyFromHandle) {
+        const canonical = canonicalizeViaOwnerMaps(prettyFromHandle);
+        if (canonical) return canonical;
+        return prettyFromHandle;
+      }
+
       // 2) Fallback: use the global owner maps canonicalizer
       return canonicalizeViaOwnerMaps(name);
     },
-    [expandedMergeMap, canonicalizeViaOwnerMaps]
+    [expandedMergeMap, canonicalizeViaOwnerMaps, handleToPrettyName]
   );
 
   // ✅ canonicalized hidden set (league prop wins, else explicit prop)
@@ -7179,7 +9144,16 @@ export function TradesTab({
 
   // Prefer explicit prop if present; else use window.name harvest
   // Prefer explicit prop if present; else use window.name harvest
-  const activityBySeasonRaw = activityFromWindow;
+  const activityBySeasonRaw = React.useMemo(() => {
+    const hasPropData =
+      activityFromProp && Object.keys(activityFromProp || {}).length > 0;
+    const hasWindowData =
+      activityFromWindow && Object.keys(activityFromWindow || {}).length > 0;
+
+    if (hasPropData) return activityFromProp;
+    if (hasWindowData) return activityFromWindow;
+    return {};
+  }, [activityFromProp, activityFromWindow]);
 
   // ✅ Re-key to canonical and accumulate (protects against any stray raw names)
   // Names coming from ownerByTeamByYear are already correct.
@@ -8106,7 +10080,40 @@ export function TradesTab({
 }
 
 /* ---------------- RosterTab — per-week lineups by team --------------- */
-/** ESPN lineup slot ids -> row label */
+// Always resolve latest manager name map — dynamic, not snapshotted
+const canonicalize = (s) => {
+  const w = typeof window !== "undefined" ? window : {};
+  const m = w.__ownerMaps;
+  if (m && typeof m.canon === "function") {
+    return m.canon(s == null ? "" : String(s));
+  }
+  return s == null ? "" : String(s);
+};
+
+// --- Manager merge helpers (shared with ManagerMergeControl) ---
+const MERGE_KEY = (leagueId) =>
+  `fl_merge_map::${String(leagueId || "").trim()}`;
+function loadMergeMap(leagueId) {
+  try {
+    const raw = localStorage.getItem(MERGE_KEY(leagueId));
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+// follow A->B->C chains
+function applyMergeAlias(name, map) {
+  let cur = (name || "").trim();
+  if (!cur) return cur;
+  const seen = new Set();
+  while (map[cur] && !seen.has(cur)) {
+    seen.add(cur);
+    cur = String(map[cur] || "").trim();
+  }
+  return cur || name;
+}
+
 const __SLOT_LABEL = {
   0: "QB",
   2: "RB",
@@ -8432,31 +10439,6 @@ function __resolveProTeamsForSeason(seasonKey, league) {
 
   if (__hasAnyEntries(league?.proTeams)) return league.proTeams;
 
-  try {
-    const payload = parsePayloadString(window.name) || {};
-    const payloadByYear = pick(payload?.proTeamsByYear);
-    if (__hasAnyEntries(payloadByYear)) return payloadByYear;
-
-    if (Array.isArray(payload?.seasons)) {
-      const seasonNum = Number(seasonKey);
-      const seasonFromPayload = payload.seasons.find((s) => {
-        const sid = Number(s?.seasonId);
-        if (Number.isFinite(seasonNum)) return sid === seasonNum;
-        return variants.some((key) => String(sid) === String(key));
-      });
-      if (__hasAnyEntries(seasonFromPayload)) {
-        const nested =
-          seasonFromPayload?.proTeams ??
-          seasonFromPayload?.proTeamsById ??
-          seasonFromPayload?.proTeamsMap ??
-          seasonFromPayload?.proTeamInfo;
-        if (__hasAnyEntries(nested)) return nested;
-      }
-    }
-
-    if (__hasAnyEntries(payload?.proTeams)) return payload.proTeams;
-  } catch {}
-
   return null;
 }
 
@@ -8662,35 +10644,13 @@ function __redScale(n) {
   });
 }
 
-// Build manager display names per teamId for the chosen season.
+// Build manager display names per teamId for the chosen season (from league only).
 function __managerMapForSeason(season, providedByYear = {}) {
   const direct = providedByYear?.[season];
-  if (direct && Object.keys(direct).length) return direct;
-
-  try {
-    const payload = parsePayloadString(window.name) || {};
-    const seasonObj = (payload?.seasons || []).find(
-      (s) => Number(s?.seasonId) === Number(season)
-    );
-    if (!seasonObj) return {};
-    const nameByMemberId = {};
-    (seasonObj.members || []).forEach((m) => {
-      const dn = m?.displayName || "";
-      const fn = m?.firstName || "";
-      const ln = m?.lastName || "";
-      const full = [fn, ln].filter(Boolean).join(" ").trim();
-      const best = full || dn || "Unknown";
-      if (m?.id != null) nameByMemberId[m.id] = best;
-    });
-    const out = {};
-    (seasonObj.teams || []).forEach((t) => {
-      const ownerId = t?.primaryOwner || (t?.owners && t.owners[0]) || null;
-      if (t?.id != null) out[t.id] = nameByMemberId[ownerId] || `Team ${t.id}`;
-    });
-    return out;
-  } catch {
-    return {};
+  if (direct && typeof direct === "object" && Object.keys(direct).length) {
+    return direct;
   }
+  return {};
 }
 
 /**
@@ -8839,6 +10799,32 @@ export function RosterTab({
   league,
   hiddenManagers,
 }) {
+  // Load ManagerMergeControl's map from localStorage for this league
+  const leagueId = useMemo(
+    () =>
+      String(league?.id || "").trim() ||
+      String(league?.name || "league").trim(),
+    [league]
+  );
+  const [mergeMap, setMergeMap] = useState({});
+  useEffect(() => {
+    setMergeMap(loadMergeMap(leagueId));
+  }, [leagueId]);
+
+  // Keep mergeMap in sync if it's changed in another tab
+  useEffect(() => {
+    const refresh = () => setMergeMap(loadMergeMap(leagueId));
+    const onStorage = (e) => {
+      if (!e) return;
+      if (e.key === MERGE_KEY(leagueId)) {
+        setMergeMap(loadMergeMap(leagueId));
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [leagueId]);
+
   // —— NEW: accept data from props OR fall back to league.* if props are empty
   const RB = React.useMemo(
     () =>
@@ -8893,23 +10879,17 @@ export function RosterTab({
   }, [seasons]);
   const byTeam = RB?.[season] || {};
 
-  // Central owner resolver (tries ownerName, falls back to window.__ownerMaps.name, else Team X)
-  const resolveOwner = React.useCallback(
+  const resolveOwner = useCallback(
     (teamId) => {
-      try {
-        if (typeof ownerName === "function") {
-          return ownerName(season, teamId) || `Team ${teamId}`;
-        }
-      } catch {}
-      try {
-        const nm = window?.__ownerMaps?.name;
-        if (typeof nm === "function") {
-          return nm(season, teamId) || `Team ${teamId}`;
-        }
-      } catch {}
-      return `Team ${teamId}`;
+      const nameFromMap =
+        (typeof window !== "undefined" &&
+          window.__ownerMaps?.name?.(season, Number(teamId))) ||
+        ""; // use name from ownerMaps
+      const base = canonicalize(nameFromMap);
+      const merged = applyMergeAlias(base, mergeMap);
+      return merged || base; // e.g., "Michael Doto"
     },
-    [season]
+    [season, mergeMap]
   );
 
   const weekCap = React.useMemo(
@@ -9085,7 +11065,7 @@ export function RosterTab({
     });
 
     return { years: yearsAsc, rows };
-  }, [seasons, rostersByYear, resolveOwner, currentWeekByYear, __benchLeftFor]);
+  }, [seasons, rostersByYear, resolveOwner, currentWeekByYear, __benchLeftFor]); // +tick
   // ---- sorting helpers/state ----
   const SortHeader = ({ label, active, dir, onClick, className = "" }) => (
     <th className={className}>
@@ -9733,6 +11713,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     [draftByYear]
   );
 
+  // canonicalize helper (fallback: identity)
   const canonicalize =
     (typeof window !== "undefined" &&
       window.__ownerMaps &&
@@ -9740,13 +11721,111 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
     ((s) => (s == null ? "" : String(s)));
 
-  // canonical hidden managers set (compare using canonicalize)
+  // NEW: ensure the popup-provided maps are primed when this tab loads
+  React.useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const maps = window.__ownerMaps;
+      if (!maps || typeof maps.prime !== "function") return;
+
+      const S = window.__sources || {};
+      const league = S.selectedLeague || S.league || {};
+      const selectedLeague = S.league2 || {}; // ok if empty
+      const espnOwnerByTeamByYear =
+        S.ownerByTeamByYear ||
+        S.espnOwnerByTeamByYear ||
+        S.espnOwnerNameByTeamByYear ||
+        {};
+      const espnSeasons = S.seasons || S.espnSeasons || [];
+      const manualAliases = S.manualAliases || {};
+
+      maps.prime({
+        league,
+        selectedLeague,
+        espnOwnerByTeamByYear,
+        manualAliases,
+        espnSeasons,
+      });
+    } catch {}
+  }, [draftByYear]);
+  // build a resolver that prefers the popup payload’s canonical maps
+  const ownerNameResolver = React.useMemo(() => {
+    const S = (typeof window !== "undefined" && (window.__sources || {})) || {};
+    // popup sends canonical maps here
+    const ownerByTeamByYear =
+      S.ownerByTeamByYear ||
+      S.espnOwnerNameByTeamByYear ||
+      S.espnOwnerByTeamByYear ||
+      {};
+
+    const teamNamesByOwner = S.teamNamesByOwner || S.espnTeamNamesByOwner || {};
+
+    // invert teamNamesByOwner for quick teamName -> owner lookup by year
+    const teamNameToOwnerByYear = {};
+    Object.entries(teamNamesByOwner || {}).forEach(([owner, byYear]) => {
+      Object.entries(byYear || {}).forEach(([yr, teamName]) => {
+        if (!teamNameToOwnerByYear[yr]) teamNameToOwnerByYear[yr] = {};
+        if (teamName) teamNameToOwnerByYear[yr][String(teamName)] = owner;
+      });
+    });
+
+    const norm = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    // return a function we can call per row
+    return function resolveFromRow(row, yr) {
+      const season = Number(yr);
+
+      // 1) teamId → owner name (run through canonicalize)
+      const maybeTeamId = Number(
+        row?.teamId ??
+          row?.team_id ??
+          row?.onTeamId ??
+          (Number.isFinite(Number(row?.team)) ? row?.team : NaN)
+      );
+      if (Number.isFinite(maybeTeamId)) {
+        const map = ownerByTeamByYear?.[season] || {};
+        const name = map?.[maybeTeamId] ?? map?.[String(maybeTeamId)];
+        if (name) return canonicalize(String(name).trim()) || "—";
+      }
+
+      // 2) team display name → owner name (via inverted map for that year; run through canonicalize)
+      const teamStr =
+        row?.teamName || row?.team_name || row?.team || row?.franchise || "";
+      if (teamStr) {
+        const inv = teamNameToOwnerByYear?.[season] || {};
+        const exact = inv[String(teamStr)];
+        if (exact) return canonicalize(String(exact).trim()) || "—";
+
+        // tolerance: try normalized match
+        const nTarget = norm(teamStr);
+        const hit = Object.entries(inv).find(([k]) => norm(k) === nTarget);
+        if (hit) return canonicalize(String(hit[1]).trim()) || "—";
+      }
+
+      // 3) fallback: raw owner → canonical
+      const rawOwner =
+        row?.owner ??
+        row?.manager ??
+        row?.manager_name ??
+        row?.ownerName ??
+        row?.owner_full ??
+        "";
+      const c = canonicalize(rawOwner).trim();
+      return c || "—";
+    };
+  }, []);
+
+  // canonical hidden managers sets
   const hiddenSet = React.useMemo(() => {
     const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
     return new Set(list.map((n) => canonicalize(n)));
   }, [hiddenManagers, canonicalize]);
 
-  // also keep a normalized (case/spacing/punct stripped) set for robustness
   const normName = React.useCallback(
     (s) =>
       String(s || "")
@@ -9764,15 +11843,8 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   function groupByOwner(rows = []) {
     const m = new Map();
     rows.forEach((r) => {
-      const rawOwner =
-        r?.owner ??
-        r?.manager ??
-        r?.manager_name ??
-        r?.ownerName ??
-        r?.owner_full ??
-        "";
-      const owner = canonicalize(rawOwner) || "—";
-      const ownerNorm = normName(rawOwner) || normName(owner);
+      const owner = ownerNameResolver(r, r?.year ?? r?.season ?? year) || "—";
+      const ownerNorm = normName(owner);
       if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return; // skip hidden
       if (!m.has(owner)) m.set(owner, []);
       m.get(owner).push(r);
@@ -10114,11 +12186,14 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     includeKeepers,
     includeKDst,
   ]);
-  // ---------- Drafted-points contribution (per owner, per season, and totals)
   const draftedPoints = React.useMemo(() => {
     const S = (typeof window !== "undefined" && (window.__sources || {})) || {};
     const rostersByYear = S.rostersByYear || {};
-    const ownerByTeamByYear = S.ownerByTeamByYear || {};
+    const ownerByTeamByYear =
+      S.ownerByTeamByYear ||
+      S.espnOwnerNameByTeamByYear ||
+      S.espnOwnerByTeamByYear ||
+      {};
 
     // Build: owner/year -> Set(playerId) drafted
     const draftedPidByOwnerYear = new Map();
@@ -10126,15 +12201,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       const yr = Number(yrStr);
       (picks || []).forEach((r) => {
         if (!includeKeepers && r?.keeper) return;
-        const raw =
-          r?.owner ??
-          r?.manager ??
-          r?.manager_name ??
-          r?.ownerName ??
-          r?.owner_full ??
-          "";
-        const owner = canonicalize(raw) || "—";
-        const ownerNorm = normName(raw) || normName(owner);
+
+        const owner = ownerNameResolver(r, yr) || "—";
+        const ownerNorm = normName(owner);
         if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return;
 
         const pid = Number(r?.playerId);
@@ -10149,8 +12218,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
 
     const teamIdForOwner = (yr, owner) => {
       const map = ownerByTeamByYear?.[yr] || {};
+      const target = canonicalize(String(owner).trim());
       for (const [tid, nm] of Object.entries(map)) {
-        if (canonicalize(nm) === owner) return Number(tid);
+        if (canonicalize(String(nm).trim()) === target) return Number(tid);
       }
       return null;
     };
@@ -10164,7 +12234,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     };
 
     const perSeason = [];
-    const perWeek = []; // ADD
+    const perWeek = [];
     const totals = new Map(); // owner -> { drafted, total, seasons:Set }
 
     for (const yrStr of Object.keys(draftByYear || {})) {
@@ -10173,15 +12243,8 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       // owners with picks this year (filtered by hidden)
       const ownersThisYear = new Set();
       (draftByYear?.[yr] || []).forEach((r) => {
-        const raw =
-          r?.owner ??
-          r?.manager ??
-          r?.manager_name ??
-          r?.ownerName ??
-          r?.owner_full ??
-          "";
-        const o = canonicalize(raw) || "—";
-        const oNorm = normName(raw) || normName(o);
+        const o = ownerNameResolver(r, yr) || "—";
+        const oNorm = normName(o);
         if (hiddenSet.has(o) || hiddenNormSet.has(oNorm)) return;
         ownersThisYear.add(o);
       });
@@ -10263,15 +12326,17 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       }))
       .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
 
-    return { perSeason, perWeek, totals: totalsRows }; // ADD perWeek in return
+    return { perSeason, perWeek, totals: totalsRows };
   }, [
     draftByYear,
     includeKeepers,
     hiddenSet,
     hiddenNormSet,
-    canonicalize,
+    currentWeekByYear,
+    ownerNameResolver,
     normName,
   ]);
+
   // ---------- breakdown helpers ----------
   const contribForPick = React.useCallback(
     (r) => {
@@ -10291,18 +12356,11 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     },
     [includeKeepers, getPickPos, getFinishPos, scoreFromPickLabels]
   );
-
   const openOwnerBreakdownForYear = React.useCallback(
     (owner) => {
       const allRows = (draftWithFinish?.[year] || []).filter((r) => {
-        const rawOwner =
-          r?.owner ??
-          r?.manager ??
-          r?.manager_name ??
-          r?.ownerName ??
-          r?.owner_full ??
-          "";
-        return ownerDisplay(rawOwner) === ownerDisplay(owner);
+        const resolved = ownerNameResolver(r, year);
+        return canonicalize(String(resolved)) === canonicalize(String(owner));
       });
       const items = [];
       for (const r of allRows) {
@@ -10314,7 +12372,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       setBreakdownRows(items);
       setShowBreakdown(true);
     },
-    [draftWithFinish, year, ownerDisplay, contribForPick]
+    [draftWithFinish, year, ownerNameResolver, ownerDisplay, contribForPick]
   );
 
   const openOwnerBreakdownAllYears = React.useCallback(
@@ -10323,14 +12381,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       for (const yrStr of Object.keys(draftWithFinish || {})) {
         const yr = Number(yrStr);
         for (const r of draftWithFinish[yrStr] || []) {
-          const rawOwner =
-            r?.owner ??
-            r?.manager ??
-            r?.manager_name ??
-            r?.ownerName ??
-            r?.owner_full ??
-            "";
-          if (ownerDisplay(rawOwner) !== ownerDisplay(owner)) continue;
+          const resolved = ownerNameResolver(r, yr);
+          if (canonicalize(String(resolved)) !== canonicalize(String(owner)))
+            continue;
           const c = contribForPick(r);
           if (!c) continue;
           items.push({
@@ -10345,7 +12398,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       setBreakdownRows(items);
       setShowBreakdown(true);
     },
-    [draftWithFinish, ownerDisplay, contribForPick]
+    [draftWithFinish, ownerNameResolver, ownerDisplay, contribForPick]
   );
 
   return (
@@ -11907,132 +13960,37 @@ export function WeeklyOutlookTab({
 
   const downloadPdf = React.useCallback(async () => {
     try {
+      // 1) Capture snapshot -> dataURL (PNG/JPEG)
       const dataUrl = await captureWeeklyOutlookImage();
-
-      const imageElement = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = (error) => reject(error);
-        img.src = dataUrl;
-      });
-
-      const width = Math.max(
-        1,
-        imageElement.naturalWidth ||
-          imageElement.width ||
-          imageElement.clientWidth ||
-          0
-      );
-      const height = Math.max(
-        1,
-        imageElement.naturalHeight ||
-          imageElement.height ||
-          imageElement.clientHeight ||
-          0
-      );
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context unavailable");
-      ctx.drawImage(imageElement, 0, 0, width, height);
-      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      const base64 = (jpegDataUrl.split(",")[1] || "").trim();
-      if (!base64) throw new Error("Unable to encode JPEG data");
-
-      const imageBytes = Uint8Array.from(atob(base64), (char) =>
-        char.charCodeAt(0)
-      );
-
-      const encoder = new TextEncoder();
-      const chunks = [];
-      const offsets = [];
-      let length = 0;
-      const EOL = "\r\n";
-
-      const pushChunk = (chunk) => {
-        chunks.push(chunk);
-        length += chunk.length;
-      };
-      const pushString = (str) => pushChunk(encoder.encode(str));
-      const pushLine = (str = "") => pushString(`${str}${EOL}`);
-      const pushBinary = (arr) => pushChunk(arr);
-      const startObject = (id) => {
-        offsets[id] = length;
-        pushLine(`${id} 0 obj`);
-      };
-      const endObject = () => pushLine("endobj");
-
-      pushLine("%PDF-1.3");
-
-      startObject(1);
-      pushLine("<< /Type /Catalog /Pages 2 0 R >>");
-      endObject();
-
-      startObject(2);
-      pushLine("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-      endObject();
-
-      startObject(3);
-      pushLine(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>`
-      );
-      endObject();
-
-      startObject(4);
-      pushLine(
-        `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`
-      );
-      pushLine("stream");
-      pushBinary(imageBytes);
-      pushLine();
-      pushLine("endstream");
-      endObject();
-
-      const contentStream = [
-        "q",
-        `${width} 0 0 ${height} 0 0 cm`,
-        "/Im0 Do",
-        "Q",
-        "",
-      ].join(EOL);
-      startObject(5);
-      pushLine(`<< /Length ${contentStream.length} >>`);
-      pushLine("stream");
-      pushString(contentStream);
-      pushLine("endstream");
-      endObject();
-
-      const xrefOffset = length;
-      pushLine("xref");
-      pushLine("0 6");
-      pushLine("0000000000 65535 f ");
-      for (let i = 1; i <= 5; i += 1) {
-        const offset = offsets[i] ?? 0;
-        pushLine(`${offset.toString().padStart(10, "0")} 00000 n `);
+      if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+        throw new Error("Snapshot failed or not an image data URL");
       }
-      pushLine("trailer");
-      pushLine("<< /Size 6 /Root 1 0 R >>");
-      pushLine("startxref");
-      pushLine(String(xrefOffset));
-      pushLine("%%EOF");
 
-      const pdfBytes = new Uint8Array(length);
-      let position = 0;
-      chunks.forEach((chunk) => {
-        pdfBytes.set(chunk, position);
-        position += chunk.length;
-      });
+      // 2) Convert dataURL to bytes without atob (more reliable for large images)
+      const resp = await fetch(dataUrl);
+      const bytesU8 = new Uint8Array(await resp.arrayBuffer());
 
+      // 3) Build PDF and embed the image at its intrinsic size
+      const pdfDoc = await PDFDocument.create();
+      const isPng = dataUrl.startsWith("data:image/png");
+      const embedded = isPng
+        ? await pdfDoc.embedPng(bytesU8)
+        : await pdfDoc.embedJpg(bytesU8);
+
+      const { width, height } = embedded; // intrinsic dims
+      const page = pdfDoc.addPage([width, height]);
+      page.drawImage(embedded, { x: 0, y: 0, width, height });
+
+      // 4) Save and trigger download
+      const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileNameFor("pdf");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileNameFor("pdf");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("PDF export failed:", err);
@@ -12621,6 +14579,48 @@ export function WeeklyOutlookTab({
     return totals;
   }, [gamesBeforeThisWeek]);
 
+  const standingsNow = React.useMemo(() => {
+    const ownersSet = new Set();
+    (league?.owners || []).forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) ownersSet.add(canon);
+    });
+    seasonTotalsByOwner.forEach((_, owner) => ownersSet.add(owner));
+    matchupsThisWeek.forEach((m) => {
+      if (m?.aName) ownersSet.add(m.aName);
+      if (m?.bName) ownersSet.add(m.bName);
+    });
+
+    const rows = [];
+    ownersSet.forEach((owner) => {
+      if (!owner) return;
+      const totals = seasonTotalsByOwner.get(owner) || {};
+      const wins = Number(totals?.wins) || 0;
+      const losses = Number(totals?.losses) || 0;
+      const games = Number(totals?.games) || wins + losses;
+      const winPct = games > 0 ? wins / games : 0;
+      const pf = Number(totals?.pf) || 0;
+      rows.push({ owner, wins, losses, games, winPct, pf });
+    });
+
+    rows.sort((a, b) => {
+      if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      if (b.pf !== a.pf) return b.pf - a.pf;
+      return a.owner.localeCompare(b.owner);
+    });
+
+    const byOwner = new Map();
+    const list = rows.map((row, idx) => {
+      const withRank = { ...row, rank: idx + 1 };
+      byOwner.set(row.owner, withRank);
+      return withRank;
+    });
+
+    return { list, byOwner };
+  }, [league?.owners, canonicalize, seasonTotalsByOwner, matchupsThisWeek]);
+
   const streakByOwner = React.useMemo(() => {
     const grouped = new Map();
     gamesBeforeThisWeek.forEach((g) => {
@@ -12970,6 +14970,13 @@ export function WeeklyOutlookTab({
     return out;
   }, [seasonsAll, playoffTeamsBase, playoffTeamsOverrides]);
 
+  const playoffTeamsThisSeason = React.useMemo(() => {
+    const direct = mergedPlayoffTeams?.[currentYear];
+    const fallback = mergedPlayoffTeams?.[String(currentYear)];
+    const val = Number(direct ?? fallback);
+    return Number.isFinite(val) && val > 0 ? val : null;
+  }, [mergedPlayoffTeams, currentYear]);
+
   const { recProbByWeekStrict, ownerRecordNow } = React.useMemo(() => {
     // completed seasons, only those with known # playoff teams
     const completedSeasons = new Set();
@@ -13271,29 +15278,7 @@ export function WeeklyOutlookTab({
                   <button
                     type="button"
                     role="menuitem"
-                    onMouseDown={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setDownloadMenuOpen(false);
-                      await downloadSnapshot();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path d="M9 3l1.5 2H14l1.5-2H19a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 01-2-2h4zM12 18a5 5 0 100-10 5 5 0 000 10zm0-2.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
-                    </svg>
-                    <span>Snapshot (PNG)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onMouseDown={async (e) => {
+                    onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       setDownloadMenuOpen(false);
@@ -13676,11 +15661,70 @@ export function WeeklyOutlookTab({
               const nowPctB = pctNum(Bo.now);
 
               const facts = [];
+              const formatList = (arr = []) => {
+                const names = (Array.isArray(arr) ? arr : [])
+                  .map((name) => String(name || "").trim())
+                  .filter(Boolean);
+                if (!names.length) return "";
+                if (names.length === 1) return names[0];
+                if (names.length === 2) return `${names[0]} and ${names[1]}`;
+                return `${names.slice(0, -1).join(", ")}, and ${
+                  names[names.length - 1]
+                }`;
+              };
               const pushFact = (key, text, ownersInvolved = []) => {
                 if (!text) return;
                 if (facts.some((f) => f.text === text)) return;
                 facts.push({ key, text, owners: ownersInvolved });
               };
+
+              const pairKey = pairKeyOf(m.aName, m.bName);
+              const standingsA = standingsNow.byOwner.get(m.aName);
+              const standingsB = standingsNow.byOwner.get(m.bName);
+              const priorMeetings = priorMatchupsThisSeason.get(pairKey) || [];
+
+              if (h.total > 0) {
+                const pctA = (h.wA / h.total) * 100;
+                const pctB = (h.wB / h.total) * 100;
+                if (pctA >= 70)
+                  pushFact(
+                    `h2h-dominance-${pairKey}`,
+                    `${m.aName} looks to parent their son, ${
+                      m.bName
+                    } again, winning ${Math.round(pctA)}% of their H2H games.`,
+                    [m.aName, m.bName]
+                  );
+                else if (pctB >= 70)
+                  pushFact(
+                    `h2h-dominance-${pairKey}`,
+                    `${m.bName} looks to parent their son, ${
+                      m.aName
+                    } again, winning ${Math.round(pctB)}% of their H2H games.`,
+                    [m.aName, m.bName]
+                  );
+              }
+
+              if (
+                streakA?.type === "loss" &&
+                streakA.length >= 2 &&
+                streakA.length <= 3
+              )
+                pushFact(
+                  `streak-stop-${m.aName}`,
+                  `${m.aName} looks to stop the bleeding after ${streakA.length} straight losses.`,
+                  [m.aName]
+                );
+
+              if (
+                streakB?.type === "loss" &&
+                streakB.length >= 2 &&
+                streakB.length <= 3
+              )
+                pushFact(
+                  `streak-stop-${m.bName}`,
+                  `${m.bName} looks to stop the bleeding after ${streakB.length} straight losses.`,
+                  [m.bName]
+                );
 
               if (streakA?.type === "win" && streakA.length >= 3)
                 pushFact(
@@ -13689,7 +15733,7 @@ export function WeeklyOutlookTab({
                   [m.aName]
                 );
 
-              if (streakA?.type === "loss" && streakA.length >= 3)
+              if (streakA?.type === "loss" && streakA.length >= 4)
                 pushFact(
                   `streak-${m.aName}-loss`,
                   `${m.aName} desperately needs a win to break their ${streakA.length}-game losing streak.`,
@@ -13703,12 +15747,54 @@ export function WeeklyOutlookTab({
                   [m.bName]
                 );
 
-              if (streakB?.type === "loss" && streakB.length >= 3)
+              if (streakB?.type === "loss" && streakB.length >= 4)
                 pushFact(
                   `streak-${m.bName}-loss`,
                   `${m.bName} desperately needs a win to break their ${streakB.length}-game losing streak.`,
                   [m.bName]
                 );
+
+              if (
+                playoffTeamsThisSeason &&
+                standingsA?.rank &&
+                standingsB?.rank
+              ) {
+                if (
+                  standingsA.rank === playoffTeamsThisSeason &&
+                  standingsB.rank === playoffTeamsThisSeason + 1
+                ) {
+                  pushFact(
+                    `bubble-${pairKey}`,
+                    `${m.aName} looks to hold their current playoff position against ${m.bName}.`,
+                    [m.aName, m.bName]
+                  );
+                } else if (
+                  standingsB.rank === playoffTeamsThisSeason &&
+                  standingsA.rank === playoffTeamsThisSeason + 1
+                ) {
+                  pushFact(
+                    `bubble-${pairKey}`,
+                    `${m.bName} looks to hold their current playoff position against ${m.aName}.`,
+                    [m.aName, m.bName]
+                  );
+                }
+              }
+
+              if (standingsA?.rank && standingsB?.rank) {
+                const ranks = [standingsA.rank, standingsB.rank].sort(
+                  (a, b) => a - b
+                );
+                if (ranks[0] === 1 && ranks[1] === 2) {
+                  const topDogFirst = standingsA.rank === 1 ? m.aName : m.bName;
+                  const topDogSecond =
+                    topDogFirst === m.aName ? m.bName : m.aName;
+                  pushFact(
+                    `topdog-${pairKey}`,
+                    `${topDogFirst} and ${topDogSecond} battle it out for top dog.`,
+                    [m.aName, m.bName]
+                  );
+                }
+              }
 
               if (hStreak)
                 pushFact(
@@ -13717,17 +15803,92 @@ export function WeeklyOutlookTab({
                   [m.aName, m.bName]
                 );
 
+              if (priorMeetings.length === 1) {
+                const prev = priorMeetings[0];
+                if (
+                  prev?.winner &&
+                  prev?.loser &&
+                  Number.isFinite(Number(prev.week))
+                ) {
+                  pushFact(
+                    `sweep-${pairKey}`,
+                    `${prev.winner} looks to sweep ${prev.loser} after taking the W in Week ${prev.week}.`,
+                    [prev.winner, prev.loser]
+                  );
+                }
+              }
+
+              if (
+                largestProjectionGap &&
+                largestProjectionGap.key === pairKey &&
+                Number.isFinite(Number(largestProjectionGap.diff))
+              ) {
+                pushFact(
+                  `projgap-${pairKey}`,
+                  `${largestProjectionGap.leader} with a ${formatProjectionDiff(
+                    largestProjectionGap.diff
+                  )} projected point differential over ${
+                    largestProjectionGap.trailer
+                  }, the largest of the week.`,
+                  [largestProjectionGap.leader, largestProjectionGap.trailer]
+                );
+              }
+
               const diffPF = pfA - pfB;
               if (Math.abs(diffPF) >= 75)
                 pushFact(
                   `pf-diff-${m.aName}-${m.bName}`,
                   `${
                     diffPF >= 0 ? m.aName : m.bName
-                  } comes in as a huge favorite, outscoring ${
+                  } comes in with a superior offense, outscoring ${
                     diffPF >= 0 ? m.bName : m.aName
                   } by ${formatPointsValue(
                     Math.abs(diffPF)
                   )} points this season.`,
+                  [m.aName, m.bName]
+                );
+
+              const totalOwners = standingsNow?.list?.length || 0;
+
+              if (
+                totalOwners >= 2 &&
+                standingsA?.rank &&
+                standingsB?.rank &&
+                ((standingsA.rank === totalOwners &&
+                  standingsB.rank === totalOwners - 1) ||
+                  (standingsB.rank === totalOwners &&
+                    standingsA.rank === totalOwners - 1))
+              )
+                pushFact(
+                  `cellar-${pairKey}`,
+                  `${m.aName} and ${m.bName} play to see who is the worst of the worst.`,
+                  [m.aName, m.bName]
+                );
+
+              const byePlayersA = playersOnByeByOwner.get(m.aName) || [];
+              if (byePlayersA.length >= 3)
+                pushFact(
+                  `bye-${m.aName}`,
+                  `${m.aName} looks to survive with ${formatList(
+                    byePlayersA
+                  )} on bye.`,
+                  [m.aName]
+                );
+
+              const byePlayersB = playersOnByeByOwner.get(m.bName) || [];
+              if (byePlayersB.length >= 3)
+                pushFact(
+                  `bye-${m.bName}`,
+                  `${m.bName} looks to survive with ${formatList(
+                    byePlayersB
+                  )} on bye.`,
+                  [m.bName]
+                );
+
+              if (isRecord500(winsA, lossesA) && isRecord500(winsB, lossesB))
+                pushFact(
+                  `battle500-${pairKey}`,
+                  `${m.aName} and ${m.bName} fight it out in the battle of the 500's.`,
                   [m.aName, m.bName]
                 );
 
@@ -13786,39 +15947,75 @@ export function WeeklyOutlookTab({
                   );
               }
 
-              if (rankA?.highRank && rankA.highRank <= 3) {
-                const word = rankWord(rankA.highRank, "high");
-                if (word)
+              const highRankEntries = [];
+              if (rankA?.highRank && rankA.highRank <= 3)
+                highRankEntries.push({
+                  owner: m.aName,
+                  rank: rankA.highRank,
+                });
+              if (rankB?.highRank && rankB.highRank <= 3)
+                highRankEntries.push({
+                  owner: m.bName,
+                  rank: rankB.highRank,
+                });
+
+              if (highRankEntries.length >= 2) {
+                const ordered = [...highRankEntries].sort(
+                  (a, b) => a.rank - b.rank
+                );
+                const [first, second] = ordered;
+                const firstWord = rankWord(first.rank, "high");
+                const secondWord = rankWord(second.rank, "high");
+                if (firstWord && secondWord)
                   pushFact(
-                    `rank-high-${m.aName}`,
-                    `${m.aName} looks to continue pouring on points as the ${word} scoring team in the league.`,
-                    [m.aName]
+                    `rank-high-pair-${pairKey}`,
+                    `Take the over, ${first.owner} is the ${firstWord} scoring team in the league while ${second.owner} is not far behind as the ${secondWord} scoring team.`,
+                    [first.owner, second.owner]
                   );
-              } else if (rankA?.lowRank && rankA.lowRank <= 3) {
-                const word = rankWord(rankA.lowRank, "low");
+              } else if (highRankEntries.length === 1) {
+                const [entry] = highRankEntries;
+                const word = rankWord(entry.rank, "high");
                 if (word)
                   pushFact(
-                    `rank-low-${m.aName}`,
-                    `${m.aName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
-                    [m.aName]
+                    `rank-high-${entry.owner}`,
+                    `${entry.owner} looks to continue pouring on points as the ${word} scoring team in the league.`,
+                    [entry.owner]
                   );
               }
 
-              if (rankB?.highRank && rankB.highRank <= 3) {
-                const word = rankWord(rankB.highRank, "high");
-                if (word)
+              const lowRankEntries = [];
+              if (rankA?.lowRank && rankA.lowRank <= 3)
+                lowRankEntries.push({
+                  owner: m.aName,
+                  rank: rankA.lowRank,
+                });
+              if (rankB?.lowRank && rankB.lowRank <= 3)
+                lowRankEntries.push({
+                  owner: m.bName,
+                  rank: rankB.lowRank,
+                });
+
+              if (lowRankEntries.length >= 2) {
+                const ordered = [...lowRankEntries].sort(
+                  (a, b) => a.rank - b.rank
+                );
+                const [first, second] = ordered;
+                const firstWord = rankWord(first.rank, "low");
+                const secondWord = rankWord(second.rank, "low");
+                if (firstWord && secondWord)
                   pushFact(
-                    `rank-high-${m.bName}`,
-                    `${m.bName} looks to continue pouring on points as the ${word} scoring team in the league.`,
-                    [m.bName]
+                    `rank-low-pair-${pairKey}`,
+                    `Take the under, ${first.owner} is the ${firstWord} scoring team in the league while ${second.owner} is not far behind as the ${secondWord} scoring team.`,
+                    [first.owner, second.owner]
                   );
-              } else if (rankB?.lowRank && rankB.lowRank <= 3) {
-                const word = rankWord(rankB.lowRank, "low");
+              } else if (lowRankEntries.length === 1) {
+                const [entry] = lowRankEntries;
+                const word = rankWord(entry.rank, "low");
                 if (word)
                   pushFact(
-                    `rank-low-${m.bName}`,
-                    `${m.bName} desperately needs to spark the offense as the ${word} scoring team in the league.`,
-                    [m.bName]
+                    `rank-low-${entry.owner}`,
+                    `${entry.owner} desperately needs to spark the offense as the ${word} scoring team in the league.`,
+                    [entry.owner]
                   );
               }
 
@@ -13826,7 +16023,7 @@ export function WeeklyOutlookTab({
                 pushFact(
                   `low-odds-${m.aName}`,
                   nowPctA === 0
-                    ? `${m.aName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsA}-${lossesA} record.`
+                    ? `${m.aName} is in a tough spot with no team ever making the playoffs after starting ${winsA}-${lossesA}.`
                     : `${m.aName} is desperate for a win with only a ${nowPctA}% chance to make the playoffs.`,
                   [m.aName]
                 );
@@ -13835,7 +16032,7 @@ export function WeeklyOutlookTab({
                 pushFact(
                   `low-odds-${m.bName}`,
                   nowPctB === 0
-                    ? `${m.bName} is in a tough spot with no manager ever making the playoffs in Week ${currentWeek} with a ${winsB}-${lossesB} record.`
+                    ? `${m.bName} is in a tough spot with no team ever making the playoffs after starting ${winsB}-${lossesB}.`
                     : `${m.bName} is desperate for a win with only a ${nowPctB}% chance to make the playoffs.`,
                   [m.bName]
                 );
@@ -13859,24 +16056,6 @@ export function WeeklyOutlookTab({
                   m.bName,
                 ]);
               }
-
-              if (facts.length < 3)
-                pushFact(
-                  `records-${m.aName}-${m.bName}`,
-                  `${m.aName} enters at ${winsA}-${lossesA} while ${m.bName} sits at ${winsB}-${lossesB}.`,
-                  [m.aName, m.bName]
-                );
-
-              if (facts.length < 3)
-                pushFact(
-                  `points-summary-${m.aName}-${m.bName}`,
-                  `${m.aName} has scored ${formatPointsValue(
-                    pfA
-                  )} points this season compared to ${formatPointsValue(
-                    pfB
-                  )} for ${m.bName}.`,
-                  [m.aName, m.bName]
-                );
 
               const displayFacts = facts.slice(0, 5);
               const nicknameCounters = new Map();
