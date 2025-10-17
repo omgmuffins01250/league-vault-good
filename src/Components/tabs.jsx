@@ -7035,6 +7035,8 @@ export function RecordsTab({ league }) {
     </div>
   );
 }
+//----------------------------------------------------------
+//--------------------------------------------------------
 // ---------- TradingTab (year -> trades UI with PPG before/after) ----------
 export function TradingTab({
   league, // { owners, hiddenManagers }
@@ -7058,6 +7060,141 @@ export function TradingTab({
     return Number.isFinite(v) ? v : d;
   };
   const uniq = (arr) => Array.from(new Set(arr));
+
+  // ---------------- pro team helpers used throughout (DEFINITIONS ADDED) -----
+  function __hasAnyEntries(src) {
+    if (!src) return false;
+    if (src instanceof Map) return src.size > 0;
+    if (Array.isArray(src)) return src.length > 0;
+    if (typeof src === "object") return Object.keys(src).length > 0;
+    return false;
+  }
+
+  // Normalize the possible team objects into an array of simple {id, abbrev, byeWeek|byeWeeks}
+  function __teamsFromSource(src) {
+    if (!src) return [];
+    let list = [];
+    if (src instanceof Map) {
+      src.forEach((v) => list.push(v));
+    } else if (Array.isArray(src)) {
+      list = src.slice();
+    } else if (typeof src === "object") {
+      list = Object.values(src);
+    }
+    return list
+      .map((t) => ({
+        id: toInt(t?.id ?? t?.teamId ?? t?.proTeamId),
+        abbrev:
+          t?.abbrev ||
+          t?.abbreviation ||
+          t?.teamAbbrev ||
+          t?.teamAbbreviation ||
+          "",
+        byeWeek: toInt(t?.byeWeek),
+        byeWeeks:
+          (Array.isArray(t?.byeWeeks) && t.byeWeeks) ||
+          (Array.isArray(t?.byeWeekSchedule) && t.byeWeekSchedule) ||
+          null,
+      }))
+      .filter((x) => Number.isFinite(x.id));
+  }
+
+  function __resolveProTeamsForSeason(seasonKey, container) {
+    // Priority: explicit proTeamsByYear on inputs -> window sources -> store record
+    const y = toInt(seasonKey);
+    const tryPaths = [];
+
+    if (container) {
+      // some callers pass a league record or store record
+      tryPaths.push(container.proTeamsByYear);
+      tryPaths.push(container.espnProTeamsByYear);
+      tryPaths.push(container?.settings?.proTeamsByYear);
+    }
+
+    if (typeof window !== "undefined") {
+      const src = window.__FL_SOURCES || window.__sources || {};
+      tryPaths.push(src.proTeamsByYear);
+      tryPaths.push(src?.seasonsByYear?.[y]?.proTeams);
+      tryPaths.push(src?.seasonsByYear?.[y]?.settings?.proTeams);
+    }
+
+    for (const node of tryPaths) {
+      if (!node) continue;
+      // node may be a "by year" object, or an array for the given year
+      const yearNode =
+        node[y] ??
+        // sometimes it's already the list for the year:
+        (Array.isArray(node) ? node : null);
+      if (__hasAnyEntries(yearNode)) return yearNode;
+    }
+    return null;
+  }
+
+  function __buildProTeamLookup(source) {
+    const rows = __teamsFromSource(source);
+    const abbrevToId = new Map();
+    const idToTeam = new Map();
+    rows.forEach((t) => {
+      idToTeam.set(t.id, t);
+      const tok = (t.abbrev || "").toUpperCase();
+      if (tok) abbrevToId.set(tok, t.id);
+    });
+    return { abbrevToId, idToTeam };
+  }
+
+  function __teamByeWeekNumbers(team) {
+    // single bye or array of byes
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v) && v > 0) out.add(v);
+    };
+    if (team?.byeWeek != null) tryNum(team.byeWeek);
+    if (Array.isArray(team?.byeWeeks)) team.byeWeeks.forEach(tryNum);
+    if (Array.isArray(team?.byeWeekSchedule))
+      team.byeWeekSchedule.forEach(tryNum);
+    return Array.from(out).sort((a, b) => a - b);
+  }
+
+  function __entryByeWeekNumbers(entry) {
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v) && v > 0) out.add(v);
+    };
+    // common places
+    const cands = [
+      entry?.byeWeek,
+      entry?.player?.byeWeek,
+      entry?.playerPoolEntry?.byeWeek,
+      entry?.proTeamByeWeek,
+      entry?.player?.proTeamByeWeek,
+      entry?.playerPoolEntry?.proTeamByeWeek,
+    ];
+    cands.forEach(tryNum);
+
+    // plural arrays buried in shapes
+    const plural = [
+      entry?.byeWeeks,
+      entry?.player?.byeWeeks,
+      entry?.playerPoolEntry?.byeWeeks,
+      entry?.byeWeekSchedule,
+      entry?.player?.byeWeekSchedule,
+      entry?.playerPoolEntry?.byeWeekSchedule,
+      entry?.proTeamByeWeekSchedule,
+      entry?.player?.proTeamByeWeekSchedule,
+      entry?.playerPoolEntry?.proTeamByeWeekSchedule,
+    ];
+    plural.forEach((arr) => Array.isArray(arr) && arr.forEach(tryNum));
+
+    return Array.from(out).sort((a, b) => a - b);
+  }
+
+  function __entryIsOnByeForWeek(entry, weekNum) {
+    if (entry?.onBye === true || entry?.player?.onBye === true) return true;
+    const nums = __entryByeWeekNumbers(entry);
+    return nums.includes(toInt(weekNum));
+  }
 
   // ---------------- store helpers ----------------
   const storeLeagueRecord = React.useMemo(() => {
@@ -7103,7 +7240,7 @@ export function TradingTab({
     return null;
   }, [league, selectedLeague]);
 
-  // ---------------- pro team / bye week helpers ----------------
+  // ---------------- pro team / bye week lookups (now backed by __sources) ---
   const proTeamSourceCacheRef = React.useRef(new Map());
   const getProTeamSource = React.useCallback(
     (seasonKey) => {
@@ -7322,6 +7459,45 @@ export function TradingTab({
     ]
   );
 
+  function __entryProTeamIds(entry, abbrevToIdMap) {
+    const out = new Set();
+    const tryNum = (n) => {
+      const v = toInt(n);
+      if (Number.isFinite(v)) out.add(v);
+    };
+    const cands = [
+      entry?.proTeamId,
+      entry?.teamId,
+      entry?.nflTeamId,
+      entry?.proTeam?.id,
+      entry?.player?.proTeamId,
+      entry?.player?.teamId,
+      entry?.player?.nflTeamId,
+      entry?.playerPoolEntry?.proTeamId,
+      entry?.playerPoolEntry?.teamId,
+      entry?.playerPoolEntry?.player?.proTeamId,
+      entry?.playerPoolEntry?.player?.teamId,
+    ];
+    cands.forEach(tryNum);
+
+    const strings = [
+      entry?.player?.proTeam,
+      entry?.player?.team,
+      entry?.proTeam,
+      entry?.team,
+      entry?.nflTeam,
+    ]
+      .map((s) => (s || "").toString().toUpperCase())
+      .filter(Boolean);
+
+    strings.forEach((tok) => {
+      const id = abbrevToIdMap?.get(tok);
+      if (Number.isFinite(id)) out.add(id);
+    });
+
+    return Array.from(out);
+  }
+
   const playerByeCacheRef = React.useRef(new Map());
   const getPlayerByeWeeks = React.useCallback(
     (seasonKey, playerId) => {
@@ -7372,6 +7548,7 @@ export function TradingTab({
     [espnRostersByYear, resolveProTeamId, resolveTeamByeWeeks]
   );
 
+  // ---------------- identity helpers ----------------
   const hidden = new Set(league?.hiddenManagers || []);
   const ownerNameOf = (year, teamId) =>
     espnOwnerFullByTeamByYear?.[year]?.[teamId] ||
@@ -7379,7 +7556,7 @@ export function TradingTab({
     `Team ${teamId}`;
 
   // We want post PPG to include the week of the trade and run through
-  // Week 17 (fantasy playoffs end), per your spec.
+  // Week 17 (fantasy playoffs end).
   const FANTASY_PLAYOFF_END = 17;
 
   // ---------------- name index ----------------
@@ -7529,9 +7706,7 @@ export function TradingTab({
       const Bafter = idsAt(toTeam, w);
 
       const AtoB = [...Aprev].filter((id) => !Aafter.has(id) && Bafter.has(id));
-      const BtoA = [...Bprev].filter((id) =>
-        !Bprev.has(id) ? false : !Bafter.has(id) && Aafter.has(id)
-      );
+      const BtoA = [...Bprev].filter((id) => !Bafter.has(id) && Aafter.has(id)); // <- fixed
 
       const trade = {
         year,
@@ -7849,6 +8024,7 @@ export function TradingTab({
     );
 
     // Build strong signatures for dedupe/merge
+    // Build strong signatures for dedupe/merge
     const canonKeyTeams = (a, b) => {
       const [x, y] = [toInt(a), toInt(b)].sort((m, n) => m - n);
       return `${x}-${y}`;
@@ -7859,12 +8035,23 @@ export function TradingTab({
         .filter(Number.isFinite)
         .sort((u, v) => u - v)
         .join(",");
+
+    // NEW: side-agnostic signature: always bind packages to (lowTeam, highTeam)
     const tradeSig = (t) => {
       const wk = toInt(t?.week, -1);
-      const teamsKey = canonKeyTeams(t.leftTeamId, t.rightTeamId);
-      const L = pidKey(t.leftGets);
-      const R = pidKey(t.rightGets);
-      return `${wk}|${teamsKey}|${L}|${R}`;
+
+      const a = toInt(t?.leftTeamId);
+      const b = toInt(t?.rightTeamId);
+      const [low, high] = [a, b].sort((m, n) => m - n);
+
+      // packages *received by* each canonical side
+      const recvLow = a === low ? t.leftGets : t.rightGets;
+      const recvHigh = b === high ? t.rightGets : t.leftGets;
+
+      const teamsKey = `${low}-${high}`;
+      const L = pidKey(recvLow);
+      const H = pidKey(recvHigh);
+      return `${wk}|${teamsKey}|${L}|${H}`;
     };
 
     // Index detailed by (week, teamsKey)
@@ -8359,6 +8546,9 @@ export function TradingTab({
   );
 }
 
+//------------------------------------------------------------------
+//----------------------------------------------------------------------
+//------------------------------------------------------------------------
 //------------------------trade tab, TradeTab, Tradetab ----------------
 // Helper: load league-specific merge map (Combine Managers)
 function getMergeMap(league) {

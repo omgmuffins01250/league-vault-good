@@ -26,9 +26,8 @@ import {
   ScenarioTab,
   LuckIndexTab,
   YearlyRecapTab,
-  TradingTab,     
+  TradingTab,
   DEFAULT_LEAGUE_ICONS,
-  
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
 import { normalizeNicknameMap } from "/project/workspace/src/Utils/nicknames.js";
@@ -480,6 +479,7 @@ function upsertLeague({
   managerNicknames,
   leagueIcon,
   espnTradesDetailedBySeason,
+  espnProTeamsByYear,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -523,8 +523,9 @@ function upsertLeague({
     espnRosterAcqByYear: espnRosterAcqByYear || prev.espnRosterAcqByYear || {},
     espnPlayoffTeamsBySeason:
       espnPlayoffTeamsBySeason || prev.espnPlayoffTeamsBySeason || {},
-      espnTradesDetailedBySeason:
+    espnTradesDetailedBySeason:
       espnTradesDetailedBySeason || prev.espnTradesDetailedBySeason || {},
+    espnProTeamsByYear: espnProTeamsByYear || prev.espnProTeamsByYear || {},
 
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
@@ -1759,6 +1760,7 @@ export default function App() {
   const [lineupSlotsByYear, setLineupSlotsByYear] = useState({});
   const [rosterAcqByYear, setRosterAcqByYear] = useState({});
   const [currentWeekBySeason, setCurrentWeekBySeason] = useState({});
+  const [proTeamsByYear, setProTeamsByYear] = useState({});
   const [ownerFullByTeamByYear, setOwnerFullByTeamByYear] = useState({});
   const [playoffTeamsBySeason, setPlayoffTeamsBySeason] = useState({});
   const [playoffTeamsOverrides, setPlayoffTeamsOverrides] = useState({});
@@ -1861,6 +1863,7 @@ export default function App() {
       setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
       setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
       setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+      setProTeamsByYear(rec?.espnProTeamsByYear || {});
       setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
       const sched =
         rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
@@ -1922,6 +1925,7 @@ export default function App() {
     setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
     setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
+    setProTeamsByYear(rec?.espnProTeamsByYear || {});
     setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
     const sched =
       rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
@@ -2254,6 +2258,11 @@ export default function App() {
             ? data.currentWeekByYear
             : {};
         setCurrentWeekBySeason(currentWeekBySeasonMap);
+
+        // ← NEW: capture pro team byes map supplied by popup
+        const proTeamsPayload =
+          data?.proTeamsByYear || data?.espnProTeamsByYear || {};
+        setProTeamsByYear(proTeamsPayload);
 
         const playoffTeamsFromSeasons = {};
         for (const s of seasons || []) {
@@ -2670,6 +2679,7 @@ export default function App() {
           managerNicknames,
           leagueIcon,
           espnTradesDetailedBySeason: data.espnTradesDetailedBySeason || {},
+          espnProTeamsByYear: proTeamsPayload,
         });
 
         setTimeout(() => {
@@ -2811,6 +2821,7 @@ export default function App() {
         rosterAcqByYear,
         seasonsByYear,
         scheduleByYear,
+        proTeamsByYear,
       };
       window.__FL_SOURCES = {
         seasonsByYear,
@@ -2829,6 +2840,7 @@ export default function App() {
     rosterAcqByYear,
     seasonsByYear,
     scheduleByYear,
+    proTeamsByYear,
   ]);
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -3476,91 +3488,105 @@ export default function App() {
                   />
                 )}
 
-{league &&
-  section === "trades" &&
-  (() => {
-    const store = readStore();
-    const curId =
-      selectedLeagueId ||
-      store.lastSelectedLeagueId ||
-      Object.keys(store.leaguesById || {})[0] ||
-      "";
-    const recForTrades =
-      (curId &&
-        store.leaguesById &&
-        store.leaguesById[curId]) ||
-      {};
-    return (
-      <TradesTab
-        league={leagueWithHidden}
-        rawRows={rawRows}
-        selectedLeague={selectedLeague}
-        activityBySeason={activityBySeason}
-        espnAddsByYear={
-          recForTrades.espnTransactionsByYear || {}
-        }
-        espnWeeklyPtsByYear={
-          recForTrades.espnWeeklyPtsByYear || {}
-        }
-        espnOwnerByTeamByYear={
-          recForTrades.espnOwnerByTeamByYear ||
-          recForTrades.espnOwnerMapByYear ||
-          {}
-        }
-        espnTeamNamesByOwner={
-          recForTrades.espnTeamNamesByOwner || {}
-        }
-        espnRostersByYear={recForTrades.espnRostersByYear || {}}
-        espnRosterAcqByYear={
-          recForTrades.espnRosterAcqByYear || {}
-        }
-        espnOwnerFullByTeamByYear={
-          recForTrades.espnOwnerFullByTeamByYear || {}
-        }
-      />
-    );
-  })()}
+                {league &&
+                  section === "trades" &&
+                  (() => {
+                    const store = readStore();
+                    const curId =
+                      selectedLeagueId ||
+                      store.lastSelectedLeagueId ||
+                      Object.keys(store.leaguesById || {})[0] ||
+                      "";
+                    const recForTrades =
+                      (curId &&
+                        store.leaguesById &&
+                        store.leaguesById[curId]) ||
+                      {};
+                    return (
+                      <TradesTab
+                        league={leagueWithHidden}
+                        rawRows={rawRows}
+                        selectedLeague={selectedLeague}
+                        activityBySeason={activityBySeason}
+                        espnAddsByYear={
+                          recForTrades.espnTransactionsByYear || {}
+                        }
+                        espnWeeklyPtsByYear={
+                          recForTrades.espnWeeklyPtsByYear || {}
+                        }
+                        espnOwnerByTeamByYear={
+                          recForTrades.espnOwnerByTeamByYear ||
+                          recForTrades.espnOwnerMapByYear ||
+                          {}
+                        }
+                        espnTeamNamesByOwner={
+                          recForTrades.espnTeamNamesByOwner || {}
+                        }
+                        espnRostersByYear={recForTrades.espnRostersByYear || {}}
+                        espnRosterAcqByYear={
+                          recForTrades.espnRosterAcqByYear || {}
+                        }
+                        espnOwnerFullByTeamByYear={
+                          recForTrades.espnOwnerFullByTeamByYear || {}
+                        }
+                      />
+                    );
+                  })()}
 
-{league &&
-  section === "trading" && (
-    <ErrorBoundary name="TradingTab">
-      {(() => {
-        const store = readStore();
-        const curId =
-          selectedLeagueId ||
-          store.lastSelectedLeagueId ||
-          Object.keys(store.leaguesById || {})[0] ||
-          "";
-        const recForTrading =
-          (curId && store.leaguesById && store.leaguesById[curId]) || {};
+                {league && section === "trading" && (
+                  <ErrorBoundary name="TradingTab">
+                    {(() => {
+                      const store = readStore();
+                      const curId =
+                        selectedLeagueId ||
+                        store.lastSelectedLeagueId ||
+                        Object.keys(store.leaguesById || {})[0] ||
+                        "";
+                      const recForTrading =
+                        (curId &&
+                          store.leaguesById &&
+                          store.leaguesById[curId]) ||
+                        {};
 
-        return (
-          <TradingTab
-            league={leagueWithHidden}
-            selectedLeague={selectedLeague}
-            espnTradesDetailedBySeason={
-              recForTrading.espnTradesDetailedBySeason || {}
-            }
-            espnOwnerByTeamByYear={
-              recForTrading.espnOwnerByTeamByYear ||
-              recForTrading.espnOwnerMapByYear ||
-              {}
-            }
-            espnOwnerFullByTeamByYear={
-              recForTrading.espnOwnerFullByTeamByYear || {}
-            }
-            espnTeamNamesByOwner={recForTrading.espnTeamNamesByOwner || {}}
-            espnRostersByYear={recForTrading.espnRostersByYear || {}}
-            espnRosterAcqByYear={recForTrading.espnRosterAcqByYear || {}}
-            currentWeekBySeason={recForTrading.espnCurrentWeekBySeason || {}}
-            fallbackTransactionsByYear={recForTrading.espnTransactionsByYear || {}}
-            /* NEW: needed to compute PPG */
-            espnWeeklyPtsByYear={recForTrading.espnWeeklyPtsByYear || {}}
-          />
-        );
-      })()}
-    </ErrorBoundary>
-  )}
+                      return (
+                        <TradingTab
+                          league={leagueWithHidden}
+                          selectedLeague={selectedLeague}
+                          espnTradesDetailedBySeason={
+                            recForTrading.espnTradesDetailedBySeason || {}
+                          }
+                          espnOwnerByTeamByYear={
+                            recForTrading.espnOwnerByTeamByYear ||
+                            recForTrading.espnOwnerMapByYear ||
+                            {}
+                          }
+                          espnOwnerFullByTeamByYear={
+                            recForTrading.espnOwnerFullByTeamByYear || {}
+                          }
+                          espnTeamNamesByOwner={
+                            recForTrading.espnTeamNamesByOwner || {}
+                          }
+                          espnRostersByYear={
+                            recForTrading.espnRostersByYear || {}
+                          }
+                          espnRosterAcqByYear={
+                            recForTrading.espnRosterAcqByYear || {}
+                          }
+                          currentWeekBySeason={
+                            recForTrading.espnCurrentWeekBySeason || {}
+                          }
+                          fallbackTransactionsByYear={
+                            recForTrading.espnTransactionsByYear || {}
+                          }
+                          /* NEW: needed to compute PPG */
+                          espnWeeklyPtsByYear={
+                            recForTrading.espnWeeklyPtsByYear || {}
+                          }
+                        />
+                      );
+                    })()}
+                  </ErrorBoundary>
+                )}
 
                 {league && section === "draft" && (
                   <DraftTab
