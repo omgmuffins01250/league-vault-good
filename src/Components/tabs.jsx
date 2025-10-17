@@ -7860,14 +7860,28 @@ export function TradingTab({
 
   // --- Averages that explicitly EXCLUDE bye weeks (mirrors Luck Index bye logic)
   const avgRange = (year, playerId, startWk, endWk) => {
-    if (
-      !(Number.isFinite(startWk) && Number.isFinite(endWk) && startWk <= endWk)
-    )
+    const start = Math.floor(startWk);
+    const end = Math.floor(endWk);
+    if (!(Number.isFinite(start) && Number.isFinite(end) && start <= end))
       return null;
+
+    const capExclusive = __resolveCurrentWeekExclusiveSimple(
+      league,
+      currentWeekBySeason,
+      year
+    );
+    const completedCap =
+      Number.isFinite(capExclusive) && capExclusive > 0
+        ? capExclusive - 1
+        : null;
+    const effectiveEnd =
+      completedCap != null ? Math.min(end, completedCap) : end;
+    if (!Number.isFinite(effectiveEnd) || start > effectiveEnd) return null;
+
     let sum = 0,
       n = 0;
     const byeSet = new Set(getPlayerByeWeeks(year, playerId));
-    for (let w = startWk; w <= endWk; w++) {
+    for (let w = start; w <= effectiveEnd; w++) {
       if (byeSet.has(w)) continue; // ← exclude byes
       const v = ptsForWeek(year, playerId, w);
       // Skip if we have no points record (bye/inactive). Count only real weeks.
@@ -8181,10 +8195,25 @@ export function TradingTab({
   const weeklyRowsFor = React.useCallback(
     (seasonKey, playerId) => {
       const rows = [];
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
       const ro = espnRostersByYear?.[seasonKey] || {};
       Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
         Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
           const wk = toInt(wkRaw);
+          if (
+            !Number.isFinite(wk) ||
+            (completedCap != null && wk > completedCap)
+          ) {
+            return;
+          }
           const entry = safeArr(entries).find(
             (e) =>
               toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
@@ -8215,7 +8244,7 @@ export function TradingTab({
       });
       return rows.sort((a, b) => a.wk - b.wk);
     },
-    [espnRostersByYear]
+    [currentWeekBySeason, espnRostersByYear, league]
   );
 
   const tradePPGExcludingBye = React.useCallback(
@@ -8227,10 +8256,24 @@ export function TradingTab({
       const rows = weeklyRowsFor(seasonKey, pid);
       const byeWeeks = getPlayerByeWeeks(seasonKey, pid);
       const byeSet = new Set(byeWeeks);
-      const last = Math.min(
-        FANTASY_PLAYOFF_END,
-        weeksEndFromRosters(seasonKey)
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
       );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
+      const capCandidates = [
+        FANTASY_PLAYOFF_END,
+        weeksEndFromRosters(seasonKey),
+      ];
+      if (completedCap != null) capCandidates.push(completedCap);
+      const finiteCaps = capCandidates
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n) && n >= 0);
+      const last = finiteCaps.length ? Math.min(...finiteCaps) : 0;
 
       const pre = rows.filter((r) => r.wk < tw && !byeSet.has(r.wk));
       const post = rows.filter(
@@ -8255,7 +8298,13 @@ export function TradingTab({
         postPPG: post.length ? +(postSum / post.length).toFixed(4) : null,
       };
     },
-    [getPlayerByeWeeks, weeklyRowsFor, weeksEndFromRosters]
+    [
+      currentWeekBySeason,
+      getPlayerByeWeeks,
+      league,
+      weeklyRowsFor,
+      weeksEndFromRosters,
+    ]
   );
 
   // Small debug API (handy when verifying bye behavior)
@@ -8488,9 +8537,26 @@ export function TradingTab({
                 const rows = weeklyRowsFor(year, pid);
                 const rowByWeek = new Map(rows.map((r) => [r.wk, r]));
                 const byeWeeks = new Set(getPlayerByeWeeks(year, pid));
-                const seasonEnd = Math.min(
+                const capExclusive = __resolveCurrentWeekExclusiveSimple(
+                  league,
+                  currentWeekBySeason,
+                  year
+                );
+                const completedCap =
+                  Number.isFinite(capExclusive) && capExclusive > 0
+                    ? capExclusive - 1
+                    : null;
+                const baseSeasonEnd = Math.min(
                   FANTASY_PLAYOFF_END,
                   weeksEndFromRosters(year)
+                );
+                const effectiveSeasonEnd =
+                  completedCap != null
+                    ? Math.min(baseSeasonEnd, completedCap)
+                    : baseSeasonEnd;
+                const seasonEnd = Math.max(
+                  0,
+                  Math.floor(effectiveSeasonEnd)
                 );
                 const weeks = Array.from(
                   { length: seasonEnd },
