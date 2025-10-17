@@ -64,3 +64,27 @@ a:hover {
     opacity: 0;
   }
 }
+
+@keyframes reverse-modal-rewind {
+  0% {
+    transform: perspective(1200px) rotateY(-6deg) scale(0.92);
+    filter: blur(6px);
+    opacity: 0;
+  }
+  60% {
+    transform: perspective(1200px) rotateY(2deg) scale(1.02);
+    filter: blur(1px);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+.reverse-modal-anim {
+  animation: reverse-modal-rewind 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+  will-change: transform, filter, opacity;
+}
