@@ -7035,23 +7035,24 @@ export function RecordsTab({ league }) {
     </div>
   );
 }
-// ---------- TradingTab (year -> trades UI with PPG before/after using rosters) ----------
+// ---------- TradingTab (year -> trades UI with PPG before/after) ----------
 export function TradingTab({
   league, // { owners, hiddenManagers }
   selectedLeague,
-  espnTradesDetailedBySeason = {}, // { [year]: Trade[] }
+
+  // Data
+  espnTradesDetailedBySeason = {}, // { [year]: Trade[] | {id:Trade} }
   espnOwnerByTeamByYear = {}, // { [year]: { [teamId]: ownerName } }
   espnOwnerFullByTeamByYear = {}, // { [year]: { [teamId]: ownerFullName } }
   espnTeamNamesByOwner = {}, // { [ownerName]: "Team Nickname" }
-  espnRostersByYear = {}, // used for PPG + inference
-  espnRosterAcqByYear = {}, // used for names + seeds
-  currentWeekBySeason = {}, // { [year]: number } (not used for PPG math)
-  fallbackTransactionsByYear = {}, // optional backup for very old seasons
-  espnWeeklyPtsByYear = {}, // NOT used for PPG calculation anymore
+  espnRostersByYear = {}, // { [year]: { [teamId]: { [week]: RosterEntry[] } } }
+  espnRosterAcqByYear = {}, // { [year]: { [teamId]: { [playerId]: {acquisitionType, name, ...} } } }
+  espnWeeklyPtsByYear = {}, // { [year]: { [playerId]: Array|Object|{weeks:...} } }
+  currentWeekBySeason = {}, // { [year]: number } (not used for ppg endpoint—see note)
+  fallbackTransactionsByYear = {}, // unused here
 }) {
-  // -- helpers --------------------------------------------------------------
+  // ---------------- helpers ----------------
   const safeArr = (v) => (Array.isArray(v) ? v : []);
-  const isFiniteNum = (n) => Number.isFinite(Number(n));
   const toInt = (n, d = null) => {
     const v = Number(n);
     return Number.isFinite(v) ? v : d;
@@ -7064,11 +7065,15 @@ export function TradingTab({
     espnOwnerByTeamByYear?.[year]?.[teamId] ||
     `Team ${teamId}`;
 
-  // ---- playerId -> name index for a year (acq + roster names) -------------
+  // We want post PPG to include the week of the trade and run through
+  // Week 17 (fantasy playoffs end), per your spec.
+  const FANTASY_PLAYOFF_END = 17;
+
+  // ---------------- name index ----------------
   const buildNameIndexForYear = (year) => {
     const idx = new Map();
 
-    // rosters: espnRostersByYear[year][teamId][week] = [{ pid/playerId/player.id, name/player.fullName }, ...]
+    // roster-derived names
     const ry = espnRostersByYear?.[year] || {};
     Object.values(ry).forEach((weeks) => {
       Object.values(weeks || {}).forEach((list) => {
@@ -7085,7 +7090,7 @@ export function TradingTab({
       });
     });
 
-    // acquisitions: espnRosterAcqByYear[year][teamId][playerId] = { name, ... }
+    // acquisitions-derived names
     const aq = espnRosterAcqByYear?.[year] || {};
     Object.values(aq).forEach((teamMap) => {
       Object.entries(teamMap || {}).forEach(([pidRaw, meta]) => {
@@ -7098,31 +7103,68 @@ export function TradingTab({
     return idx;
   };
 
-  // Regular season end guess (used for sorting only; PPG uses roster max week)
-  const regSeasonEndWeek = (year) => toInt(currentWeekBySeason?.[year]) || 14;
+  // years we’ll render = union of detailed + any acq entries
+  const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map(
+    (y) => Number(y)
+  );
+  const yearsFromAcq = Object.keys(espnRosterAcqByYear || {}).map((y) =>
+    Number(y)
+  );
+  const yearList = uniq([...yearsFromDetailed, ...yearsFromAcq])
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a);
 
-  // ---- INFERENCE: seed-from-TRADE and expand by roster diffs --------------
-  // For every player whose acquisitionType === "TRADE", find the week + teams (A,B)
-  // where ownership flips, then expand the package by including *all* players that
-  // moved from A→B or B→A across that week boundary (regardless of their acq type).
+  const playerNameIndexByYear = {};
+  yearList.forEach(
+    (yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr))
+  );
+  const pname = (year, pid) => {
+    const id = toInt(pid);
+    if (!Number.isFinite(id)) return `#${pid}`;
+    return playerNameIndexByYear[year]?.get(id) || `#${id}`;
+  };
+
+  // ---------------- ownership + trade detection ----------------
+  const ownerOfAtWeek = (year, pid, week) => {
+    const ry = espnRostersByYear?.[year] || {};
+    for (const [tid, weeks] of Object.entries(ry)) {
+      const list = weeks?.[week] || [];
+      if (
+        safeArr(list).some(
+          (e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === pid
+        )
+      ) {
+        return toInt(tid);
+      }
+    }
+    return null;
+  };
+
+  // first week where owner flips
+  const findTradeWeek = (year, pid) => {
+    // bound by what we actually have in rosters (safest)
+    const ry = espnRostersByYear?.[year] || {};
+    let maxWeek = 0;
+    Object.values(ry).forEach((weeks) => {
+      Object.keys(weeks || {}).forEach((w) => {
+        const n = toInt(w);
+        if (n) maxWeek = Math.max(maxWeek, n);
+      });
+    });
+    const last = Math.max(maxWeek, FANTASY_PLAYOFF_END);
+
+    for (let w = 2; w <= last; w++) {
+      const prev = ownerOfAtWeek(year, pid, w - 1);
+      const curr = ownerOfAtWeek(year, pid, w);
+      if (prev && curr && prev !== curr) return w;
+    }
+    return null;
+  };
+
+  // infer a trade by seeding on players with acquisitionType === 'TRADE' and diffing rosters around the flip
   const inferTradesByRosterDiff = (year) => {
     const rosters = espnRostersByYear?.[year] || {};
     const teamIds = Object.keys(rosters).map(Number).filter(Number.isFinite);
-    const endWeek = regSeasonEndWeek(year);
-
-    const ownerOf = (pid, w) => {
-      const id = toInt(pid);
-      if (!Number.isFinite(id)) return null;
-      for (const tid of teamIds) {
-        const list = rosters[tid]?.[w] || [];
-        if (
-          list.some((e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === id)
-        ) {
-          return tid;
-        }
-      }
-      return null;
-    };
 
     const idsAt = (tid, wk) =>
       new Set(
@@ -7131,7 +7173,7 @@ export function TradingTab({
           .filter(Number.isFinite)
       );
 
-    // seed pids from acquisitions marked TRADE
+    // seed: all pids marked TRADE
     const seeds = [];
     const acq = espnRosterAcqByYear?.[year] || {};
     Object.values(acq).forEach((teamMap) => {
@@ -7147,70 +7189,200 @@ export function TradingTab({
     const nm = (pid) => nameIdx.get(toInt(pid)) || `#${pid}`;
 
     const out = [];
-    const seen = new Set(); // signature de-dupe
+    const seen = new Set();
 
     for (const pid of seeds) {
-      // find first ownership change (week, fromTeam, toTeam)
-      let changeWeek = null,
-        fromTeam = null,
-        toTeam = null;
-      for (let w = 2; w <= endWeek; w++) {
-        const prev = ownerOf(pid, w - 1);
-        const curr = ownerOf(pid, w);
-        if (prev && curr && prev !== curr) {
-          changeWeek = w;
-          fromTeam = prev;
-          toTeam = curr;
-          break;
-        }
-      }
-      if (!changeWeek) continue;
+      const w = findTradeWeek(year, pid);
+      if (!w) continue;
 
-      // expand: everyone who moved between these two teams across (w-1 -> w)
-      const Aprev = idsAt(fromTeam, changeWeek - 1);
-      const Aafter = idsAt(fromTeam, changeWeek);
-      const Bprev = idsAt(toTeam, changeWeek - 1);
-      const Bafter = idsAt(toTeam, changeWeek);
+      const fromTeam = ownerOfAtWeek(year, pid, w - 1);
+      const toTeam = ownerOfAtWeek(year, pid, w);
+      if (!fromTeam || !toTeam || fromTeam === toTeam) continue;
+
+      const Aprev = idsAt(fromTeam, w - 1);
+      const Aafter = idsAt(fromTeam, w);
+      const Bprev = idsAt(toTeam, w - 1);
+      const Bafter = idsAt(toTeam, w);
 
       const AtoB = [...Aprev].filter((id) => !Aafter.has(id) && Bafter.has(id));
-      const BtoA = [...Bprev].filter((id) => !Bafter.has(id) && Aafter.has(id));
+      const BtoA = [...Bprev].filter((id) =>
+        !Bprev.has(id) ? false : !Bafter.has(id) && Aafter.has(id)
+      );
 
-      // build trade object
       const trade = {
         year,
-        week: changeWeek,
-        leftTeamId: fromTeam,
-        rightTeamId: toTeam,
-        leftGets: BtoA.map((id) => ({ pid: id, name: nm(id) })), // what "fromTeam" receives
-        rightGets: AtoB.map((id) => ({ pid: id, name: nm(id) })), // what "toTeam" receives
+        week: w,
+        leftTeamId: fromTeam, // "from" side (sending)
+        rightTeamId: toTeam, // "to" side (receiving)
+        leftGets: BtoA.map((id) => ({ pid: id, name: nm(id) })),
+        rightGets: AtoB.map((id) => ({ pid: id, name: nm(id) })),
       };
 
-      // de-dupe by signature (treat A↔B and B↔A as the same trade)
+      // order-insensitive signature
       const L = trade.leftGets
-        .map((p) => p.pid)
+        .map((p) => +p.pid)
         .sort((a, b) => a - b)
         .join(",");
       const R = trade.rightGets
-        .map((p) => p.pid)
+        .map((p) => +p.pid)
         .sort((a, b) => a - b)
         .join(",");
-      const sig = `${trade.week}|${trade.leftTeamId}|${trade.rightTeamId}|${L}|${R}`;
-      const revSig = `${trade.week}|${trade.rightTeamId}|${trade.leftTeamId}|${R}|${L}`;
-
-      if (!seen.has(sig) && !seen.has(revSig)) {
-        seen.add(sig);
-        seen.add(revSig);
-        if (trade.leftGets.length > 0 && trade.rightGets.length > 0) {
-          out.push(trade);
-        }
+      const s1 = `${trade.week}|${Math.min(
+        trade.leftTeamId,
+        trade.rightTeamId
+      )}-${Math.max(trade.leftTeamId, trade.rightTeamId)}|${L}|${R}`;
+      if (!seen.has(s1) && trade.leftGets.length && trade.rightGets.length) {
+        seen.add(s1);
+        out.push(trade);
       }
     }
 
     return out;
   };
 
-  // ---- normalize any built-in trade shapes we already have ----------------
-  // => { year, week, leftTeamId, rightTeamId, leftGets:[{pid,name}], rightGets:[{pid,name}] }
+  // ---------------- weekly points reader (robust) ----------------
+  // prefer espnWeeklyPtsByYear (skips byes naturally when keys missing),
+  // fallback to roster points for that week when needed.
+  const ptsFromRosterWeek = (year, pid, week) => {
+    const ry = espnRostersByYear?.[year] || {};
+    for (const weeks of Object.values(ry)) {
+      const list = weeks?.[week] || [];
+      for (const e of safeArr(list)) {
+        const id = toInt(e?.pid ?? e?.playerId ?? e?.player?.id);
+        if (id === pid) {
+          // typical names we’ve seen
+          const tries = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "fantasy",
+            "ppr",
+            "pprPts",
+          ];
+          for (const k of tries) {
+            const v = e?.[k];
+            if (Number.isFinite(Number(v))) return Number(v);
+          }
+          // some leagues put totals under nested objects
+          const alt = e?.totals || e?.stats || e?.points;
+          if (alt && typeof alt === "object") {
+            for (const v of Object.values(alt)) {
+              if (Number.isFinite(Number(v))) return Number(v);
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const ptsForWeek = (year, playerId, week) => {
+    const map = espnWeeklyPtsByYear?.[year];
+    const row = map?.[playerId];
+    const coerce = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+
+    if (row != null) {
+      // A) flat number[] indexed by (week-1)
+      if (Array.isArray(row)) {
+        const ix = week - 1;
+        if (ix >= 0 && ix < row.length) return coerce(row[ix]);
+      }
+      // B) {weeks:{...}} or plain object keyed by week number/string or "W10"
+      const base =
+        row && typeof row === "object" && row.weeks ? row.weeks : row;
+
+      if (base && typeof base === "object") {
+        const direct = base[week] ?? base[String(week)] ?? base[`W${week}`];
+        if (direct != null) {
+          if (typeof direct === "object") {
+            // nested object with a points field
+            const tries = [
+              "pts",
+              "points",
+              "total",
+              "appliedTotal",
+              "ppr",
+              "value",
+            ];
+            for (const k of tries) {
+              const v = direct?.[k];
+              const n = coerce(v);
+              if (n != null) return n;
+            }
+          } else {
+            const n = coerce(direct);
+            if (n != null) return n;
+          }
+        }
+
+        // array of objects with {week, points}
+        if (Array.isArray(base)) {
+          for (const it of base) {
+            if (it && (it.week === week || it.scoringPeriodId === week)) {
+              const tries = [
+                "pts",
+                "points",
+                "total",
+                "appliedTotal",
+                "ppr",
+                "value",
+              ];
+              for (const k of tries) {
+                const n = coerce(it?.[k]);
+                if (n != null) return n;
+              }
+            }
+          }
+        }
+
+        // generic object whose children hold {week, ...}
+        for (const v of Object.values(base)) {
+          if (
+            v &&
+            typeof v === "object" &&
+            (v.week === week || v.scoringPeriodId === week)
+          ) {
+            const tries = [
+              "pts",
+              "points",
+              "total",
+              "appliedTotal",
+              "ppr",
+              "value",
+            ];
+            for (const k of tries) {
+              const n = coerce(v?.[k]);
+              if (n != null) return n;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to roster material
+    return ptsFromRosterWeek(year, playerId, week);
+  };
+
+  const avgRange = (year, playerId, startWk, endWk) => {
+    if (
+      !(Number.isFinite(startWk) && Number.isFinite(endWk) && startWk <= endWk)
+    )
+      return null;
+    let sum = 0,
+      n = 0;
+    for (let w = startWk; w <= endWk; w++) {
+      const v = ptsForWeek(year, playerId, w);
+      // Skip if we have no points record (bye/inactive). Count only real weeks.
+      if (Number.isFinite(v)) {
+        sum += v;
+        n++;
+      }
+    }
+    return n ? sum / n : null;
+  };
+
+  // --------- normalize detailed trade shapes (Kona/ESPN) ----------
   const normalizeTrade = (year, tr) => {
     if (!tr || typeof tr !== "object") return null;
 
@@ -7221,7 +7393,9 @@ export function TradingTab({
       toInt(tr.period) ??
       null;
 
-    // shape A: { teams:[{teamId, receives:[{playerId,name}]}, ...] }
+    const txId = tr.relatedTransactionId || tr.id || null; // capture for dedupe
+
+    // A) { teams:[ {teamId, receives:[{playerId,name}]}, ... ] }
     if (Array.isArray(tr.teams) && tr.teams.length >= 2) {
       const a = tr.teams[0] || {};
       const b = tr.teams[1] || {};
@@ -7240,6 +7414,7 @@ export function TradingTab({
       return {
         year,
         week,
+        txId,
         leftTeamId: toInt(a.teamId),
         rightTeamId: toInt(b.teamId),
         leftGets: getPkg(a),
@@ -7247,7 +7422,7 @@ export function TradingTab({
       };
     }
 
-    // shape B: { a:{teamId, in:[...]}, b:{teamId, in:[...]} }
+    // B) { a:{teamId, in:[...]}, b:{teamId, in:[...]} }
     if (tr.a || tr.b) {
       const A = tr.a || {};
       const B = tr.b || {};
@@ -7265,6 +7440,7 @@ export function TradingTab({
       return {
         year,
         week,
+        txId,
         leftTeamId: toInt(A.teamId),
         rightTeamId: toInt(B.teamId),
         leftGets: take(A),
@@ -7272,7 +7448,7 @@ export function TradingTab({
       };
     }
 
-    // shape C: { leftTeamId, rightTeamId, leftGets:[], rightGets:[] }
+    // C) already normalized
     if (tr.leftGets || tr.rightGets) {
       const toPkg = (xs) =>
         safeArr(xs).map((p) => {
@@ -7288,6 +7464,7 @@ export function TradingTab({
       return {
         year,
         week,
+        txId,
         leftTeamId: toInt(tr.leftTeamId),
         rightTeamId: toInt(tr.rightTeamId),
         leftGets: toPkg(tr.leftGets),
@@ -7295,7 +7472,7 @@ export function TradingTab({
       };
     }
 
-    // shape D: ESPN “detailed trade”: { items:[{type:'TRADE', playerId, fromTeamId, toTeamId}], teamActions:{...} }
+    // D) ESPN/Kona: items[{type:'TRADE', playerId, fromTeamId, toTeamId}], teamActions
     if (Array.isArray(tr.items)) {
       const items = tr.items.filter((i) =>
         (i?.type || "").toUpperCase().includes("TRADE")
@@ -7321,6 +7498,7 @@ export function TradingTab({
       return {
         year,
         week,
+        txId,
         leftTeamId: toInt(A),
         rightTeamId: toInt(B),
         leftGets: toPkg((i) => i?.toTeamId === A),
@@ -7331,37 +7509,15 @@ export function TradingTab({
     return null;
   };
 
-  // ---- years list ---------------------------------------------------------
-  const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map(
-    (y) => Number(y)
-  );
-  const yearsFromAcq = Object.keys(espnRosterAcqByYear || {}).map((y) =>
-    Number(y)
-  );
-  const yearList = uniq([...yearsFromDetailed, ...yearsFromAcq])
-    .filter(Number.isFinite)
-    .sort((a, b) => b - a);
-
-  // ---- name index + helper ----
-  const playerNameIndexByYear = {};
-  yearList.forEach(
-    (yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr))
-  );
-  const pname = (year, pid) => {
-    const id = toInt(pid);
-    if (!Number.isFinite(id)) return `#${pid}`;
-    return playerNameIndexByYear[year]?.get(id) || `#${id}`;
-  };
-
-  // ---- Build final year -> trades list (detailed + inferred, de-duped) ----
+  // ---------------- build trades by year (merge detailed+inferred, dedupe) ----------------
   const byYear = {};
   yearList.forEach((yr) => {
-    // detailed (normalize multiple shapes)
+    // detailed
     const raw = espnTradesDetailedBySeason?.[yr];
     const arr = Array.isArray(raw) ? raw : Object.values(raw || {});
     const detailed = arr.map((tr) => normalizeTrade(yr, tr)).filter(Boolean);
 
-    // seeded inference (fills missing pieces in the package)
+    // inferred
     const inferred = inferTradesByRosterDiff(yr).filter(
       (t) =>
         Number.isFinite(t?.leftTeamId) &&
@@ -7370,118 +7526,139 @@ export function TradingTab({
         (t.rightGets?.length || 0) > 0
     );
 
-    const makeSigs = (t) => {
-      const L = (t.leftGets || [])
+    // Build strong signatures for dedupe/merge
+    const canonKeyTeams = (a, b) => {
+      const [x, y] = [toInt(a), toInt(b)].sort((m, n) => m - n);
+      return `${x}-${y}`;
+    };
+    const pidKey = (list = []) =>
+      list
         .map((p) => +p.pid)
-        .sort((a, b) => a - b)
+        .filter(Number.isFinite)
+        .sort((u, v) => u - v)
         .join(",");
-      const R = (t.rightGets || [])
-        .map((p) => +p.pid)
-        .sort((a, b) => a - b)
-        .join(",");
-      const s1 = `${t.week}|${t.leftTeamId}|${t.rightTeamId}|${L}|${R}`;
-      const s2 = `${t.week}|${t.rightTeamId}|${t.leftTeamId}|${R}|${L}`;
-      return [s1, s2];
+    const tradeSig = (t) => {
+      const wk = toInt(t?.week, -1);
+      const teamsKey = canonKeyTeams(t.leftTeamId, t.rightTeamId);
+      const L = pidKey(t.leftGets);
+      const R = pidKey(t.rightGets);
+      return `${wk}|${teamsKey}|${L}|${R}`;
     };
 
+    // Index detailed by (week, teamsKey)
+    const detBucket = new Map();
+    detailed.forEach((t, i) => {
+      const wk = toInt(t?.week, -1);
+      const k = `${wk}|${canonKeyTeams(t.leftTeamId, t.rightTeamId)}`;
+      if (!detBucket.has(k)) detBucket.set(k, []);
+      detBucket.get(k).push({ idx: i, t });
+    });
+
+    // Union players
+    const unionPlayers = (A = [], B = []) => {
+      const map = new Map();
+      [...A, ...B].forEach((p) => {
+        const id = +p?.pid;
+        if (!Number.isFinite(id)) return;
+        if (!map.has(id)) map.set(id, { pid: id, name: p?.name });
+      });
+      return Array.from(map.values());
+    };
+
+    // Merge inferred into matching detailed trade (same week & teams; at least one overlapping pid)
+    const consumedInf = new Set();
+    inferred.forEach((inf) => {
+      const wk = toInt(inf?.week, -1);
+      const k = `${wk}|${canonKeyTeams(inf.leftTeamId, inf.rightTeamId)}`;
+      const cands = detBucket.get(k);
+      if (!cands || !cands.length) return;
+
+      // pick the detailed trade with the largest overlap
+      let best = null,
+        bestOverlap = 0,
+        bestSwap = false;
+      cands.forEach(({ t }) => {
+        const leftOverlap = t.leftGets.filter((lp) =>
+          inf.leftGets.some((ip) => +ip.pid === +lp.pid)
+        ).length;
+        const rightOverlap = t.rightGets.filter((rp) =>
+          inf.rightGets.some((ip) => +ip.pid === +rp.pid)
+        ).length;
+        const same = leftOverlap + rightOverlap;
+
+        const swapLeft = t.leftGets.filter((lp) =>
+          inf.rightGets.some((ip) => +ip.pid === +lp.pid)
+        ).length;
+        const swapRight = t.rightGets.filter((rp) =>
+          inf.leftGets.some((ip) => +ip.pid === +rp.pid)
+        ).length;
+        const swapped = swapLeft + swapRight;
+
+        if (same > bestOverlap) {
+          best = t;
+          bestOverlap = same;
+          bestSwap = false;
+        }
+        if (swapped > bestOverlap) {
+          best = t;
+          bestOverlap = swapped;
+          bestSwap = true;
+        }
+      });
+
+      if (!best || bestOverlap === 0) return;
+
+      const det = best;
+      const addL = bestSwap ? inf.rightGets : inf.leftGets;
+      const addR = bestSwap ? inf.leftGets : inf.rightGets;
+
+      det.leftGets = unionPlayers(det.leftGets, addL);
+      det.rightGets = unionPlayers(det.rightGets, addR);
+      consumedInf.add(inf);
+    });
+
+    // Strong de-dupe:
+    // 1) If txId present on detailed, collapse all with same txId.
+    // 2) Otherwise collapse by canonical trade signature.
     const out = [];
-    const seen = new Set();
+    const seenTx = new Set();
+    const seenSig = new Set();
 
-    for (const t of detailed) {
-      const [s1, s2] = makeSigs(t);
-      if (!seen.has(s1) && !seen.has(s2)) {
-        seen.add(s1);
-        seen.add(s2);
-        out.push(t);
-      }
-    }
-    for (const t of inferred) {
-      const [s1, s2] = makeSigs(t);
-      if (!seen.has(s1) && !seen.has(s2)) {
-        seen.add(s1);
-        seen.add(s2);
-        out.push(t);
-      }
-    }
+    const push = (t) => {
+      if (!t) return;
+      // canonicalize empty sides are not allowed
+      if (!(t.leftGets?.length && t.rightGets?.length)) return;
 
+      const txId = t.txId && String(t.txId);
+      if (txId) {
+        if (seenTx.has(txId)) return;
+        seenTx.add(txId);
+        out.push(t);
+        return;
+      }
+
+      const sig = tradeSig(t);
+      if (seenSig.has(sig)) return;
+      seenSig.add(sig);
+      out.push(t);
+    };
+
+    detailed.forEach(push);
+    inferred.filter((t) => !consumedInf.has(t)).forEach(push);
+
+    // sort by week
     byYear[yr] = out.sort((a, b) => toInt(a?.week, 0) - toInt(b?.week, 0));
   });
 
-  // ---------- PPG via ROSTERS (not espnWeeklyPts) ----------
-  // Find max week present in rosters for a given year
-  const weeksEndFromRosters = (year) => {
-    const ro = espnRostersByYear?.[year] || {};
-    let maxW = 0;
-    for (const teamId of Object.keys(ro)) {
-      const weeksObj = ro[teamId] || {};
-      for (const wk of Object.keys(weeksObj)) {
-        const w = toInt(wk);
-        if (Number.isFinite(w)) maxW = Math.max(maxW, w);
-      }
-    }
-    return maxW || 17;
-  };
+  // ---------------- PPG (before/after) helpers ----------------
+  // “pre” = avg weeks 1..(week-1), excluding weeks with no points data (bye/inactive)
+  // “post” = avg weeks week..17 (include week of trade), same exclusion rule.
+  const prePPG = (year, pid, week) =>
+    week > 1 ? avgRange(year, pid, 1, week - 1) : null;
+  const postPPG = (year, pid, week) =>
+    avgRange(year, pid, week, FANTASY_PLAYOFF_END);
 
-  // Get player's fantasy points for a given week by scanning rosters
-  const ptsFromRosters = (year, pid, week) => {
-    const ro = espnRostersByYear?.[year] || {};
-    for (const weeksObj of Object.values(ro)) {
-      const list = weeksObj?.[week] || [];
-      for (const e of safeArr(list)) {
-        const id = toInt(e?.pid ?? e?.playerId ?? e?.player?.id);
-        if (id === pid) {
-          const picks = [
-            "pts",
-            "points",
-            "totalPoints",
-            "appliedTotal",
-            "fantasy",
-            "fpts",
-            "ppr",
-            "pprPts",
-          ];
-          for (const k of picks) {
-            const v = e?.[k];
-            if (Number.isFinite(+v)) return +v;
-          }
-          const alt = e?.totals || e?.stats || e?.points;
-          if (alt && typeof alt === "object") {
-            for (const v of Object.values(alt)) {
-              if (Number.isFinite(+v)) return +v;
-            }
-          }
-          return null;
-        }
-      }
-    }
-    return null;
-  };
-
-  // Average points in [startW, endW] inclusive from rosters
-  const avgRangeFromRosters = (year, pid, startW, endW) => {
-    if (!(startW <= endW)) return null;
-    let sum = 0,
-      n = 0;
-    for (let w = startW; w <= endW; w++) {
-      const v = ptsFromRosters(year, pid, w);
-      if (Number.isFinite(v)) {
-        sum += v;
-        n++;
-      }
-    }
-    return n ? sum / n : null;
-  };
-
-  // Compute pre/post PPG given tradeWeek (post includes trade week)
-  const ppgPrePostFromRosters = (year, pid, tradeWeek) => {
-    const last = weeksEndFromRosters(year);
-    const pre =
-      tradeWeek > 1 ? avgRangeFromRosters(year, pid, 1, tradeWeek - 1) : null;
-    const post = avgRangeFromRosters(year, pid, tradeWeek, last);
-    return { pre, post };
-  };
-
-  // UI bits ---------------------------------------------------------------
+  // ---------------- UI ----------------
   const Box = ({ title, children }) => (
     <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60 p-3">
       {title ? (
@@ -7499,11 +7676,14 @@ export function TradingTab({
           <li className="text-xs opacity-60 italic">None</li>
         ) : (
           list.map((p, i) => {
-            const { pre, post } =
-              isFiniteNum(p?.pid) && isFiniteNum(week)
-                ? ppgPrePostFromRosters(year, +p.pid, +week)
-                : { pre: null, post: null };
-
+            const pre =
+              Number.isFinite(+p?.pid) && Number.isFinite(+week)
+                ? prePPG(year, +p.pid, +week)
+                : null;
+            const post =
+              Number.isFinite(+p?.pid) && Number.isFinite(+week)
+                ? postPPG(year, +p.pid, +week)
+                : null;
             return (
               <li key={i} className="text-sm">
                 <span
@@ -7534,10 +7714,8 @@ export function TradingTab({
     const leftName = ownerNameOf(t.year, t.leftTeamId);
     const rightName = ownerNameOf(t.year, t.rightTeamId);
 
-    // respect hidden managers: if *both* sides hidden, skip
-    const leftHidden = hidden.has(leftName);
-    const rightHidden = hidden.has(rightName);
-    if (leftHidden && rightHidden) return null;
+    // if both sides are hidden, skip
+    if (hidden.has(leftName) && hidden.has(rightName)) return null;
 
     return (
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-base-100/40 p-3">
@@ -7578,14 +7756,13 @@ export function TradingTab({
     );
   };
 
-  // Render ----------------------------------------------------------------
+  // ---------------- Render ----------------
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Trading</h2>
 
       {yearList.map((yr) => {
-        const list = safeArr(byYear[yr]);
-
+        const list = byYear[yr] || [];
         return (
           <details key={yr} open className="group">
             <summary className="cursor-pointer list-none mb-2">
@@ -7603,12 +7780,9 @@ export function TradingTab({
               </div>
             ) : (
               <div className="space-y-3 px-1">
-                {list
-                  .slice()
-                  .sort((a, b) => toInt(a?.week, 0) - toInt(b?.week, 0))
-                  .map((t, i) => (
-                    <TradeCard key={`${yr}-${i}`} t={t} />
-                  ))}
+                {list.map((t, i) => (
+                  <TradeCard key={`${yr}-${i}`} t={t} />
+                ))}
               </div>
             )}
           </details>
