@@ -7059,6 +7059,319 @@ export function TradingTab({
   };
   const uniq = (arr) => Array.from(new Set(arr));
 
+  // ---------------- store helpers ----------------
+  const storeLeagueRecord = React.useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw =
+        window.localStorage?.getItem("FL_STORE_v2") ||
+        window.localStorage?.getItem("FL_STORE_v1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+
+      const ids = [
+        league?.meta?.leagueId,
+        league?.leagueId,
+        selectedLeague?.meta?.leagueId,
+        selectedLeague?.leagueId,
+        parsed?.lastSelectedLeagueId,
+      ]
+        .map((id) =>
+          id != null && id !== ""
+            ? typeof id === "number"
+              ? String(id)
+              : String(id)
+            : null
+        )
+        .filter(Boolean);
+
+      const seen = new Set();
+      for (const lid of ids) {
+        if (seen.has(lid)) continue;
+        seen.add(lid);
+        const rec =
+          parsed?.leaguesById?.[lid] ??
+          (Number.isFinite(Number(lid))
+            ? parsed?.leaguesById?.[Number(lid)]
+            : undefined);
+        if (rec && typeof rec === "object") return rec;
+      }
+    } catch (err) {
+      console.warn("TradingTab: failed to read FL store for bye data", err);
+    }
+    return null;
+  }, [league, selectedLeague]);
+
+  // ---------------- pro team / bye week helpers ----------------
+  const proTeamSourceCacheRef = React.useRef(new Map());
+  const getProTeamSource = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamSourceCacheRef.current.has(cacheKey)) {
+        return proTeamSourceCacheRef.current.get(cacheKey);
+      }
+
+      const candidates = [
+        __resolveProTeamsForSeason(seasonKey, league),
+        __resolveProTeamsForSeason(seasonKey, selectedLeague),
+        __resolveProTeamsForSeason(seasonKey, storeLeagueRecord),
+      ];
+
+      const source = candidates.find((cand) => __hasAnyEntries(cand)) || null;
+      proTeamSourceCacheRef.current.set(cacheKey, source);
+      return source;
+    },
+    [league, selectedLeague, storeLeagueRecord]
+  );
+
+  const proTeamLookupCacheRef = React.useRef(new Map());
+  const getProTeamLookup = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamLookupCacheRef.current.has(cacheKey)) {
+        return proTeamLookupCacheRef.current.get(cacheKey);
+      }
+      const lookup = __buildProTeamLookup(getProTeamSource(seasonKey));
+      proTeamLookupCacheRef.current.set(cacheKey, lookup);
+      return lookup;
+    },
+    [getProTeamSource]
+  );
+
+  const teamByeCacheRef = React.useRef(new Map());
+  const resolveTeamByeWeeks = React.useCallback(
+    (seasonKey, proTeamId) => {
+      const cacheKey = `${seasonKey}|${proTeamId}`;
+      if (teamByeCacheRef.current.has(cacheKey)) {
+        return teamByeCacheRef.current.get(cacheKey);
+      }
+
+      const weeks = [];
+      const source = getProTeamSource(seasonKey);
+      const targetId = toInt(proTeamId);
+      if (Number.isFinite(targetId) && __hasAnyEntries(source)) {
+        const pushWeeks = (team) => {
+          if (!team) return;
+          const arr = __teamByeWeekNumbers(team);
+          if (arr.length) weeks.push(...arr);
+        };
+
+        if (source instanceof Map) {
+          pushWeeks(source.get(targetId));
+          pushWeeks(source.get(String(targetId)));
+        } else if (Array.isArray(source)) {
+          const found = source.find(
+            (team) =>
+              toInt(team?.id ?? team?.teamId ?? team?.proTeamId) === targetId
+          );
+          pushWeeks(found);
+        } else if (typeof source === "object") {
+          for (const [key, team] of Object.entries(source || {})) {
+            if (
+              toInt(team?.id ?? team?.teamId ?? team?.proTeamId ?? key) ===
+              targetId
+            ) {
+              pushWeeks(team);
+              break;
+            }
+          }
+        }
+      }
+
+      const uniqWeeks = Array.from(new Set(weeks.filter(Number.isFinite))).sort(
+        (a, b) => a - b
+      );
+      teamByeCacheRef.current.set(cacheKey, uniqWeeks);
+      return uniqWeeks;
+    },
+    [getProTeamSource]
+  );
+
+  const playerProTeamCacheRef = React.useRef(new Map());
+  const resolveProTeamId = React.useCallback(
+    (seasonKey, playerId) => {
+      const cacheKey = `${seasonKey}|${playerId}`;
+      if (playerProTeamCacheRef.current.has(cacheKey)) {
+        return playerProTeamCacheRef.current.get(cacheKey);
+      }
+
+      const pid = toInt(playerId);
+      if (!Number.isFinite(pid)) {
+        playerProTeamCacheRef.current.set(cacheKey, null);
+        return null;
+      }
+
+      const lookup = getProTeamLookup(seasonKey);
+      const fromRosters = espnRostersByYear?.[seasonKey] || {};
+      for (const weeks of Object.values(fromRosters || {})) {
+        for (const entries of Object.values(weeks || {})) {
+          for (const entry of safeArr(entries)) {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (entryPid !== pid) continue;
+
+            const directCandidates = [
+              entry?.proTeamId,
+              entry?.teamId,
+              entry?.nflTeamId,
+              entry?.proTeam?.id,
+              entry?.player?.proTeamId,
+              entry?.player?.teamId,
+              entry?.player?.nflTeamId,
+              entry?.playerPoolEntry?.proTeamId,
+              entry?.playerPoolEntry?.teamId,
+              entry?.playerPoolEntry?.player?.proTeamId,
+              entry?.playerPoolEntry?.player?.teamId,
+            ];
+            for (const cand of directCandidates) {
+              const id = toInt(cand);
+              if (Number.isFinite(id)) {
+                playerProTeamCacheRef.current.set(cacheKey, id);
+                return id;
+              }
+            }
+
+            if (lookup?.abbrevToId) {
+              const ids = __entryProTeamIds(entry, lookup.abbrevToId);
+              for (const id of ids) {
+                if (Number.isFinite(id)) {
+                  playerProTeamCacheRef.current.set(cacheKey, id);
+                  return id;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const acqByYear = espnRosterAcqByYear?.[seasonKey] || {};
+      for (const team of Object.values(acqByYear || {})) {
+        if (!team) continue;
+        const rec = team[pid] ?? team[String(pid)];
+        if (!rec || typeof rec !== "object") continue;
+        const candidates = [
+          rec?.proTeamId,
+          rec?.teamId,
+          rec?.nflTeamId,
+          rec?.player?.proTeamId,
+          rec?.player?.teamId,
+          rec?.player?.nflTeamId,
+          rec?.playerPoolEntry?.player?.proTeamId,
+        ];
+        for (const cand of candidates) {
+          const id = toInt(cand);
+          if (Number.isFinite(id)) {
+            playerProTeamCacheRef.current.set(cacheKey, id);
+            return id;
+          }
+        }
+      }
+
+      const candidatePools = [];
+      if (storeLeagueRecord) {
+        candidatePools.push(
+          storeLeagueRecord.playersById,
+          storeLeagueRecord.espnPlayersById,
+          storeLeagueRecord.playerCardsById,
+          storeLeagueRecord.konaPlayersById
+        );
+      }
+      if (typeof window !== "undefined") {
+        const src = window.__FL_SOURCES || window.__sources || {};
+        candidatePools.push(
+          src.playersById,
+          src.espnPlayersById,
+          src.playerCardsById,
+          src.konaPlayersById
+        );
+      }
+
+      for (const pool of candidatePools) {
+        if (!pool) continue;
+        const rec = pool[pid] ?? pool[String(pid)];
+        if (!rec || typeof rec !== "object") continue;
+        const candidates = [
+          rec?.proTeamId,
+          rec?.teamId,
+          rec?.nflTeamId,
+          rec?.pro?.teamId,
+          rec?.player?.proTeamId,
+          rec?.player?.teamId,
+          rec?.player?.nflTeamId,
+          rec?.playerPoolEntry?.player?.proTeamId,
+        ];
+        for (const cand of candidates) {
+          const id = toInt(cand);
+          if (Number.isFinite(id)) {
+            playerProTeamCacheRef.current.set(cacheKey, id);
+            return id;
+          }
+        }
+      }
+
+      playerProTeamCacheRef.current.set(cacheKey, null);
+      return null;
+    },
+    [
+      espnRostersByYear,
+      espnRosterAcqByYear,
+      getProTeamLookup,
+      storeLeagueRecord,
+    ]
+  );
+
+  const playerByeCacheRef = React.useRef(new Map());
+  const getPlayerByeWeeks = React.useCallback(
+    (seasonKey, playerId) => {
+      const cacheKey = `${seasonKey}|${playerId}`;
+      if (playerByeCacheRef.current.has(cacheKey)) {
+        return playerByeCacheRef.current.get(cacheKey);
+      }
+
+      const pid = toInt(playerId);
+      if (!Number.isFinite(pid)) {
+        playerByeCacheRef.current.set(cacheKey, []);
+        return [];
+      }
+
+      const weeksSet = new Set();
+      const rosters = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(rosters || {}).forEach(([, byWeek]) => {
+        Object.entries(byWeek || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          safeArr(entries).forEach((entry) => {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (entryPid !== pid) return;
+            __entryByeWeekNumbers(entry).forEach((n) =>
+              Number.isFinite(Number(n)) ? weeksSet.add(Number(n)) : null
+            );
+            if (Number.isFinite(wk) && __entryIsOnByeForWeek(entry, wk)) {
+              weeksSet.add(wk);
+            }
+          });
+        });
+      });
+
+      const proTeamId = resolveProTeamId(seasonKey, pid);
+      if (Number.isFinite(proTeamId)) {
+        resolveTeamByeWeeks(seasonKey, proTeamId).forEach((wk) =>
+          weeksSet.add(wk)
+        );
+      }
+
+      const weeks = Array.from(weeksSet)
+        .filter((wk) => Number.isFinite(wk))
+        .sort((a, b) => a - b);
+      playerByeCacheRef.current.set(cacheKey, weeks);
+      return weeks;
+    },
+    [espnRostersByYear, resolveProTeamId, resolveTeamByeWeeks]
+  );
+
   const hidden = new Set(league?.hiddenManagers || []);
   const ownerNameOf = (year, teamId) =>
     espnOwnerFullByTeamByYear?.[year]?.[teamId] ||
@@ -7125,41 +7438,52 @@ export function TradingTab({
   };
 
   // ---------------- ownership + trade detection ----------------
-  const ownerOfAtWeek = (year, pid, week) => {
-    const ry = espnRostersByYear?.[year] || {};
-    for (const [tid, weeks] of Object.entries(ry)) {
-      const list = weeks?.[week] || [];
-      if (
-        safeArr(list).some(
-          (e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === pid
-        )
-      ) {
-        return toInt(tid);
+  const ownerOfAtWeek = React.useCallback(
+    (year, pid, week) => {
+      const ry = espnRostersByYear?.[year] || {};
+      for (const [tid, weeks] of Object.entries(ry)) {
+        const list = weeks?.[week] || [];
+        if (
+          safeArr(list).some(
+            (e) => toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === pid
+          )
+        ) {
+          return toInt(tid);
+        }
       }
-    }
-    return null;
-  };
+      return null;
+    },
+    [espnRostersByYear]
+  );
+
+  const weeksEndFromRosters = React.useCallback(
+    (year) => {
+      const ry = espnRostersByYear?.[year] || {};
+      let maxWeek = 0;
+      Object.values(ry).forEach((weeks) => {
+        Object.keys(weeks || {}).forEach((w) => {
+          const n = toInt(w);
+          if (Number.isFinite(n)) maxWeek = Math.max(maxWeek, n);
+        });
+      });
+      return Math.max(maxWeek, FANTASY_PLAYOFF_END);
+    },
+    [espnRostersByYear]
+  );
 
   // first week where owner flips
-  const findTradeWeek = (year, pid) => {
-    // bound by what we actually have in rosters (safest)
-    const ry = espnRostersByYear?.[year] || {};
-    let maxWeek = 0;
-    Object.values(ry).forEach((weeks) => {
-      Object.keys(weeks || {}).forEach((w) => {
-        const n = toInt(w);
-        if (n) maxWeek = Math.max(maxWeek, n);
-      });
-    });
-    const last = Math.max(maxWeek, FANTASY_PLAYOFF_END);
-
-    for (let w = 2; w <= last; w++) {
-      const prev = ownerOfAtWeek(year, pid, w - 1);
-      const curr = ownerOfAtWeek(year, pid, w);
-      if (prev && curr && prev !== curr) return w;
-    }
-    return null;
-  };
+  const findTradeWeek = React.useCallback(
+    (year, pid) => {
+      const last = weeksEndFromRosters(year);
+      for (let w = 2; w <= last; w++) {
+        const prev = ownerOfAtWeek(year, pid, w - 1);
+        const curr = ownerOfAtWeek(year, pid, w);
+        if (prev && curr && prev !== curr) return w;
+      }
+      return null;
+    },
+    [ownerOfAtWeek, weeksEndFromRosters]
+  );
 
   // infer a trade by seeding on players with acquisitionType === 'TRADE' and diffing rosters around the flip
   const inferTradesByRosterDiff = (year) => {
@@ -7250,7 +7574,6 @@ export function TradingTab({
       for (const e of safeArr(list)) {
         const id = toInt(e?.pid ?? e?.playerId ?? e?.player?.id);
         if (id === pid) {
-          // typical names we’ve seen
           const tries = [
             "pts",
             "points",
@@ -7264,7 +7587,6 @@ export function TradingTab({
             const v = e?.[k];
             if (Number.isFinite(Number(v))) return Number(v);
           }
-          // some leagues put totals under nested objects
           const alt = e?.totals || e?.stats || e?.points;
           if (alt && typeof alt === "object") {
             for (const v of Object.values(alt)) {
@@ -7296,7 +7618,6 @@ export function TradingTab({
         const direct = base[week] ?? base[String(week)] ?? base[`W${week}`];
         if (direct != null) {
           if (typeof direct === "object") {
-            // nested object with a points field
             const tries = [
               "pts",
               "points",
@@ -7316,7 +7637,6 @@ export function TradingTab({
           }
         }
 
-        // array of objects with {week, points}
         if (Array.isArray(base)) {
           for (const it of base) {
             if (it && (it.week === week || it.scoringPeriodId === week)) {
@@ -7336,7 +7656,6 @@ export function TradingTab({
           }
         }
 
-        // generic object whose children hold {week, ...}
         for (const v of Object.values(base)) {
           if (
             v &&
@@ -7364,6 +7683,7 @@ export function TradingTab({
     return ptsFromRosterWeek(year, playerId, week);
   };
 
+  // --- Averages that explicitly EXCLUDE bye weeks (mirrors Luck Index bye logic)
   const avgRange = (year, playerId, startWk, endWk) => {
     if (
       !(Number.isFinite(startWk) && Number.isFinite(endWk) && startWk <= endWk)
@@ -7371,7 +7691,9 @@ export function TradingTab({
       return null;
     let sum = 0,
       n = 0;
+    const byeSet = new Set(getPlayerByeWeeks(year, playerId));
     for (let w = startWk; w <= endWk; w++) {
+      if (byeSet.has(w)) continue; // ← exclude byes
       const v = ptsForWeek(year, playerId, w);
       // Skip if we have no points record (bye/inactive). Count only real weeks.
       if (Number.isFinite(v)) {
@@ -7651,12 +7973,257 @@ export function TradingTab({
   });
 
   // ---------------- PPG (before/after) helpers ----------------
-  // “pre” = avg weeks 1..(week-1), excluding weeks with no points data (bye/inactive)
-  // “post” = avg weeks week..17 (include week of trade), same exclusion rule.
+  // “pre” = avg weeks 1..(week-1), excluding BYE weeks and non-scoring weeks
+  // “post” = avg weeks week..17 (include week of trade), excluding BYE weeks and non-scoring weeks
   const prePPG = (year, pid, week) =>
     week > 1 ? avgRange(year, pid, 1, week - 1) : null;
   const postPPG = (year, pid, week) =>
     avgRange(year, pid, week, FANTASY_PLAYOFF_END);
+
+  // ---------- Detailed inspector (also excludes BYEs) ----------
+  const weeklyRowsFor = React.useCallback(
+    (seasonKey, playerId) => {
+      const rows = [];
+      const ro = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
+        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          const entry = safeArr(entries).find(
+            (e) =>
+              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
+          );
+          if (!entry) return;
+          const picks = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "ppr",
+            "pprPts",
+            "value",
+          ];
+          let pts = null;
+          for (const key of picks) {
+            if (Number.isFinite(Number(entry?.[key]))) {
+              pts = Number(entry?.[key]);
+              break;
+            }
+          }
+          rows.push({
+            wk,
+            pts,
+            fantasyTeamId: toInt(teamKey),
+          });
+        });
+      });
+      return rows.sort((a, b) => a.wk - b.wk);
+    },
+    [espnRostersByYear]
+  );
+
+  const tradePPGExcludingBye = React.useCallback(
+    (seasonKey, playerId, tradeWeek) => {
+      const pid = toInt(playerId);
+      const tw = toInt(tradeWeek);
+      if (!Number.isFinite(pid) || !Number.isFinite(tw)) return null;
+
+      const rows = weeklyRowsFor(seasonKey, pid);
+      const byeWeeks = getPlayerByeWeeks(seasonKey, pid);
+      const byeSet = new Set(byeWeeks);
+      const last = Math.min(
+        FANTASY_PLAYOFF_END,
+        weeksEndFromRosters(seasonKey)
+      );
+
+      const pre = rows.filter((r) => r.wk < tw && !byeSet.has(r.wk));
+      const post = rows.filter(
+        (r) => r.wk >= tw && r.wk <= last && !byeSet.has(r.wk)
+      );
+
+      const sum = (arr) =>
+        arr.reduce((acc, item) => acc + (Number(item.pts) || 0), 0);
+      const preSum = sum(pre);
+      const postSum = sum(post);
+
+      return {
+        season: seasonKey,
+        pid,
+        tradeWeek: tw,
+        byeWeeks,
+        preWeeks: pre.map((r) => r.wk),
+        preSum: +preSum.toFixed(2),
+        prePPG: pre.length ? +(preSum / pre.length).toFixed(4) : null,
+        postWeeks: post.map((r) => r.wk),
+        postSum: +postSum.toFixed(2),
+        postPPG: post.length ? +(postSum / post.length).toFixed(4) : null,
+      };
+    },
+    [getPlayerByeWeeks, weeklyRowsFor, weeksEndFromRosters]
+  );
+
+  // Small debug API (handy when verifying bye behavior)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const showByeWeeks = (seasonKey) => {
+      const source = getProTeamSource(seasonKey);
+      const rows = [];
+      if (__hasAnyEntries(source)) {
+        const pushRow = (team, key) => {
+          if (!team || typeof team !== "object") return;
+          const id = toInt(team?.id ?? team?.teamId ?? team?.proTeamId ?? key);
+          const abbrev =
+            team?.abbrev ||
+            team?.abbreviation ||
+            team?.teamAbbrev ||
+            team?.teamAbbreviation ||
+            null;
+          const name =
+            team?.nickname ||
+            team?.nickName ||
+            team?.shortName ||
+            team?.name ||
+            null;
+          const weeks = __teamByeWeekNumbers(team);
+          rows.push({
+            proTeamId: id,
+            Abbrev: abbrev || "",
+            Name: name || "",
+            ByeWeeks: weeks.join(", "),
+          });
+        };
+
+        if (source instanceof Map) {
+          source.forEach((team, key) => pushRow(team, key));
+        } else if (Array.isArray(source)) {
+          source.forEach((team, idx) => pushRow(team, team?.id ?? idx));
+        } else if (typeof source === "object") {
+          Object.entries(source || {}).forEach(([key, team]) =>
+            pushRow(team, key)
+          );
+        }
+      }
+      rows.sort(
+        (a, b) =>
+          (Number(a.ByeWeeks.split(", ")[0]) || 99) -
+            (Number(b.ByeWeeks.split(", ")[0]) || 99) ||
+          String(a.Abbrev).localeCompare(String(b.Abbrev))
+      );
+      console.table(rows);
+      return rows;
+    };
+
+    const byeWeekForPlayer = (seasonKey, playerId) => {
+      const weeks = getPlayerByeWeeks(seasonKey, playerId);
+      const proTeamId = resolveProTeamId(seasonKey, playerId);
+      const lookup = getProTeamLookup(seasonKey);
+      let team = null;
+      if (lookup?.abbrevToId instanceof Map) {
+        for (const [token, id] of lookup.abbrevToId.entries()) {
+          if (id === proTeamId) {
+            team = token;
+            break;
+          }
+        }
+      }
+      return {
+        proTeamId,
+        team,
+        byeWeeks: weeks,
+        byeWeek: weeks[0] ?? null,
+      };
+    };
+
+    const inspectTradePPG = (seasonKey, playerId, forcedTradeWeek) => {
+      const yr = toInt(seasonKey);
+      const pid = toInt(playerId);
+      if (!Number.isFinite(yr) || !Number.isFinite(pid)) {
+        console.warn("inspectTradePPG: year and playerId must be numbers");
+        return null;
+      }
+
+      const ro = espnRostersByYear?.[yr] || {};
+      const nameMap = new Map();
+      Object.values(ro || {}).forEach((weeks) => {
+        Object.values(weeks || {}).forEach((entries) => {
+          safeArr(entries).forEach((entry) => {
+            const entryPid = toInt(
+              entry?.pid ?? entry?.playerId ?? entry?.player?.id
+            );
+            if (!entryPid || nameMap.has(entryPid)) return;
+            const nm =
+              entry?.name ||
+              entry?.player?.fullName ||
+              entry?.player?.displayName ||
+              entry?.player?.name ||
+              entry?.playerPoolEntry?.player?.fullName ||
+              null;
+            if (nm) nameMap.set(entryPid, nm);
+          });
+        });
+      });
+
+      const tradeWeek = toInt(forcedTradeWeek) ?? findTradeWeek(yr, pid) ?? 10;
+      const byeInfo = byeWeekForPlayer(yr, pid);
+      const rows = weeklyRowsFor(yr, pid);
+      const byeSet = new Set(byeInfo.byeWeeks || []);
+
+      console.log(
+        `Player: ${nameMap.get(pid) || `#${pid}`}, Year ${yr}, proTeam=${
+          byeInfo.team || byeInfo.proTeamId || "?"
+        }, Trade week=${tradeWeek}, Bye weeks=${
+          (byeInfo.byeWeeks || []).join(", ") || "n/a"
+        }`
+      );
+      console.table(
+        rows.map((row) => ({
+          Week: row.wk,
+          Points: row.pts,
+          Counted_in_PRE:
+            row.wk < tradeWeek && !byeSet.has(row.wk) ? "yes" : "no",
+          Counted_in_POST:
+            row.wk >= tradeWeek &&
+            row.wk <= FANTASY_PLAYOFF_END &&
+            !byeSet.has(row.wk)
+              ? "yes"
+              : "no",
+        }))
+      );
+      const result = tradePPGExcludingBye(yr, pid, tradeWeek);
+      console.log(result);
+      return result;
+    };
+
+    const resolvePlayerProTeamId = (seasonKey, playerId) =>
+      resolveProTeamId(seasonKey, playerId);
+
+    const api = {
+      showByeWeeks,
+      inspectTradePPG,
+      byeWeekForPlayer,
+      resolveProTeamId: resolvePlayerProTeamId,
+    };
+
+    Object.assign(window, api);
+    console.log(
+      "✅ Ready: showByeWeeks(year), inspectTradePPG(year,pid[,tradeWeek]), byeWeekForPlayer(year,pid)"
+    );
+
+    return () => {
+      Object.entries(api).forEach(([key, fn]) => {
+        if (window[key] === fn) delete window[key];
+      });
+    };
+  }, [
+    espnRostersByYear,
+    findTradeWeek,
+    getPlayerByeWeeks,
+    getProTeamLookup,
+    getProTeamSource,
+    resolveProTeamId,
+    tradePPGExcludingBye,
+    weeklyRowsFor,
+  ]);
 
   // ---------------- UI ----------------
   const Box = ({ title, children }) => (
