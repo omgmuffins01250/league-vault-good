@@ -7362,8 +7362,8 @@ export function TradingTab({
     // candidates together
     const cand = [...detailed, ...inferred];
 
-    // group by unordered teams per week, then UNION players,
-    // then re-orient by checking who owns each player AFTER the trade week.
+    // group by unordered teams per week, then UNION players based on which
+    // side received them in the detailed/inferred payloads.
     const groups = new Map();
     const keyOf = (t) => {
       const a = toInt(t.leftTeamId), b = toInt(t.rightTeamId);
@@ -7371,43 +7371,65 @@ export function TradingTab({
       return `${t.week}|${lo}|${hi}`;
     };
 
-    cand.forEach(t => {
-      if (!Number.isFinite(t?.week)) return;
-      if (!Number.isFinite(t?.leftTeamId) || !Number.isFinite(t?.rightTeamId)) return;
-      const key = keyOf(t);
+    const addPkgToGroup = (group, teamId, pkg) => {
+      const tid = toInt(teamId);
+      if (!Number.isFinite(tid)) return;
+      if (tid !== group.a && tid !== group.b) return;
+      if (!group.receives.has(tid)) group.receives.set(tid, new Map());
+      const bucket = group.receives.get(tid);
+      safeArr(pkg).forEach((p) => {
+        const pid = toInt(p?.pid);
+        if (!Number.isFinite(pid)) return;
+        if (!bucket.has(pid)) {
+          bucket.set(pid, { pid, name: p?.name || null });
+        } else if (!bucket.get(pid).name && p?.name) {
+          bucket.get(pid).name = p.name;
+        }
+      });
+    };
+
+    cand.forEach((t) => {
+      const week = toInt(t?.week);
+      const leftId = toInt(t?.leftTeamId);
+      const rightId = toInt(t?.rightTeamId);
+      if (!Number.isFinite(week)) return;
+      if (!Number.isFinite(leftId) || !Number.isFinite(rightId)) return;
+      const key = keyOf({ week, leftTeamId: leftId, rightTeamId: rightId });
       if (!groups.has(key)) {
-        const a = Math.min(t.leftTeamId, t.rightTeamId);
-        const b = Math.max(t.leftTeamId, t.rightTeamId);
-        groups.set(key, { week: t.week, a, b, pids: new Set() });
+        const a = Math.min(leftId, rightId);
+        const b = Math.max(leftId, rightId);
+        groups.set(key, { week, a, b, receives: new Map() });
       }
       const g = groups.get(key);
-      safeArr(t.leftGets).forEach(p => g.pids.add(toInt(p?.pid)));
-      safeArr(t.rightGets).forEach(p => g.pids.add(toInt(p?.pid)));
+      // Preserve earliest week if conflicting data sneaks in
+      if (!Number.isFinite(g.week) || week < g.week) g.week = week;
+
+      addPkgToGroup(g, leftId, t.leftGets);
+      addPkgToGroup(g, rightId, t.rightGets);
     });
 
     const merged = [];
     groups.forEach((g) => {
-      const week = g.week;
-      const a = g.a, b = g.b;
+      const listFor = (teamId) => {
+        const bucket = g.receives.get(teamId);
+        if (!bucket) return [];
+        return Array.from(bucket.values()).map((p) => ({
+          pid: p.pid,
+          name: p.name || pname(yr, p.pid),
+        }));
+      };
 
-      const leftGets = [];
-      const rightGets = [];
-      [...g.pids].filter(Number.isFinite).forEach(pid => {
-        const owner = ownerOfAt(yr, pid, week); // ownership AFTER the week
-        if (owner === a) leftGets.push({ pid, name: pname(yr, pid) });
-        else if (owner === b) rightGets.push({ pid, name: pname(yr, pid) });
-        // if ownership unknown, skip — usually early season edge cases
-      });
+      const leftGets = listFor(g.a).sort((x, y) => x.name.localeCompare(y.name));
+      const rightGets = listFor(g.b).sort((x, y) => x.name.localeCompare(y.name));
 
-      // Only add if both sides actually got something
       if (leftGets.length || rightGets.length) {
         merged.push({
           year: yr,
-          week,
-          leftTeamId: a,
-          rightTeamId: b,
-          leftGets: leftGets.sort((x,y)=>x.name.localeCompare(y.name)),
-          rightGets: rightGets.sort((x,y)=>x.name.localeCompare(y.name)),
+          week: g.week,
+          leftTeamId: g.a,
+          rightTeamId: g.b,
+          leftGets,
+          rightGets,
         });
       }
     });
