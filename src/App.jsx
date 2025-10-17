@@ -3296,15 +3296,15 @@ export default function App() {
               onClick={() => setSection("trades")}
               disabled={!league}
             >
-              Trades / Transactions
+              Waivers
             </SidebarButton>
             <SidebarButton
-  active={section === "trading"}
-  onClick={() => setSection("trading")}
-  disabled={!league}
->
-  Trading
-</SidebarButton>
+              active={section === "trading"}
+              onClick={() => setSection("trading")}
+              disabled={!league}
+            >
+              Trades
+            </SidebarButton>
             <SidebarButton
               active={section === "draft"}
               onClick={() => setSection("draft")}
