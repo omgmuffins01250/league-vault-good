@@ -8159,6 +8159,16 @@ export function TradingTab({
     byYear[yr] = out.sort((a, b) => toInt(a?.week, 0) - toInt(b?.week, 0));
   });
 
+  const [collapsedYears, setCollapsedYears] = React.useState(() => new Set());
+  const toggleYear = React.useCallback((year) => {
+    setCollapsedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) next.delete(year);
+      else next.add(year);
+      return next;
+    });
+  }, []);
+
   // ---------------- PPG (before/after) helpers ----------------
   // “pre” = avg weeks 1..(week-1), excluding BYE weeks and non-scoring weeks
   // “post” = avg weeks week..17 (include week of trade), excluding BYE weeks and non-scoring weeks
@@ -8414,11 +8424,16 @@ export function TradingTab({
 
   // ---------------- UI ----------------
   const Box = ({ title, children }) => (
-    <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60 p-3">
-      {title ? (
-        <div className="text-xs font-semibold opacity-70 mb-1">{title}</div>
-      ) : null}
-      {children}
+    <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-zinc-950/50 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.75)] backdrop-blur">
+      <div className="pointer-events-none absolute inset-0 opacity-75 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(148,163,184,0.22),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(94,234,212,0.16),transparent_60%)]" />
+      <div className="relative p-4 text-sm text-slate-700 dark:text-slate-100">
+        {title ? (
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500/90 dark:text-slate-300/90">
+            {title}
+          </div>
+        ) : null}
+        {children}
+      </div>
     </div>
   );
 
@@ -8548,31 +8563,61 @@ export function TradingTab({
               }
             }
 
+            const receiving = sign === "+";
+            const basePill =
+              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-tight";
+            const neutralPill = `${basePill} border-white/60 bg-white/85 text-slate-600 dark:text-slate-200 dark:bg-white/[0.06] dark:border-white/10`;
+            const positivePill = `${basePill} border-emerald-400/60 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300`;
+            const negativePill = `${basePill} border-rose-400/60 bg-rose-500/15 text-rose-600 dark:text-rose-300`;
+
+            let prePillClass = neutralPill;
+            let postPillClass = neutralPill;
+            const hasBoth = pre != null && post != null;
+
+            if (receiving && hasBoth) {
+              if (pre > post) {
+                prePillClass = positivePill;
+                postPillClass = negativePill;
+              } else if (pre < post) {
+                prePillClass = negativePill;
+                postPillClass = positivePill;
+              }
+            }
+
+            const preDisplay =
+              pre != null ? `${pre.toFixed(2)} PPG` : "PPG n/a";
+            const postDisplay =
+              post != null ? `${post.toFixed(2)} PPG` : "PPG n/a";
+
             return (
               <li key={i} className="text-sm">
                 <div className="flex flex-col">
-                  <div className="flex flex-wrap items-baseline gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={
-                        sign === "+" ? "text-emerald-600" : "text-rose-600"
-                      }
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
+                        sign === "+"
+                          ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                          : "border-rose-400/60 bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                      }`}
                     >
                       {sign}
                     </span>
                     <button
                       type="button"
                       onClick={() => togglePlayer(key)}
-                      className="font-medium hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+                      className="text-[15px] font-semibold text-slate-800 transition-colors hover:text-emerald-600 hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:hover:text-emerald-300 dark:focus-visible:ring-offset-slate-950"
                     >
                       {p?.name}
                     </button>
                     {pre != null || post != null ? (
-                      <span className="ml-1 text-xs opacity-70">
-                        (pre: {pre != null ? pre.toFixed(2) : "n/a"}, post: {" "}
-                        {post != null ? post.toFixed(2) : "n/a"} PPG)
-                      </span>
+                      <div className="ml-1 flex flex-wrap items-center gap-1.5">
+                        <span className={prePillClass}>Pre: {preDisplay}</span>
+                        <span className={postPillClass}>Post: {postDisplay}</span>
+                      </div>
                     ) : (
-                      <span className="ml-1 text-xs opacity-50">(PPG n/a)</span>
+                      <span className="ml-1 text-xs text-slate-500/70 dark:text-slate-400/80">
+                        PPG unavailable
+                      </span>
                     )}
                   </div>
                   {detail}
@@ -8592,40 +8637,67 @@ export function TradingTab({
     // if both sides are hidden, skip
     if (hidden.has(leftName) && hidden.has(rightName)) return null;
 
+    const totalPieces = (t.leftGets?.length || 0) + (t.rightGets?.length || 0);
+
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-base-100/40 p-3">
-        <div className="flex items-center justify-center text-xs mb-2 opacity-70">
-          Week {t.week ?? "?"}
-        </div>
-
-        <div className="grid md:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
-          <Box>
-            <div className="text-sm font-semibold mb-2 truncate">
-              {leftName}
+      <div className="relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 shadow-[0_26px_60px_-35px_rgba(15,23,42,0.85)] backdrop-blur">
+        <div className="pointer-events-none absolute inset-0 opacity-75 bg-[radial-gradient(115%_150%_at_0%_0%,rgba(56,189,248,0.14),transparent_60%),radial-gradient(140%_120%_at_100%_100%,rgba(16,185,129,0.16),transparent_65%)]" />
+        <div className="relative space-y-4 p-4 sm:p-6 text-sm text-slate-700 dark:text-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
+              Week {t.week ?? "?"}
             </div>
-            <PlayerList
-              sign="+"
-              items={t.leftGets}
-              year={t.year}
-              week={t.week ?? 1}
-            />
-          </Box>
-
-          <div className="flex flex-col items-center justify-center">
-            <div className="text-2xl select-none">↔</div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/85 dark:text-slate-400/85">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
+                <span className="text-[12px] font-bold tracking-tight text-slate-700 dark:text-slate-100">
+                  {totalPieces}
+                </span>
+                Assets
+              </span>
+            </div>
           </div>
 
-          <Box>
-            <div className="text-sm font-semibold mb-2 truncate">
-              {rightName}
+          <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
+            <Box>
+              <div className="mb-3 flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-500/80 dark:text-emerald-300/80">
+                  Receives
+                </span>
+                <span className="truncate text-[15px] font-semibold text-slate-800 dark:text-slate-100">
+                  {leftName}
+                </span>
+              </div>
+              <PlayerList
+                sign="+"
+                items={t.leftGets}
+                year={t.year}
+                week={t.week ?? 1}
+              />
+            </Box>
+
+            <div className="flex flex-col items-center justify-center">
+              <div className="rounded-full border border-white/50 bg-white/80 px-4 py-2 text-2xl font-semibold text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+                ↔
+              </div>
             </div>
-            <PlayerList
-              sign="+"
-              items={t.rightGets}
-              year={t.year}
-              week={t.week ?? 1}
-            />
-          </Box>
+
+            <Box>
+              <div className="mb-3 flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-500/80 dark:text-emerald-300/80">
+                  Receives
+                </span>
+                <span className="truncate text-[15px] font-semibold text-slate-800 dark:text-slate-100">
+                  {rightName}
+                </span>
+              </div>
+              <PlayerList
+                sign="+"
+                items={t.rightGets}
+                year={t.year}
+                week={t.week ?? 1}
+              />
+            </Box>
+          </div>
         </div>
       </div>
     );
@@ -8633,36 +8705,69 @@ export function TradingTab({
 
   // ---------------- Render ----------------
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Trades</h2>
-
-      {yearList.map((yr) => {
-        const list = byYear[yr] || [];
-        return (
-          <details key={yr} open className="group">
-            <summary className="cursor-pointer list-none mb-2">
-              <div className="flex items-center justify-between gap-3 rounded-xl bg-base-200 px-4 py-3">
-                <div className="font-medium">{yr}</div>
-                <div className="text-sm opacity-70">
-                  {list.length} trade{list.length === 1 ? "" : "s"}
+    <div className="space-y-6">
+      <Card
+        title="Trades"
+        subtitle="Season-by-season breakdown of completed trades with pre/post production context."
+      >
+        <div className="space-y-5">
+          {yearList.map((yr) => {
+            const list = byYear[yr] || [];
+            const isOpen = !collapsedYears.has(yr);
+            return (
+              <div
+                key={yr}
+                className="relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/75 dark:bg-zinc-950/55 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.8)] backdrop-blur"
+              >
+                <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(129,140,248,0.18),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.16),transparent_65%)]" />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => toggleYear(yr)}
+                    className="flex w-full items-center justify-between gap-3 rounded-3xl px-5 py-4 text-left text-slate-700 transition-colors hover:bg-white/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:hover:bg-white/[0.06] dark:focus-visible:ring-offset-slate-950"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500/80 dark:text-slate-400/80">
+                        Season
+                      </span>
+                      <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">
+                        {yr}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
+                        {list.length} trade{list.length === 1 ? "" : "s"}
+                      </span>
+                      <span
+                        className={`text-lg text-slate-500 transition-transform dark:text-slate-400 ${
+                          isOpen ? "rotate-0" : "-rotate-90"
+                        }`}
+                      >
+                        ▾
+                      </span>
+                    </div>
+                  </button>
+                  {isOpen ? (
+                    <div className="border-t border-white/50 px-5 py-5 dark:border-white/10">
+                      {list.length === 0 ? (
+                        <div className="text-sm italic text-slate-500/80 dark:text-slate-400/80">
+                          No trades recorded for {yr}.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {list.map((t, i) => (
+                            <TradeCard key={`${yr}-${i}`} t={t} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </summary>
-
-            {list.length === 0 ? (
-              <div className="px-2 py-2 text-sm opacity-70 italic">
-                No trades recorded for {yr}.
-              </div>
-            ) : (
-              <div className="space-y-3 px-1">
-                {list.map((t, i) => (
-                  <TradeCard key={`${yr}-${i}`} t={t} />
-                ))}
-              </div>
-            )}
-          </details>
-        );
-      })}
+            );
+          })}
+        </div>
+      </Card>
     </div>
   );
 }
