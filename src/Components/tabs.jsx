@@ -8227,10 +8227,15 @@ export function TradingTab({
       const rows = weeklyRowsFor(seasonKey, pid);
       const byeWeeks = getPlayerByeWeeks(seasonKey, pid);
       const byeSet = new Set(byeWeeks);
-      const last = Math.min(
+      const lastCompletedWeek = Math.min(
         FANTASY_PLAYOFF_END,
         weeksEndFromRosters(seasonKey)
       );
+      const currentWeekExclusive = resolveCurrentWeekExclusive(seasonKey);
+      const last =
+        currentWeekExclusive > 0
+          ? Math.min(lastCompletedWeek, currentWeekExclusive - 1)
+          : lastCompletedWeek;
 
       const pre = rows.filter((r) => r.wk < tw && !byeSet.has(r.wk));
       const post = rows.filter(
@@ -8255,7 +8260,12 @@ export function TradingTab({
         postPPG: post.length ? +(postSum / post.length).toFixed(4) : null,
       };
     },
-    [getPlayerByeWeeks, weeklyRowsFor, weeksEndFromRosters]
+    [
+      getPlayerByeWeeks,
+      weeklyRowsFor,
+      weeksEndFromRosters,
+      resolveCurrentWeekExclusive,
+    ]
   );
 
   // Small debug API (handy when verifying bye behavior)
