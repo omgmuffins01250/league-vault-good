@@ -8424,38 +8424,159 @@ export function TradingTab({
 
   const PlayerList = ({ sign = "+", items = [], year, week }) => {
     const list = safeArr(items);
+    const [expanded, setExpanded] = React.useState({});
+
+    const togglePlayer = React.useCallback((key) => {
+      setExpanded((prev) => {
+        const next = { ...prev, [key]: !prev[key] };
+        if (!next[key]) delete next[key];
+        return next;
+      });
+    }, []);
+
+    const formatPoints = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      return num.toFixed(2);
+    };
+
+    const tradeWeek = Number.isFinite(Number(week)) ? Number(week) : null;
+
     return (
       <ul className="space-y-1">
         {list.length === 0 ? (
           <li className="text-xs opacity-60 italic">None</li>
         ) : (
           list.map((p, i) => {
+            const pid = toInt(p?.pid);
+            const key = `${year}-${Number.isFinite(pid) ? pid : i}`;
+            const isOpen = !!expanded[key];
+
             const pre =
-              Number.isFinite(+p?.pid) && Number.isFinite(+week)
-                ? prePPG(year, +p.pid, +week)
+              Number.isFinite(pid) && Number.isFinite(tradeWeek)
+                ? prePPG(year, pid, tradeWeek)
                 : null;
             const post =
-              Number.isFinite(+p?.pid) && Number.isFinite(+week)
-                ? postPPG(year, +p.pid, +week)
+              Number.isFinite(pid) && Number.isFinite(tradeWeek)
+                ? postPPG(year, pid, tradeWeek)
                 : null;
+
+            let detail = null;
+            if (isOpen) {
+              if (!Number.isFinite(pid)) {
+                detail = (
+                  <div className="ml-5 mt-2 text-xs opacity-60 italic">
+                    Player details unavailable.
+                  </div>
+                );
+              } else {
+                const rows = weeklyRowsFor(year, pid);
+                const rowByWeek = new Map(rows.map((r) => [r.wk, r]));
+                const byeWeeks = new Set(getPlayerByeWeeks(year, pid));
+                const seasonEnd = Math.min(
+                  FANTASY_PLAYOFF_END,
+                  weeksEndFromRosters(year)
+                );
+                const weeks = Array.from(
+                  { length: seasonEnd },
+                  (_, idx) => idx + 1
+                );
+
+                const renderWeekList = (weekNumbers) => {
+                  if (!weekNumbers.length) {
+                    return (
+                      <div className="mt-1 text-xs opacity-60 italic">
+                        No weeks recorded.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ul className="mt-1 space-y-1">
+                      {weekNumbers.map((wk) => {
+                        const row = rowByWeek.get(wk);
+                        const formatted =
+                          row && formatPoints(row.pts) != null
+                            ? `${formatPoints(row.pts)} pts`
+                            : byeWeeks.has(wk)
+                            ? "BYE"
+                            : "—";
+                        const isTradeWeek =
+                          Number.isFinite(tradeWeek) && wk === tradeWeek;
+                        return (
+                          <li
+                            key={wk}
+                            className={
+                              "flex items-center justify-between rounded-md bg-white/60 px-2 py-1 text-xs text-slate-700 shadow-sm ring-1 ring-inset ring-black/5 dark:bg-white/[0.08] dark:text-slate-200" +
+                              (isTradeWeek
+                                ? " border border-emerald-400/70 dark:border-emerald-500/60"
+                                : " border border-transparent")
+                            }
+                          >
+                            <span className="font-medium">Week {wk}</span>
+                            <span className="font-mono">{formatted}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                };
+
+                const preWeeks = Number.isFinite(tradeWeek)
+                  ? weeks.filter((wk) => wk < tradeWeek)
+                  : [];
+                const postWeeks = Number.isFinite(tradeWeek)
+                  ? weeks.filter((wk) => wk >= tradeWeek)
+                  : weeks;
+
+                detail = (
+                  <div className="ml-5 mt-2 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Pre trade
+                      </div>
+                      {renderWeekList(preWeeks)}
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Post trade
+                      </div>
+                      {renderWeekList(postWeeks)}
+                    </div>
+                  </div>
+                );
+              }
+            }
+
             return (
               <li key={i} className="text-sm">
-                <span
-                  className={
-                    sign === "+" ? "text-emerald-600" : "text-rose-600"
-                  }
-                >
-                  {sign}
-                </span>{" "}
-                <span className="font-medium">{p?.name}</span>
-                {pre != null || post != null ? (
-                  <span className="ml-2 text-xs opacity-70">
-                    (pre: {pre != null ? pre.toFixed(2) : "n/a"}, post:{" "}
-                    {post != null ? post.toFixed(2) : "n/a"} PPG)
-                  </span>
-                ) : (
-                  <span className="ml-2 text-xs opacity-50">(PPG n/a)</span>
-                )}
+                <div className="flex flex-col">
+                  <div className="flex flex-wrap items-baseline gap-1">
+                    <span
+                      className={
+                        sign === "+" ? "text-emerald-600" : "text-rose-600"
+                      }
+                    >
+                      {sign}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => togglePlayer(key)}
+                      className="font-medium hover:underline focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+                    >
+                      {p?.name}
+                    </button>
+                    {pre != null || post != null ? (
+                      <span className="ml-1 text-xs opacity-70">
+                        (pre: {pre != null ? pre.toFixed(2) : "n/a"}, post: {" "}
+                        {post != null ? post.toFixed(2) : "n/a"} PPG)
+                      </span>
+                    ) : (
+                      <span className="ml-1 text-xs opacity-50">(PPG n/a)</span>
+                    )}
+                  </div>
+                  {detail}
+                </div>
               </li>
             );
           })
