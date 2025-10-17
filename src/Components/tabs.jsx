@@ -8319,7 +8319,7 @@ export function TradingTab({
   // ---------------- Render ----------------
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Trading</h2>
+      <h2 className="text-xl font-semibold">Trades</h2>
 
       {yearList.map((yr) => {
         const list = byYear[yr] || [];
