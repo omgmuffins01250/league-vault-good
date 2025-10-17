@@ -8227,15 +8227,10 @@ export function TradingTab({
       const rows = weeklyRowsFor(seasonKey, pid);
       const byeWeeks = getPlayerByeWeeks(seasonKey, pid);
       const byeSet = new Set(byeWeeks);
-      const lastCompletedWeek = Math.min(
+      const last = Math.min(
         FANTASY_PLAYOFF_END,
         weeksEndFromRosters(seasonKey)
       );
-      const currentWeekExclusive = resolveCurrentWeekExclusive(seasonKey);
-      const last =
-        currentWeekExclusive > 0
-          ? Math.min(lastCompletedWeek, currentWeekExclusive - 1)
-          : lastCompletedWeek;
 
       const pre = rows.filter((r) => r.wk < tw && !byeSet.has(r.wk));
       const post = rows.filter(
@@ -8260,12 +8255,7 @@ export function TradingTab({
         postPPG: post.length ? +(postSum / post.length).toFixed(4) : null,
       };
     },
-    [
-      getPlayerByeWeeks,
-      weeklyRowsFor,
-      weeksEndFromRosters,
-      resolveCurrentWeekExclusive,
-    ]
+    [getPlayerByeWeeks, weeklyRowsFor, weeksEndFromRosters]
   );
 
   // Small debug API (handy when verifying bye behavior)
@@ -8622,7 +8612,9 @@ export function TradingTab({
                     {pre != null || post != null ? (
                       <div className="ml-1 flex flex-wrap items-center gap-1.5">
                         <span className={prePillClass}>Pre: {preDisplay}</span>
-                        <span className={postPillClass}>Post: {postDisplay}</span>
+                        <span className={postPillClass}>
+                          Post: {postDisplay}
+                        </span>
                       </div>
                     ) : (
                       <span className="ml-1 text-xs text-slate-500/70 dark:text-slate-400/80">
