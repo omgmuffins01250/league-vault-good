@@ -7866,7 +7866,19 @@ export function TradingTab({
         return { error: "Trade teams unavailable." };
       }
 
-      const endWeek = Math.max(startWeek, FANTASY_PLAYOFF_END);
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        season
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? Math.min(FANTASY_PLAYOFF_END, capExclusive - 1)
+          : FANTASY_PLAYOFF_END;
+      const endWeek = Math.min(
+        Math.max(startWeek, FANTASY_PLAYOFF_END),
+        completedCap
+      );
       const startSlotsSet = getStartSlotSetForYear(season);
       const benchCapacity = getBenchCapacityForYear(season);
       const seasonRosters = espnRostersByYear?.[season] || {};
@@ -8162,6 +8174,8 @@ export function TradingTab({
       }
 
       const teamsOutput = {};
+      const recordLabel = (wins, losses, ties) =>
+        Number(ties) > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
       aggregateByTeam.forEach((aggregate, teamId) => {
         aggregate.weeks.sort((a, b) => a.week - b.week);
         const actualWinEquiv =
@@ -8177,13 +8191,21 @@ export function TradingTab({
             wins: aggregate.actualWins,
             losses: aggregate.actualLosses,
             ties: aggregate.actualTies,
-            label: `${aggregate.actualWins}-${aggregate.actualLosses}-${aggregate.actualTies}`,
+            label: recordLabel(
+              aggregate.actualWins,
+              aggregate.actualLosses,
+              aggregate.actualTies
+            ),
           },
           noTradeRecord: {
             wins: aggregate.noTradeWins,
             losses: aggregate.noTradeLosses,
             ties: aggregate.noTradeTies,
-            label: `${aggregate.noTradeWins}-${aggregate.noTradeLosses}-${aggregate.noTradeTies}`,
+            label: recordLabel(
+              aggregate.noTradeWins,
+              aggregate.noTradeLosses,
+              aggregate.noTradeTies
+            ),
           },
           deltaWins,
           auditNotes: aggregate.auditNotes,
@@ -8198,10 +8220,12 @@ export function TradingTab({
       };
     },
     [
+      currentWeekBySeason,
       espnRostersByYear,
       gamesForSeason,
       getBenchCapacityForYear,
       getStartSlotSetForYear,
+      league,
       ownerNameOf,
       pname,
       ppos,
@@ -8216,15 +8240,11 @@ export function TradingTab({
     data: null,
     error: null,
   });
-  const [reverseExpandedTeams, setReverseExpandedTeams] = React.useState(
-    () => new Set()
-  );
   const [reverseInfoOpen, setReverseInfoOpen] = React.useState(false);
 
   const handleReverseClick = React.useCallback(
     (trade) => {
       if (!trade) return;
-      setReverseExpandedTeams(new Set());
       setReverseInfoOpen(false);
       setReverseModalState({
         open: true,
@@ -8272,17 +8292,7 @@ export function TradingTab({
       data: null,
       error: null,
     });
-    setReverseExpandedTeams(new Set());
     setReverseInfoOpen(false);
-  }, []);
-
-  const toggleReverseTeam = React.useCallback((teamId) => {
-    setReverseExpandedTeams((prev) => {
-      const next = new Set(prev);
-      if (next.has(teamId)) next.delete(teamId);
-      else next.add(teamId);
-      return next;
-    });
   }, []);
 
   // ---------------- ownership + trade detection ----------------
@@ -9328,13 +9338,6 @@ export function TradingTab({
               <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
                 Week {t.week ?? "?"}
               </span>
-              <button
-                type="button"
-                onClick={() => onReverse?.(t)}
-                className="inline-flex items-center rounded-full border border-emerald-400/70 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.26em] text-emerald-600 transition-colors hover:bg-emerald-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-emerald-300/40 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20 dark:focus-visible:ring-offset-zinc-950"
-              >
-                Reverse?
-              </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/85 dark:text-slate-400/85">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
@@ -9364,10 +9367,17 @@ export function TradingTab({
               />
             </Box>
 
-            <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center gap-3 text-center">
               <div className="rounded-full border border-white/50 bg-white/80 px-4 py-2 text-2xl font-semibold text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
                 ↔
               </div>
+              <button
+                type="button"
+                onClick={() => onReverse?.(t)}
+                className="inline-flex items-center justify-center rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-300/90 via-amber-200/75 to-yellow-200/75 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-800 shadow-[0_24px_55px_-30px_rgba(245,158,11,0.6)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_65px_-32px_rgba(245,158,11,0.7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-amber-300/40 dark:text-amber-100 dark:focus-visible:ring-offset-zinc-950"
+              >
+                Reverse Trade
+              </button>
             </div>
 
             <Box>
@@ -9393,7 +9403,7 @@ export function TradingTab({
   };
 
   const reverseInfoText =
-    "We rewind just this trade starting in its week and keep everything else exactly as it happened. We don’t re-pick the whole lineup — we only replace starter spots that were directly created by this trade. Replacements are the best eligible bench players by their actual points that week. Opponents keep their original scores (except the other trade team, which is also recalculated). We summarize your new weekly results and season record from the trade week through Week 17.";
+    "We rewind just this trade starting in its week and keep everything else exactly as it happened. We don’t re-pick the whole lineup — we only replace starter spots that were directly created by this trade. Replacements are the best eligible bench players by their actual points that week. Opponents keep their original scores (except the other trade team, which is also recalculated). We summarize your new weekly results and season record from the trade week through the last completed week (up to Week 17).";
 
   const formatReversePoints = (value) =>
     Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "—";
@@ -9487,7 +9497,6 @@ export function TradingTab({
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   {teams.map((team) => {
-                    const expanded = reverseExpandedTeams.has(team.teamId);
                     return (
                       <div
                         key={team.teamId}
@@ -9524,44 +9533,20 @@ export function TradingTab({
                             </div>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleReverseTeam(team.teamId)}
-                          className="inline-flex items-center rounded-full border border-white/50 bg-white/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-600 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/10 dark:bg-white/[0.07] dark:text-slate-200 dark:hover:bg-white/10 dark:focus-visible:ring-offset-zinc-950"
-                        >
-                          {expanded ? "Hide weeks" : "View weeks"}
-                        </button>
-                        {team.auditNotes?.length ? (
-                          <div className="rounded-2xl border border-amber-300/40 bg-amber-100/20 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-200/30 dark:bg-amber-200/10 dark:text-amber-200">
-                            {team.auditNotes.map((note, idx) => (
-                              <div key={`${team.teamId}-audit-${idx}`}>
-                                • {note}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {expanded ? (
-                          <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/85 dark:border-white/10 dark:bg-white/[0.06]">
-                            <table className="min-w-full divide-y divide-white/60 text-xs text-slate-600 dark:divide-white/10 dark:text-slate-200">
-                              <thead className="bg-white/60 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
-                                <tr>
-                                  <th className="px-3 py-2 text-left">Week</th>
-                                  <th className="px-3 py-2 text-left">
-                                    Opponent
-                                  </th>
-                                  <th className="px-3 py-2 text-right">
-                                    Actual Pts
-                                  </th>
-                                  <th className="px-3 py-2 text-right">
-                                    No-trade Pts
-                                  </th>
-                                  <th className="px-3 py-2 text-center">
-                                    Result Change
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {team.weeks.map((wk) => {
+                        <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/85 dark:border-white/10 dark:bg-white/[0.06]">
+                          <table className="min-w-full divide-y divide-white/60 text-xs text-slate-600 dark:divide-white/10 dark:text-slate-200">
+                            <thead className="bg-white/60 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Week</th>
+                                <th className="px-3 py-2 text-left">Opponent</th>
+                                <th className="px-3 py-2 text-right">Actual Pts</th>
+                                <th className="px-3 py-2 text-right">No-trade Pts</th>
+                                <th className="px-3 py-2 text-center">Result Change</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {team.weeks.length ? (
+                                team.weeks.map((wk) => {
                                   const rowBase =
                                     wk.changeType === "positive"
                                       ? "bg-emerald-500/15"
@@ -9576,9 +9561,7 @@ export function TradingTab({
                                       <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-100">
                                         {wk.week}
                                       </td>
-                                      <td className="px-3 py-2">
-                                        {wk.opponentName}
-                                      </td>
+                                      <td className="px-3 py-2">{wk.opponentName}</td>
                                       <td className="px-3 py-2 text-right font-mono">
                                         {formatReversePoints(wk.actualPts)}
                                       </td>
@@ -9590,11 +9573,20 @@ export function TradingTab({
                                       </td>
                                     </tr>
                                   );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : null}
+                                })
+                              ) : (
+                                <tr>
+                                  <td
+                                    colSpan={5}
+                                    className="px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500"
+                                  >
+                                    No completed weeks yet.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     );
                   })}
