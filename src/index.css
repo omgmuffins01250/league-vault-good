@@ -19,10 +19,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   display: block;
-  background: #ffffff; /* fallback light background */
-  background-color: hsl(var(--b1) / 1);
-  color: #213547; /* fallback dark text */
-  color: hsl(var(--bc) / 1);
+  /* remove the hard-coded white */
+  background-color: hsl(var(--b1) / 1);   /* follows DaisyUI theme */
+  color: hsl(var(--bc) / 1);              /* follows DaisyUI theme */
 }
 
 /* Optional: keep your link/button tweaks or remove them if you prefer Tailwind */
