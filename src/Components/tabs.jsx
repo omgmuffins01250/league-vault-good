@@ -9791,42 +9791,25 @@ export function TradingTab({
     const posLabelFor = (posId) =>
       posId != null ? __POS_LABEL[Number(posId)] || null : null;
 
-    const badgeBaseClass =
-      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.26em]";
-    const actualBadgeProps = (entry) => {
-      if (entry?.source === "trade") {
-        return {
-          label: "Trade asset",
-          className: `${badgeBaseClass} border-amber-300/70 bg-amber-500/10 text-amber-600 dark:border-amber-300/40 dark:text-amber-200`,
-        };
+    const metaNoteFor = (entry, variant) => {
+      if (variant === "actual") {
+        return entry?.source === "trade" ? "Trade asset" : null;
+      }
+      if (variant === "noTrade") {
+        switch (entry?.source) {
+          case "bench":
+            return "Bench replacement";
+          case "sent":
+            return "Returned asset";
+          case "empty":
+            return "No eligible player";
+          case "unchanged":
+            return "Unchanged";
+          default:
+            return null;
+        }
       }
       return null;
-    };
-    const noTradeBadgeProps = (entry) => {
-      switch (entry?.source) {
-        case "bench":
-          return {
-            label: "Bench replacement",
-            className: `${badgeBaseClass} border-sky-300/70 bg-sky-500/10 text-sky-600 dark:border-sky-300/40 dark:text-sky-200`,
-          };
-        case "sent":
-          return {
-            label: "Returned asset",
-            className: `${badgeBaseClass} border-indigo-300/70 bg-indigo-500/10 text-indigo-600 dark:border-indigo-300/40 dark:text-indigo-200`,
-          };
-        case "empty":
-          return {
-            label: "No eligible player",
-            className: `${badgeBaseClass} border-rose-300/70 bg-rose-500/10 text-rose-600 dark:border-rose-300/40 dark:text-rose-200`,
-          };
-        case "unchanged":
-          return {
-            label: "Unchanged",
-            className: `${badgeBaseClass} border-emerald-300/70 bg-emerald-500/10 text-emerald-600 dark:border-emerald-300/40 dark:text-emerald-200`,
-          };
-        default:
-          return null;
-      }
     };
 
     const formatDeltaValue = (delta) => {
@@ -9841,10 +9824,7 @@ export function TradingTab({
       const slotLabel = slotLabelFor(entry?.slotId);
       const posLabel = posLabelFor(entry?.posId);
       const key = `${variant}-${entry?.order ?? 0}-${entry?.slotId ?? "?"}-${entry?.pid ?? "empty"}`;
-      const badge =
-        variant === "actual"
-          ? actualBadgeProps(entry)
-          : noTradeBadgeProps(entry);
+      const metaNote = metaNoteFor(entry, variant);
       let deltaLabel = null;
       let deltaClass = "";
       if (variant === "noTrade" && actualLookup) {
@@ -9870,19 +9850,18 @@ export function TradingTab({
       return (
         <div
           key={key}
-          className="flex items-center justify-between gap-3 rounded-xl border border-white/45 bg-white/90 px-3 py-2 text-sm shadow-[0_16px_40px_-32px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
+          className="flex items-center justify-between gap-3 rounded-xl border border-white/45 bg-white/90 px-3 py-1.5 text-[13px] shadow-[0_16px_40px_-32px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
         >
           <div className="min-w-0">
             <div className="truncate font-semibold text-slate-800 dark:text-slate-100">
               {entry?.name || "—"}
             </div>
-            <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-              {slotLabel}
-              {posLabel ? ` • ${posLabel}` : ""}
+            <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+              {posLabel && posLabel !== slotLabel ? `${slotLabel} • ${posLabel}` : slotLabel || posLabel || ""}
             </div>
-            {badge?.label ? (
-              <div className="mt-1">
-                <span className={badge.className}>{badge.label}</span>
+            {metaNote ? (
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {metaNote}
               </div>
             ) : null}
             {replacementNote ? (
