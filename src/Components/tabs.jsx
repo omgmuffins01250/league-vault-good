@@ -8079,13 +8079,20 @@ export function TradingTab({
           const posId = __entryPosId(entry);
           const pts = __entryPts(entry);
           if (startSlotsSet.has(slotId)) {
-            starters.push({ pid, slotId, posId, pts });
+            const order = starters.length;
+            starters.push({ pid, slotId, posId, pts, order });
             actualPts += pts;
           } else if (!received.has(pid)) {
             if (!Number.isFinite(posId)) return;
             const existing = benchMap.get(pid);
             if (!existing || pts > existing.pts) {
-              benchMap.set(pid, { pid, posId, pts, source: "bench" });
+              benchMap.set(pid, {
+                pid,
+                posId,
+                pts,
+                source: "bench",
+                name: pname(season, pid),
+              });
             }
           }
         });
@@ -8099,7 +8106,13 @@ export function TradingTab({
           const pts = Number(ptsForWeek(season, pid, week)) || 0;
           const existing = benchMap.get(pid);
           if (!existing || pts > existing.pts) {
-            benchMap.set(pid, { pid, posId, pts, source: "sent" });
+            benchMap.set(pid, {
+              pid,
+              posId,
+              pts,
+              source: "sent",
+              name: pname(season, pid),
+            });
           }
         });
 
@@ -8122,14 +8135,67 @@ export function TradingTab({
 
         let noTradePts = 0;
         const auditNotes = [];
+        const actualLineup = [];
+        const noTradeLineup = [];
         starters.forEach((starter) => {
+          const playerName = pname(season, starter.pid);
+          actualLineup.push({
+            order: starter.order,
+            pid: starter.pid,
+            slotId: starter.slotId,
+            posId: starter.posId,
+            pts: starter.pts,
+            name: playerName,
+            source: received.has(starter.pid) ? "trade" : "original",
+          });
           if (!received.has(starter.pid)) {
             noTradePts += starter.pts;
+            noTradeLineup.push({
+              order: starter.order,
+              pid: starter.pid,
+              slotId: starter.slotId,
+              posId: starter.posId,
+              pts: starter.pts,
+              name: playerName,
+              source: "unchanged",
+              replacedPid: starter.pid,
+              replacedName: playerName,
+            });
             return;
           }
           const replacement = pickBenchForSlot(starter.slotId);
           if (replacement) {
             noTradePts += replacement.pts;
+            const replacementName = pname(season, replacement.pid);
+            noTradeLineup.push({
+              order: starter.order,
+              pid: replacement.pid,
+              slotId: starter.slotId,
+              posId:
+                Number.isFinite(replacement.posId)
+                  ? replacement.posId
+                  : starter.posId,
+              pts: replacement.pts,
+              name: replacementName,
+              source: replacement.source === "sent" ? "sent" : "bench",
+              replacedPid: starter.pid,
+              replacedName: playerName,
+            });
+          } else {
+            auditNotes.push(
+              `Week ${week}: no eligible replacement for ${playerName}`
+            );
+            noTradeLineup.push({
+              order: starter.order,
+              pid: null,
+              slotId: starter.slotId,
+              posId: starter.posId,
+              pts: 0,
+              name: "No eligible player",
+              source: "empty",
+              replacedPid: starter.pid,
+              replacedName: playerName,
+            });
           }
         });
 
@@ -8169,6 +8235,8 @@ export function TradingTab({
           actualPts,
           noTradePts,
           auditNotes,
+          actualLineup,
+          noTradeLineup,
         };
       };
 
@@ -8182,6 +8250,8 @@ export function TradingTab({
             actualPts: sim.actualPts,
             noTradePts: sim.noTradePts,
             auditNotes: sim.auditNotes,
+            actualLineup: sim.actualLineup,
+            noTradeLineup: sim.noTradeLineup,
           });
         });
       }
@@ -8266,6 +8336,13 @@ export function TradingTab({
             noTradeResult,
             changeLabel,
             changeType,
+            actualLineup: safeArr(record.actualLineup).map((entry) => ({
+              ...entry,
+            })),
+            noTradeLineup: safeArr(record.noTradeLineup).map((entry) => ({
+              ...entry,
+            })),
+            auditNotes: safeArr(record.auditNotes),
           });
         });
       }
@@ -8473,11 +8550,13 @@ export function TradingTab({
     error: null,
   });
   const [reverseInfoOpen, setReverseInfoOpen] = React.useState(false);
+  const [reverseDetailSelection, setReverseDetailSelection] = React.useState(null);
 
   const handleReverseClick = React.useCallback(
     (trade) => {
       if (!trade) return;
       setReverseInfoOpen(false);
+      setReverseDetailSelection(null);
       setReverseModalState({
         open: true,
         loading: true,
@@ -8525,6 +8604,7 @@ export function TradingTab({
       error: null,
     });
     setReverseInfoOpen(false);
+    setReverseDetailSelection(null);
   }, []);
 
   // ---------------- ownership + trade detection ----------------
@@ -9680,6 +9760,182 @@ export function TradingTab({
       return [];
     };
 
+    const sortLineupEntries = (list) =>
+      safeArr(list)
+        .map((entry, idx) => {
+          const order = Number.isFinite(Number(entry?.order))
+            ? Number(entry.order)
+            : idx;
+          return { ...entry, order };
+        })
+        .sort((a, b) => {
+          if (a.order !== b.order) return a.order - b.order;
+          const aSlot = Number.isFinite(Number(a?.slotId))
+            ? Number(a.slotId)
+            : 0;
+          const bSlot = Number.isFinite(Number(b?.slotId))
+            ? Number(b.slotId)
+            : 0;
+          if (aSlot !== bSlot) return aSlot - bSlot;
+          const aPid = Number.isFinite(Number(a?.pid))
+            ? Number(a.pid)
+            : 0;
+          const bPid = Number.isFinite(Number(b?.pid))
+            ? Number(b.pid)
+            : 0;
+          return aPid - bPid;
+        });
+
+    const slotLabelFor = (slotId) =>
+      SETUP_SLOT_LABEL[Number(slotId)] || `Slot ${slotId ?? "?"}`;
+    const posLabelFor = (posId) =>
+      posId != null ? __POS_LABEL[Number(posId)] || null : null;
+
+    const badgeBaseClass =
+      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.26em]";
+    const actualBadgeProps = (entry) => {
+      if (entry?.source === "trade") {
+        return {
+          label: "Trade asset",
+          className: `${badgeBaseClass} border-amber-300/70 bg-amber-500/10 text-amber-600 dark:border-amber-300/40 dark:text-amber-200`,
+        };
+      }
+      return null;
+    };
+    const noTradeBadgeProps = (entry) => {
+      switch (entry?.source) {
+        case "bench":
+          return {
+            label: "Bench replacement",
+            className: `${badgeBaseClass} border-sky-300/70 bg-sky-500/10 text-sky-600 dark:border-sky-300/40 dark:text-sky-200`,
+          };
+        case "sent":
+          return {
+            label: "Returned asset",
+            className: `${badgeBaseClass} border-indigo-300/70 bg-indigo-500/10 text-indigo-600 dark:border-indigo-300/40 dark:text-indigo-200`,
+          };
+        case "empty":
+          return {
+            label: "No eligible player",
+            className: `${badgeBaseClass} border-rose-300/70 bg-rose-500/10 text-rose-600 dark:border-rose-300/40 dark:text-rose-200`,
+          };
+        case "unchanged":
+          return {
+            label: "Unchanged",
+            className: `${badgeBaseClass} border-emerald-300/70 bg-emerald-500/10 text-emerald-600 dark:border-emerald-300/40 dark:text-emerald-200`,
+          };
+        default:
+          return null;
+      }
+    };
+
+    const formatDeltaValue = (delta) => {
+      if (!Number.isFinite(delta)) return null;
+      const magnitude = Math.abs(delta);
+      if (magnitude < 0.005) return null;
+      const prefix = delta > 0 ? "+" : "−";
+      return `${prefix}${magnitude.toFixed(2)}`;
+    };
+
+    const renderLineupEntry = (entry, variant, actualLookup) => {
+      const slotLabel = slotLabelFor(entry?.slotId);
+      const posLabel = posLabelFor(entry?.posId);
+      const key = `${variant}-${entry?.order ?? 0}-${entry?.slotId ?? "?"}-${entry?.pid ?? "empty"}`;
+      const badge =
+        variant === "actual"
+          ? actualBadgeProps(entry)
+          : noTradeBadgeProps(entry);
+      let deltaLabel = null;
+      let deltaClass = "";
+      if (variant === "noTrade" && actualLookup) {
+        const actual = actualLookup.get(entry?.order);
+        if (actual) {
+          const delta = Number(entry?.pts) - (Number(actual?.pts) || 0);
+          const formatted = formatDeltaValue(delta);
+          if (formatted) {
+            deltaLabel = formatted;
+            deltaClass =
+              delta > 0
+                ? "text-emerald-600 dark:text-emerald-300"
+                : "text-rose-600 dark:text-rose-300";
+          }
+        }
+      }
+      const replacementNote =
+        variant === "noTrade" &&
+        entry?.source !== "unchanged" &&
+        entry?.replacedName
+          ? `Replaces ${entry.replacedName}`
+          : null;
+      return (
+        <div
+          key={key}
+          className="flex items-center justify-between gap-3 rounded-xl border border-white/45 bg-white/90 px-3 py-2 text-sm shadow-[0_16px_40px_-32px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
+        >
+          <div className="min-w-0">
+            <div className="truncate font-semibold text-slate-800 dark:text-slate-100">
+              {entry?.name || "—"}
+            </div>
+            <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+              {slotLabel}
+              {posLabel ? ` • ${posLabel}` : ""}
+            </div>
+            {badge?.label ? (
+              <div className="mt-1">
+                <span className={badge.className}>{badge.label}</span>
+              </div>
+            ) : null}
+            {replacementNote ? (
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {replacementNote}
+              </div>
+            ) : null}
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-100">
+              {formatReversePoints(entry?.pts)}
+            </div>
+            {deltaLabel ? (
+              <div className={`text-xs font-semibold tabular-nums ${deltaClass}`}>
+                {deltaLabel}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      );
+    };
+
+    const renderLineupList = ({
+      title,
+      totalPts,
+      entries,
+      variant,
+      actualLookup,
+    }) => {
+      const list = Array.isArray(entries) ? entries : [];
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500/80 dark:text-slate-400/80">
+              {title}
+            </div>
+            <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-100">
+              {formatReversePoints(totalPts)}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {list.length ? (
+              list.map((entry) => renderLineupEntry(entry, variant, actualLookup))
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/50 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/15 dark:text-slate-400">
+                No lineup data.
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6">
         <div
@@ -9786,6 +10042,39 @@ export function TradingTab({
                         : seedingTone === "negative"
                         ? "text-rose-600 dark:text-rose-200"
                         : "text-slate-800 dark:text-slate-100";
+                    const selectionMatchesTeam =
+                      reverseDetailSelection &&
+                      Number(reverseDetailSelection.teamId) ===
+                        Number(team.teamId);
+                    const selectedWeekDetail = selectionMatchesTeam
+                      ? team.weeks.find(
+                          (wk) =>
+                            Number(wk?.week) ===
+                            Number(reverseDetailSelection.week)
+                        ) || null
+                      : null;
+                    const actualLineupSorted = selectedWeekDetail
+                      ? sortLineupEntries(selectedWeekDetail.actualLineup)
+                      : [];
+                    const actualLookup = new Map(
+                      actualLineupSorted.map((entry) => [entry.order, entry])
+                    );
+                    const noTradeLineupSorted = selectedWeekDetail
+                      ? sortLineupEntries(selectedWeekDetail.noTradeLineup)
+                      : [];
+                    const detailAuditNotes = safeArr(
+                      selectedWeekDetail?.auditNotes
+                    );
+                    const totalDelta = selectedWeekDetail
+                      ? Number(selectedWeekDetail.noTradePts) -
+                        Number(selectedWeekDetail.actualPts)
+                      : 0;
+                    const totalDeltaLabel = formatDeltaValue(totalDelta);
+                    const totalDeltaClass =
+                      totalDelta > 0
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : "text-rose-600 dark:text-rose-300";
+
                     const actualSeedLabel = Number.isFinite(seeding?.actualRank)
                       ? ordinal(Number(seeding.actualRank))
                       : "—";
@@ -9943,13 +10232,62 @@ export function TradingTab({
                                       : wk.changeType === "negative"
                                       ? "bg-rose-500/15"
                                       : "bg-white/70 dark:bg-white/[0.04]";
+                                  const isSelected =
+                                    selectionMatchesTeam &&
+                                    Number(reverseDetailSelection?.week) ===
+                                      Number(wk.week);
+                                  const handleActivate = () => {
+                                    setReverseDetailSelection((prev) => {
+                                      if (
+                                        prev &&
+                                        Number(prev.teamId) ===
+                                          Number(team.teamId) &&
+                                        Number(prev.week) === Number(wk.week)
+                                      ) {
+                                        return null;
+                                      }
+                                      return {
+                                        teamId: Number(team.teamId),
+                                        week: Number(wk.week),
+                                      };
+                                    });
+                                  };
                                   return (
                                     <tr
                                       key={`${team.teamId}-${wk.week}`}
-                                      className={`${rowBase} border-b border-white/40 last:border-b-0 dark:border-white/10`}
+                                      className={`${rowBase} border-b border-white/40 last:border-b-0 dark:border-white/10 transition-colors ${
+                                        isSelected
+                                          ? "ring-2 ring-emerald-400/60 dark:ring-emerald-300/60"
+                                          : ""
+                                      } cursor-pointer hover:bg-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-white/[0.08] dark:focus-visible:ring-offset-slate-950`}
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-pressed={isSelected}
+                                      onClick={handleActivate}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          handleActivate();
+                                        }
+                                      }}
                                     >
-                                      <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-100">
-                                        {wk.week}
+                                      <td
+                                        className={`px-3 py-2 font-semibold text-slate-700 dark:text-slate-100 ${
+                                          isSelected
+                                            ? "text-emerald-600 dark:text-emerald-300"
+                                            : ""
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`inline-flex h-2 w-2 rounded-full ${
+                                              isSelected
+                                                ? "bg-emerald-500"
+                                                : "bg-slate-300/70 dark:bg-slate-600/70"
+                                            }`}
+                                          />
+                                          <span>{wk.week}</span>
+                                        </div>
                                       </td>
                                       <td className="px-3 py-2">{wk.opponentName}</td>
                                       <td className="px-3 py-2 text-right font-mono">
@@ -9977,6 +10315,66 @@ export function TradingTab({
                             </tbody>
                           </table>
                         </div>
+                        {selectedWeekDetail ? (
+                          <div className="space-y-4 rounded-2xl border border-white/45 bg-white/90 p-4 text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.85)] dark:border-white/10 dark:bg-white/[0.08]">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500/80 dark:text-slate-400/80">
+                                  Week {selectedWeekDetail.week} lineup detail
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  Opponent: {selectedWeekDetail.opponentName || "—"}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                                  Actual {formatReversePoints(selectedWeekDetail.actualPts)}
+                                </div>
+                                <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
+                                  No-trade {formatReversePoints(selectedWeekDetail.noTradePts)}
+                                </div>
+                                {totalDeltaLabel ? (
+                                  <div className={`text-xs font-semibold ${totalDeltaClass}`}>
+                                    Δ {totalDeltaLabel}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {renderLineupList({
+                                title: "Actual lineup",
+                                totalPts: selectedWeekDetail.actualPts,
+                                entries: actualLineupSorted,
+                                variant: "actual",
+                                actualLookup,
+                              })}
+                              {renderLineupList({
+                                title: "No-trade lineup",
+                                totalPts: selectedWeekDetail.noTradePts,
+                                entries: noTradeLineupSorted,
+                                variant: "noTrade",
+                                actualLookup,
+                              })}
+                            </div>
+                            {detailAuditNotes.length ? (
+                              <div className="rounded-xl border border-white/40 bg-white/80 p-3 text-xs leading-relaxed text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
+                                  Notes
+                                </div>
+                                <ul className="mt-2 space-y-1 list-disc pl-4">
+                                  {detailAuditNotes.map((note, idx) => (
+                                    <li
+                                      key={`${team.teamId}-${selectedWeekDetail.week}-note-${idx}`}
+                                      className="leading-snug"
+                                    >
+                                      {note}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
