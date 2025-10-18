@@ -9850,36 +9850,40 @@ export function TradingTab({
       return (
         <div
           key={key}
-          className="flex items-center justify-between gap-3 rounded-xl border border-white/45 bg-white/90 px-3 py-1.5 text-[13px] shadow-[0_16px_40px_-32px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
+          className="space-y-1.5 rounded-xl border border-white/45 bg-white/90 px-3 py-2 text-[13px] shadow-[0_16px_40px_-32px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
         >
-          <div className="min-w-0">
-            <div className="truncate font-semibold text-slate-800 dark:text-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            {slotLabel || posLabel ? (
+              <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                {slotLabel || posLabel}
+              </span>
+            ) : null}
+            {slotLabel || posLabel ? (
+              <span className="text-slate-400 dark:text-slate-500">:</span>
+            ) : null}
+            <span className="min-w-0 flex-1 truncate font-semibold text-slate-800 dark:text-slate-100">
               {entry?.name || "—"}
-            </div>
-            <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-              {posLabel && posLabel !== slotLabel ? `${slotLabel} • ${posLabel}` : slotLabel || posLabel || ""}
-            </div>
-            {metaNote ? (
-              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {metaNote}
-              </div>
-            ) : null}
-            {replacementNote ? (
-              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {replacementNote}
-              </div>
-            ) : null}
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-100">
+            </span>
+            <span className="text-slate-400 dark:text-slate-500">:</span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-100">
               {formatReversePoints(entry?.pts)}
-            </div>
+            </span>
             {deltaLabel ? (
-              <div className={`text-xs font-semibold tabular-nums ${deltaClass}`}>
+              <span className={`shrink-0 text-xs font-semibold tabular-nums ${deltaClass}`}>
                 {deltaLabel}
-              </div>
+              </span>
             ) : null}
           </div>
+          {metaNote ? (
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              {metaNote}
+            </div>
+          ) : null}
+          {replacementNote ? (
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              {replacementNote}
+            </div>
+          ) : null}
         </div>
       );
     };
