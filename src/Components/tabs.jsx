@@ -3787,6 +3787,7 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
     score2,
     owner1,
     owner2,
+    isPlayoff = false,
   }) => {
     const wk = Number(week);
     if (!Number.isFinite(wk) || wk <= 0) return;
@@ -3825,6 +3826,7 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
       score2: toNumberOrNull(score2),
       owner1: ownerName1,
       owner2: ownerName2,
+      is_playoff: isPlayoff === true,
     });
   };
 
@@ -3837,6 +3839,18 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
       );
       const owner1 = g?.owner ?? g?.team1Owner ?? g?.homeOwner;
       const owner2 = g?.opp ?? g?.opponent ?? g?.team2Owner ?? g?.awayOwner;
+      const seasonType = String(g?.seasonType || g?.type || "").toLowerCase();
+      const playoffTier = String(g?.playoffTierType || g?.playoffTier || "").toUpperCase();
+      const isPlayoffGame =
+        g?.is_playoff === true ||
+        g?.isPlayoff === true ||
+        g?.playoff === true ||
+        g?.postseason === true ||
+        g?.is_postseason === true ||
+        g?.playoffMatchup === true ||
+        seasonType.includes("playoff") ||
+        seasonType.includes("postseason") ||
+        (playoffTier && playoffTier !== "" && playoffTier !== "NONE");
       pushGame({
         week,
         team1Id:
@@ -3871,6 +3885,7 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
           g?.pa,
         owner1,
         owner2,
+        isPlayoff: isPlayoffGame,
       });
     }
   }
@@ -3893,6 +3908,14 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
         const wkVal = byWeek ? Number(byWeek?.[week]) : NaN;
         return Number.isFinite(wkVal) ? wkVal : null;
       };
+      const matchupType = String(m?.matchupType || m?.type || "").toLowerCase();
+      const isPlayoffGame =
+        m?.isPlayoffMatchup === true ||
+        m?.isPlayoff === true ||
+        m?.playoffMatchup === true ||
+        m?.postseason === true ||
+        matchupType.includes("playoff") ||
+        matchupType.includes("postseason");
       pushGame({
         week,
         team1Id: home?.teamId ?? home?.team?.id ?? home?.id,
@@ -3901,6 +3924,7 @@ function __collectGamesForSeason(league, season, ownerByTeamByYear) {
         score2: pickScore(away),
         owner1: home?.ownerName ?? home?.teamName,
         owner2: away?.ownerName ?? away?.teamName,
+        isPlayoff: isPlayoffGame,
       });
     }
   }
@@ -7899,12 +7923,14 @@ export function TradingTab({
           (Number.isFinite(t2) ? ownerNameOf(season, t2) : "");
         const score1 = Number(g?.score1);
         const score2 = Number(g?.score2);
+        const isPlayoffGame = g?.is_playoff === true;
         if (Number.isFinite(t1)) {
           gameLookup.set(`${t1}|${week}`, {
             opponentId: Number.isFinite(t2) ? t2 : null,
             opponentOwner: owner2,
             scoreFor: Number.isFinite(score1) ? score1 : null,
             scoreAgainst: Number.isFinite(score2) ? score2 : null,
+            isPlayoff: isPlayoffGame,
           });
         }
         if (Number.isFinite(t2)) {
@@ -7913,6 +7939,7 @@ export function TradingTab({
             opponentOwner: owner1,
             scoreFor: Number.isFinite(score2) ? score2 : null,
             scoreAgainst: Number.isFinite(score1) ? score1 : null,
+            isPlayoff: isPlayoffGame,
           });
         }
       });
@@ -7946,6 +7973,75 @@ export function TradingTab({
           noTradeTies: 0,
           auditNotes: [],
         });
+      });
+
+      const actualSeasonRecords = new Map();
+      const ensureSeasonRecord = (teamId) => {
+        const tid = toInt(teamId);
+        if (!Number.isFinite(tid)) return null;
+        if (!actualSeasonRecords.has(tid)) {
+          actualSeasonRecords.set(tid, {
+            teamId: tid,
+            name: ownerNameOf(season, tid),
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            pf: 0,
+            pa: 0,
+          });
+        }
+        return actualSeasonRecords.get(tid);
+      };
+
+      games.forEach((g) => {
+        const week = Number(g?.week);
+        if (!Number.isFinite(week) || week <= 0) return;
+        if (week > endWeek) return;
+        if (g?.is_playoff === true) return;
+        const t1 = toInt(g?.team1Id);
+        const t2 = toInt(g?.team2Id);
+        const score1 = Number(g?.score1);
+        const score2 = Number(g?.score2);
+        const rec1 = ensureSeasonRecord(t1);
+        const rec2 = ensureSeasonRecord(t2);
+        if (rec1 && Number.isFinite(score1)) rec1.pf += score1;
+        if (rec1 && Number.isFinite(score2)) rec1.pa += score2;
+        if (rec2 && Number.isFinite(score2)) rec2.pf += score2;
+        if (rec2 && Number.isFinite(score1)) rec2.pa += score1;
+        if (
+          Number.isFinite(score1) &&
+          Number.isFinite(score2) &&
+          rec1 &&
+          rec2
+        ) {
+          if (score1 > score2) {
+            rec1.wins += 1;
+            rec2.losses += 1;
+          } else if (score2 > score1) {
+            rec2.wins += 1;
+            rec1.losses += 1;
+          } else {
+            rec1.ties += 1;
+            rec2.ties += 1;
+          }
+        }
+      });
+
+      tradeTeams.forEach((teamId) => ensureSeasonRecord(teamId));
+
+      const cloneSeasonRecord = (rec) => ({
+        teamId: rec?.teamId ?? null,
+        name: rec?.name ?? "",
+        wins: Number(rec?.wins) || 0,
+        losses: Number(rec?.losses) || 0,
+        ties: Number(rec?.ties) || 0,
+        pf: Number(rec?.pf) || 0,
+        pa: Number(rec?.pa) || 0,
+      });
+
+      const noTradeSeasonRecords = new Map();
+      actualSeasonRecords.forEach((rec, teamId) => {
+        noTradeSeasonRecords.set(teamId, cloneSeasonRecord(rec));
       });
 
       const actualPointsForTeamWeek = (teamId, week) => {
@@ -8163,6 +8259,7 @@ export function TradingTab({
             week: wk,
             opponentName: opponentOwner || "—",
             opponentId,
+            isPlayoff: game?.isPlayoff === true,
             actualPts: record.actualPts,
             noTradePts: record.noTradePts,
             actualResult,
@@ -8173,42 +8270,177 @@ export function TradingTab({
         });
       }
 
+      const adjustResultCount = (rec, result, delta) => {
+        if (!rec || !result) return;
+        const applyDelta = (field) => {
+          const current = Number(rec[field]) || 0;
+          const next = current + delta;
+          rec[field] = next < 0 ? 0 : next;
+        };
+        if (result === "W") applyDelta("wins");
+        else if (result === "L") applyDelta("losses");
+        else if (result === "T") applyDelta("ties");
+      };
+
+      const swapRecordResult = (rec, from, to) => {
+        if (!rec) return;
+        if (from && from !== "—") adjustResultCount(rec, from, -1);
+        if (to && to !== "—") adjustResultCount(rec, to, 1);
+      };
+
+      const invertResult = (res) => {
+        if (res === "W") return "L";
+        if (res === "L") return "W";
+        if (res === "T") return "T";
+        return res;
+      };
+
+      aggregateByTeam.forEach((aggregate) => {
+        aggregate.weeks.forEach((wk) => {
+          if (wk.isPlayoff) return;
+          const rec = noTradeSeasonRecords.get(aggregate.teamId);
+          if (rec) {
+            swapRecordResult(rec, wk.actualResult, wk.noTradeResult);
+            if (
+              Number.isFinite(wk?.actualPts) &&
+              Number.isFinite(wk?.noTradePts)
+            ) {
+              rec.pf += wk.noTradePts - wk.actualPts;
+            }
+          }
+
+          const opponentId = Number.isFinite(wk?.opponentId)
+            ? Number(wk.opponentId)
+            : null;
+          if (
+            Number.isFinite(opponentId) &&
+            !tradeTeamSet.has(opponentId)
+          ) {
+            const oppRec = noTradeSeasonRecords.get(opponentId);
+            if (oppRec) {
+              swapRecordResult(
+                oppRec,
+                invertResult(wk.actualResult),
+                invertResult(wk.noTradeResult)
+              );
+            }
+          }
+        });
+      });
+
+      const computeStandingsFromRecords = (recordMap) => {
+        const rows = Array.from(recordMap.values()).map((rec) => {
+          const wins = Number(rec?.wins) || 0;
+          const losses = Number(rec?.losses) || 0;
+          const ties = Number(rec?.ties) || 0;
+          const games = wins + losses + ties;
+          const winPct = games > 0 ? (wins + ties * 0.5) / games : 0;
+          return {
+            teamId: rec.teamId,
+            name: rec.name,
+            wins,
+            losses,
+            ties,
+            pf: Number(rec?.pf) || 0,
+            pa: Number(rec?.pa) || 0,
+            games,
+            winPct,
+          };
+        });
+        rows.sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          if (a.losses !== b.losses) return a.losses - b.losses;
+          if (b.pf !== a.pf) return b.pf - a.pf;
+          return String(a.name || "").localeCompare(String(b.name || ""));
+        });
+        const byTeamId = new Map();
+        const ranked = rows.map((row, idx) => {
+          const withRank = { ...row, rank: idx + 1 };
+          byTeamId.set(row.teamId, withRank);
+          return withRank;
+        });
+        return { list: ranked, byTeamId };
+      };
+
+      const actualStandings = computeStandingsFromRecords(actualSeasonRecords);
+      const noTradeStandings = computeStandingsFromRecords(noTradeSeasonRecords);
+
+      const playoffTeamCountRaw =
+        league?.playoffTeamsOverrides?.[season] ??
+        league?.playoffTeamsOverrides?.[String(season)] ??
+        league?.espnPlayoffTeamsBySeason?.[season] ??
+        league?.espnPlayoffTeamsBySeason?.[String(season)];
+      const playoffTeamCount = Number(playoffTeamCountRaw) || 0;
+
       const teamsOutput = {};
       const recordLabel = (wins, losses, ties) =>
         Number(ties) > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
       aggregateByTeam.forEach((aggregate, teamId) => {
         aggregate.weeks.sort((a, b) => a.week - b.week);
-        const actualWinEquiv =
-          aggregate.actualWins + aggregate.actualTies * 0.5;
-        const noTradeWinEquiv =
-          aggregate.noTradeWins + aggregate.noTradeTies * 0.5;
+        const actualSeason = actualSeasonRecords.get(teamId) ||
+          cloneSeasonRecord({ teamId, name: aggregate.name });
+        const noTradeSeason = noTradeSeasonRecords.get(teamId) ||
+          cloneSeasonRecord(actualSeason);
+
+        const actualWins = Number(actualSeason?.wins) || 0;
+        const actualLosses = Number(actualSeason?.losses) || 0;
+        const actualTies = Number(actualSeason?.ties) || 0;
+        const noTradeWins = Number(noTradeSeason?.wins) || 0;
+        const noTradeLosses = Number(noTradeSeason?.losses) || 0;
+        const noTradeTies = Number(noTradeSeason?.ties) || 0;
+
+        const actualWinEquiv = actualWins + actualTies * 0.5;
+        const noTradeWinEquiv = noTradeWins + noTradeTies * 0.5;
         const deltaWins = Number((noTradeWinEquiv - actualWinEquiv).toFixed(1));
+
+        const actualStanding = actualStandings.byTeamId.get(teamId);
+        const noTradeStanding = noTradeStandings.byTeamId.get(teamId);
+        const actualRank = actualStanding?.rank ?? null;
+        const noTradeRank = noTradeStanding?.rank ?? null;
+        const seedingDiff =
+          Number.isFinite(actualRank) && Number.isFinite(noTradeRank)
+            ? actualRank - noTradeRank
+            : 0;
+        const actualPlayoff =
+          playoffTeamCount > 0 &&
+          Number.isFinite(actualRank) &&
+          actualRank > 0 &&
+          actualRank <= playoffTeamCount;
+        const noTradePlayoff =
+          playoffTeamCount > 0 &&
+          Number.isFinite(noTradeRank) &&
+          noTradeRank > 0 &&
+          noTradeRank <= playoffTeamCount;
+
         teamsOutput[teamId] = {
           teamId,
           name: aggregate.name,
           weeks: aggregate.weeks,
           actualRecord: {
-            wins: aggregate.actualWins,
-            losses: aggregate.actualLosses,
-            ties: aggregate.actualTies,
-            label: recordLabel(
-              aggregate.actualWins,
-              aggregate.actualLosses,
-              aggregate.actualTies
-            ),
+            wins: actualWins,
+            losses: actualLosses,
+            ties: actualTies,
+            label: recordLabel(actualWins, actualLosses, actualTies),
           },
           noTradeRecord: {
-            wins: aggregate.noTradeWins,
-            losses: aggregate.noTradeLosses,
-            ties: aggregate.noTradeTies,
-            label: recordLabel(
-              aggregate.noTradeWins,
-              aggregate.noTradeLosses,
-              aggregate.noTradeTies
-            ),
+            wins: noTradeWins,
+            losses: noTradeLosses,
+            ties: noTradeTies,
+            label: recordLabel(noTradeWins, noTradeLosses, noTradeTies),
           },
           deltaWins,
           auditNotes: aggregate.auditNotes,
+          seeding: {
+            actualRank: Number.isFinite(actualRank) ? actualRank : null,
+            noTradeRank: Number.isFinite(noTradeRank) ? noTradeRank : null,
+            diff: Number.isFinite(actualRank) && Number.isFinite(noTradeRank)
+              ? seedingDiff
+              : 0,
+            playoffSlots: playoffTeamCount,
+            actualPlayoff,
+            noTradePlayoff,
+          },
         };
       });
 
@@ -9374,7 +9606,7 @@ export function TradingTab({
               <button
                 type="button"
                 onClick={() => onReverse?.(t)}
-                className="inline-flex items-center justify-center rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-300/90 via-amber-200/75 to-yellow-200/75 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-800 shadow-[0_24px_55px_-30px_rgba(245,158,11,0.6)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_65px_-32px_rgba(245,158,11,0.7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-amber-300/40 dark:text-amber-100 dark:focus-visible:ring-offset-zinc-950"
+                className="inline-flex items-center justify-center rounded-full border border-amber-400/60 bg-white/85 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-600 shadow-[0_20px_48px_-30px_rgba(245,158,11,0.55)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_26px_60px_-32px_rgba(245,158,11,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-amber-300/40 dark:bg-white/[0.08] dark:text-amber-200 dark:hover:bg-white/[0.12] dark:focus-visible:ring-offset-zinc-950"
               >
                 Reverse Trade
               </button>
@@ -9438,6 +9670,16 @@ export function TradingTab({
           .filter(Boolean)
       : Object.values(teamRecords || {});
 
+    const tradeAssetsForTeam = (teamId) => {
+      const tid = toInt(teamId);
+      if (!Number.isFinite(tid) || !trade) return [];
+      const leftId = toInt(trade.leftTeamId);
+      const rightId = toInt(trade.rightTeamId);
+      if (tid === leftId) return safeArr(trade.leftGets);
+      if (tid === rightId) return safeArr(trade.rightGets);
+      return [];
+    };
+
     return (
       <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6">
         <div
@@ -9497,6 +9739,78 @@ export function TradingTab({
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   {teams.map((team) => {
+                    const assets = tradeAssetsForTeam(team.teamId);
+                    const deltaWins = Number(team?.deltaWins) || 0;
+                    const noTradeTone =
+                      deltaWins > 0
+                        ? "positive"
+                        : deltaWins < 0
+                        ? "negative"
+                        : "neutral";
+                    const noTradeBoxClass =
+                      noTradeTone === "positive"
+                        ? "rounded-2xl border border-emerald-300/50 bg-emerald-500/10 p-3 dark:border-emerald-300/30 dark:bg-emerald-500/10"
+                        : noTradeTone === "negative"
+                        ? "rounded-2xl border border-rose-300/60 bg-rose-500/10 p-3 dark:border-rose-400/40 dark:bg-rose-500/10"
+                        : "rounded-2xl border border-white/50 bg-white/80 p-3 dark:border-white/10 dark:bg-white/[0.05]";
+                    const noTradeLabelClass =
+                      noTradeTone === "positive"
+                        ? "text-emerald-600/85 dark:text-emerald-200/85"
+                        : noTradeTone === "negative"
+                        ? "text-rose-600/85 dark:text-rose-200/85"
+                        : "text-slate-500/75 dark:text-slate-400/75";
+                    const noTradeValueClass =
+                      noTradeTone === "positive"
+                        ? "text-emerald-600 dark:text-emerald-200"
+                        : noTradeTone === "negative"
+                        ? "text-rose-600 dark:text-rose-200"
+                        : "text-slate-800 dark:text-slate-100";
+
+                    const seeding = team?.seeding || null;
+                    const seedingDiff = Number(seeding?.diff) || 0;
+                    const seedingTone =
+                      seedingDiff > 0
+                        ? "positive"
+                        : seedingDiff < 0
+                        ? "negative"
+                        : "neutral";
+                    const seedLabelClass =
+                      seedingTone === "positive"
+                        ? "text-emerald-600/85 dark:text-emerald-200/85"
+                        : seedingTone === "negative"
+                        ? "text-rose-600/85 dark:text-rose-200/85"
+                        : "text-slate-500/75 dark:text-slate-400/75";
+                    const seedValueClass =
+                      seedingTone === "positive"
+                        ? "text-emerald-600 dark:text-emerald-200"
+                        : seedingTone === "negative"
+                        ? "text-rose-600 dark:text-rose-200"
+                        : "text-slate-800 dark:text-slate-100";
+                    const actualSeedLabel = Number.isFinite(seeding?.actualRank)
+                      ? ordinal(Number(seeding.actualRank))
+                      : "—";
+                    const noTradeSeedLabel = Number.isFinite(seeding?.noTradeRank)
+                      ? ordinal(Number(seeding.noTradeRank))
+                      : "—";
+                    let playoffStatus = null;
+                    let playoffTone = "neutral";
+                    if (seeding && Number(seeding.playoffSlots) > 0) {
+                      const actualIn = !!seeding.actualPlayoff;
+                      const noTradeIn = !!seeding.noTradePlayoff;
+                      playoffStatus = `${actualIn ? "In" : "Out"} → ${
+                        noTradeIn ? "In" : "Out"
+                      }`;
+                      if (actualIn !== noTradeIn) {
+                        playoffTone = noTradeIn ? "positive" : "negative";
+                      }
+                    }
+                    const playoffStatusClass =
+                      playoffTone === "positive"
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : playoffTone === "negative"
+                        ? "text-rose-600 dark:text-rose-300"
+                        : "text-slate-600 dark:text-slate-300";
+
                     return (
                       <div
                         key={team.teamId}
@@ -9510,6 +9824,23 @@ export function TradingTab({
                             <div className="truncate text-lg font-semibold text-slate-800 dark:text-slate-100">
                               {team.name}
                             </div>
+                            {assets.length ? (
+                              <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+                                {assets.map((asset, idx) => {
+                                  const key = `${team.teamId}-${asset?.pid ?? idx}`;
+                                  const label = asset?.name || asset?.playerName;
+                                  const display = label || `#${asset?.pid ?? "?"}`;
+                                  return (
+                                    <span
+                                      key={key}
+                                      className="inline-flex items-center rounded-full border border-emerald-300/60 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-600 dark:border-emerald-400/40 dark:text-emerald-200"
+                                    >
+                                      + {display}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
                           </div>
                           <span className={deltaBadgeClass(team.deltaWins)}>
                             {formatDeltaWinsLabel(team.deltaWins)}
@@ -9524,15 +9855,74 @@ export function TradingTab({
                               {team.actualRecord.label}
                             </div>
                           </div>
-                          <div className="rounded-2xl border border-emerald-300/50 bg-emerald-500/10 p-3 dark:border-emerald-300/30 dark:bg-emerald-500/10">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-600/85 dark:text-emerald-200/85">
+                          <div className={noTradeBoxClass}>
+                            <div className={`text-[11px] font-semibold uppercase tracking-[0.28em] ${noTradeLabelClass}`}>
                               No-trade
                             </div>
-                            <div className="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-200">
+                            <div className={`mt-1 text-xl font-semibold ${noTradeValueClass}`}>
                               {team.noTradeRecord.label}
                             </div>
                           </div>
                         </div>
+                        {seeding ? (
+                          <div className="rounded-2xl border border-white/50 bg-white/80 p-3 dark:border-white/10 dark:bg-white/[0.05]">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500/75 dark:text-slate-400/75">
+                              Final Seeding
+                            </div>
+                            <div className="mt-2 flex items-center justify-between">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                                  Actual
+                                </div>
+                                <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                                  {actualSeedLabel}
+                                </div>
+                              </div>
+                              <div className="text-xs text-slate-400 dark:text-slate-500">→</div>
+                              <div className="text-right">
+                                <div className={`text-[10px] uppercase tracking-[0.2em] ${seedLabelClass}`}>
+                                  No-trade
+                                </div>
+                                <div className={`text-lg font-semibold ${seedValueClass}`}>
+                                  {noTradeSeedLabel}
+                                </div>
+                              </div>
+                            </div>
+                            <div
+                              className={`mt-2 text-xs ${
+                                seedingDiff === 0
+                                  ? "text-slate-500 dark:text-slate-400"
+                                  : seedingTone === "positive"
+                                  ? "text-emerald-600 dark:text-emerald-300"
+                                  : "text-rose-600 dark:text-rose-300"
+                              }`}
+                            >
+                              {seedingDiff === 0
+                                ? "Seeding unchanged."
+                                : seedingDiff > 0
+                                ? `Moved up ${
+                                    seedingDiff === 1
+                                      ? "1 spot"
+                                      : `${seedingDiff} spots`
+                                  }`
+                                : `Dropped ${
+                                    Math.abs(seedingDiff) === 1
+                                      ? "1 spot"
+                                      : `${Math.abs(seedingDiff)} spots`
+                                  }`}
+                            </div>
+                            {playoffStatus ? (
+                              <div className={`mt-1 text-xs font-semibold ${playoffStatusClass}`}>
+                                Playoff berth: {playoffStatus}
+                              </div>
+                            ) : null}
+                            {seeding?.playoffSlots > 0 ? (
+                              <div className="mt-1 text-[10px] uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
+                                Top {seeding.playoffSlots} make playoffs
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/85 dark:border-white/10 dark:bg-white/[0.06]">
                           <table className="min-w-full divide-y divide-white/60 text-xs text-slate-600 dark:divide-white/10 dark:text-slate-200">
                             <thead className="bg-white/60 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
