@@ -9804,7 +9804,7 @@ export function TradingTab({
           case "empty":
             return "No eligible player";
           case "unchanged":
-            return "Unchanged";
+            return null;
           default:
             return null;
         }
