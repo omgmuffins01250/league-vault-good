@@ -1,130 +1,93 @@
-import React from "react";
-
-import FooterLogo from "../assets/images/logo-1-1.png";
-
 const Footer = () => {
   return (
-    <div>
-      <section className="mailchimp-one">
-        <div className="container wow fadeInUp">
-          <div className="inner-container">
-            <div className="mailchimp-one__icon">
-              <i className="apton-icon-mail"></i>
-            </div>
-            <form action="#" className="mailchimp-one__form">
-              <input
-                type="text"
-                placeholder="Enter your email address"
-                name="email"
-              />
-              <button className="thm-btn mailchimp-one__btn" type="submit">
-                <span>Register Now</span>
-              </button>
-            </form>
-          </div>
+    <footer className="mt-24 border-t border-slate-700/40 bg-slate-950/40">
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-14 md:flex-row md:items-start md:justify-between">
+        <div className="max-w-md space-y-4">
+          <p className="text-sm uppercase tracking-[0.3em] text-slate-500">
+            LeagueVault
+          </p>
+          <h3 className="text-2xl font-semibold text-slate-100">
+            Preserve every season’s lore.
+          </h3>
+          <p className="text-sm text-slate-400">
+            Import your league history, explore the data, and keep the receipts
+            for every rivalry.
+          </p>
         </div>
-      </section>
 
-      <footer className="site-footer">
-        <div className="site-footer__upper">
-          <div className="container">
-            <div className="row">
-              <div className="col-lg-4">
-                <div className="footer-widget footer-widget__about">
-                  <a href="index.html">
-                    <img src={FooterLogo} width="129" alt="awesome post" />
-                  </a>
-                  <p>
-                    Lorem Ipsum is simply dummy text the <br /> printing and
-                    setting industry. Lorm Ipsum
-                    <br /> has been the text ever.
-                  </p>
-                </div>
-              </div>
-
-              <div className="col-lg-5">
-                <div className="footer-widget__links-wrap">
-                  <div className="footer-widget">
-                    <h3 className="footer-widget__title">Company</h3>
-                    <ul className="list-unstyled footer-widget__links-list">
-                      <li>
-                        <a href="#none">About</a>
-                      </li>
-                      <li>
-                        <a href="#none">Our Team</a>
-                      </li>
-                      <li>
-                        <a href="#none">Contact</a>
-                      </li>
-                      <li>
-                        <a href="#none">Services</a>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="footer-widget">
-                    <h3 className="footer-widget__title">Explore</h3>
-                    <ul className="list-unstyled footer-widget__links-list">
-                      <li>
-                        <a href="#none">News</a>
-                      </li>
-                      <li>
-                        <a href="#none">Features</a>
-                      </li>
-                      <li>
-                        <a href="#none">Download</a>
-                      </li>
-                      <li>
-                        <a href="#none">Free Trial</a>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="footer-widget">
-                    <h3 className="footer-widget__title">Links</h3>
-                    <ul className="list-unstyled footer-widget__links-list">
-                      <li>
-                        <a href="#none">Help</a>
-                      </li>
-                      <li>
-                        <a href="#none">Privacy Policy</a>
-                      </li>
-                      <li>
-                        <a href="#none">Terms of Use</a>
-                      </li>
-                      <li>
-                        <a href="#none">Services</a>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-3 d-flex align-items-center justify-content-xl-end justify-content-lg-end justify-content-md-center justify-content-sm-center">
-                <div className="footer-widget">
-                  <div className="footer-widget__social">
-                    <a href="#none">
-                      <i className="fab fa-facebook-square"></i>
-                    </a>
-                    <a href="#none">
-                      <i className="fab fa-twitter"></i>
-                    </a>
-                    <a href="#none">
-                      <i className="fab fa-instagram"></i>
-                    </a>
-                    <a href="#none">
-                      <i className="fab fa-pinterest-p"></i>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div className="grid flex-1 grid-cols-1 gap-8 text-sm text-slate-400 sm:grid-cols-2 md:grid-cols-3">
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-300/80">
+              Product
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <a href="#features" className="hover:text-amber-300/80">
+                  Features
+                </a>
+              </li>
+              <li>
+                <a href="#screens" className="hover:text-amber-300/80">
+                  Screenshots
+                </a>
+              </li>
+              <li>
+                <a href="#pricing" className="hover:text-amber-300/80">
+                  Pricing
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-300/80">
+              Company
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <a href="mailto:support@leaguevault.app" className="hover:text-amber-300/80">
+                  Support
+                </a>
+              </li>
+              <li>
+                <a href="#contact" className="hover:text-amber-300/80">
+                  Contact
+                </a>
+              </li>
+              <li>
+                <a href="/signin" className="hover:text-amber-300/80">
+                  Sign in
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-300/80">
+              Legal
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <a href="/terms" className="hover:text-amber-300/80">
+                  Terms
+                </a>
+              </li>
+              <li>
+                <a href="/privacy" className="hover:text-amber-300/80">
+                  Privacy
+                </a>
+              </li>
+              <li>
+                <a href="/app" className="hover:text-amber-300/80">
+                  App
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
-        <div className="site-footer__bottom">
-          <div className="container text-center">
-            <p>© copyright 2020 by Layerdrops.com</p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      </div>
+      <div className="border-t border-slate-800/50 bg-slate-950/60 py-6 text-center text-xs text-slate-500">
+        © {new Date().getFullYear()} LeagueVault. All rights reserved.
+      </div>
+    </footer>
   );
 };
 

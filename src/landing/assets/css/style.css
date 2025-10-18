@@ -4605,17 +4605,6 @@ button {
     --vault-dim: #a9b0bb;
   }
   
-  /* Subtle noise texture (safe on dark) */
-  .apiton-landing {
-    background-color: var(--vault-bg);
-    color: var(--vault-text);
-    background-image:
-      radial-gradient(1200px 600px at 70% -10%, rgba(200,156,61,0.06), transparent 60%),
-      radial-gradient(800px 400px at 20% 120%, rgba(200,156,61,0.05), transparent 55%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 40 40'%3E%3Cg fill='%23161a20' fill-opacity='0.35'%3E%3Ccircle cx='0.5' cy='0.5' r='0.5'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: auto, auto, 140px 140px;
-  }
-  
   /* NAV */
   .apiton-landing .navbar {
     background: linear-gradient(180deg, #12161b, #0e1116);
@@ -4664,6 +4653,9 @@ button {
   }
   
   /* Headline “unlocked” in brass gradient */
+  .vault-title {
+    color: var(--vault-text);
+  }
   .vault-title .brass {
     background: linear-gradient(180deg, var(--vault-brass-1), var(--vault-brass-2));
     -webkit-background-clip: text;
@@ -4721,21 +4713,29 @@ button {
     box-shadow: 0 0 0 2px #0f1115, 0 0 8px rgba(255,255,255,0.15);
   }
   
-  /* Footer edge */
-  .apiton-landing footer {
-    border-top: 1px solid var(--vault-line);
-    background: linear-gradient(180deg, #0e1116, #0c0f13);
-  }
   /* ===== Vault theme helpers ===== */
 .apiton-landing {
-  /* page-wide deep vault background */
   --vault-bg1: #0e1217;
   --vault-bg2: #101722;
-  background:
+  color: var(--vault-text);
+  background-color: var(--vault-bg);
+  background-image:
     radial-gradient(1200px 600px at 15% 10%, rgba(92, 105, 255, 0.08), transparent 60%),
     radial-gradient(1000px 500px at 85% 35%, rgba(255, 209, 92, 0.06), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 40 40'%3E%3Cg fill='%23161a20' fill-opacity='0.35'%3E%3Ccircle cx='0.5' cy='0.5' r='0.5'/%3E%3C/g%3E%3C/svg%3E"),
     linear-gradient(180deg, var(--vault-bg1), var(--vault-bg2));
-  color: #e8edf3;
+  background-size: auto, auto, 140px 140px, 100% 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.apiton-landing > * {
+  position: relative;
+  z-index: 1;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* the rounded glass card we’ll reuse under each section */
