@@ -14800,7 +14800,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               className="absolute inset-0 bg-black/50"
               onClick={() => setShowExplain(false)}
             />
-            <div className="relative w-full max-w-lg rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col">
+            <div
+              className="relative z-10 w-full max-w-lg rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl max-h-[85vh] flex flex-col"
+            >
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
                 <div className="text-base font-semibold">
                   Best Drafter — How it’s calculated
