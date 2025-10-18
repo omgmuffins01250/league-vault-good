@@ -9926,7 +9926,7 @@ export function TradingTab({
           onClick={closeReverseModal}
         />
         <div
-          className="relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-white/20 bg-white/95 p-6 text-slate-700 shadow-[0_40px_120px_-50px_rgba(15,23,42,0.85)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80 dark:text-slate-100 reverse-modal-anim"
+          className="relative z-10 max-h-[90vh] w-full max-w-6xl xl:max-w-7xl overflow-y-auto rounded-[28px] border border-white/20 bg-white/95 p-6 text-slate-700 shadow-[0_40px_120px_-50px_rgba(15,23,42,0.85)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80 dark:text-slate-100 reverse-modal-anim"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
