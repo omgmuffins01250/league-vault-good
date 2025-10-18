@@ -3137,10 +3137,20 @@ export default function App() {
   return (
     <div
       data-theme="luxury"
-      className="min-h-screen bg-base-100 text-base-content"
+      className="relative min-h-screen overflow-hidden bg-base-100 text-base-content"
     >
-      {/* NAVBAR */}
-      <div className="navbar bg-base-200 rounded-xl mb-4 shadow relative">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+      >
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute bottom-[-180px] right-[-120px] h-[620px] w-[620px] rounded-full bg-sky-500/10 blur-[200px]" />
+        <div className="absolute top-[12%] left-[-160px] h-[420px] w-[420px] rounded-full bg-amber-400/10 blur-[160px]" />
+      </div>
+      <div className="relative z-10 px-4 pb-12 pt-6 sm:px-6 lg:px-10">
+        <div className="mx-auto w-full max-w-6xl space-y-8">
+          {/* NAVBAR */}
+          <div className="navbar relative rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
         <div className="flex-1 items-center gap-3">
           {leagueOptions.length > 0 && (
             <div className="dropdown">
@@ -3202,7 +3212,7 @@ export default function App() {
           )}
         </div>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <h1 className="text-2xl md:text-4xl font-semibold tracking-tight">
+          <h1 className="text-2xl md:text-4xl font-semibold tracking-tight text-white">
             {leagueName}
           </h1>
         </div>
@@ -3210,29 +3220,33 @@ export default function App() {
           <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
         </div>
       </div>
-      {/* PAGE CONTAINER */}
-      <div className="max-w-none px-0 md:px-0 py-3 ml-5">
-        {" "}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 overflow-hidden rounded-full bg-zinc-900 dark:bg-white grid place-items-center text-white dark:text-zinc-900 font-semibold">
-              {headerIconIsUpload ? (
-                <img
-                  src={leagueIcon?.value}
-                  alt={`${leagueName || "League"} icon`}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-lg leading-none">{headerIconGlyph}</span>
-              )}
+          {/* PAGE HEADER */}
+          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 shadow-[0_26px_75px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-900/90 text-white shadow-inner dark:bg-white/90 dark:text-zinc-900">
+                  {headerIconIsUpload ? (
+                    <img
+                      src={leagueIcon?.value}
+                      alt={`${leagueName || "League"} icon`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-full w-full place-items-center text-lg leading-none">
+                      {headerIconGlyph}
+                    </span>
+                  )}
+                </div>
+                <div className="text-lg font-semibold text-white/90 dark:text-white">
+                  {leagueName}
+                </div>
+              </div>
+              <div />
             </div>
-            <div className="text-lg font-semibold">{leagueName}</div>
           </div>
-          <div />
-        </div>
-        <div className="mt-6 grid lg:grid-cols-[168px_1fr] gap-4">
-          {/* SIDEBAR */}
-          <aside className="space-y-2">
+          <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+            {/* SIDEBAR */}
+            <aside className="space-y-2 rounded-3xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl shadow-[0_26px_75px_-50px_rgba(8,12,24,0.85)]">
             <SidebarButton
               active={section === "setup"}
               onClick={() => setSection("setup")}
@@ -3602,5 +3616,6 @@ export default function App() {
         <Footer />
       </div>
     </div>
+  </div>
   );
 }
