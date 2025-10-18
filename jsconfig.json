@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+      "baseUrl": ".",
+      "paths": {
+        "/project/workspace/src/*": ["src/*"],
+        "@/*": ["src/*"]
+      }
+    }
+  }
+  
