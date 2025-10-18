@@ -10025,6 +10025,26 @@ export function TradingTab({
                         : seedingTone === "negative"
                         ? "text-rose-600 dark:text-rose-200"
                         : "text-slate-800 dark:text-slate-100";
+                    const seedingMessageClass =
+                      seedingTone === "positive"
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : seedingTone === "negative"
+                        ? "text-rose-600 dark:text-rose-300"
+                        : "text-slate-500 dark:text-slate-400";
+                    const seedingMessage =
+                      seedingDiff === 0
+                        ? null
+                        : seedingDiff > 0
+                        ? `Moved up ${
+                            seedingDiff === 1
+                              ? "1 spot"
+                              : `${seedingDiff} spots`
+                          }`
+                        : `Dropped ${
+                            Math.abs(seedingDiff) === 1
+                              ? "1 spot"
+                              : `${Math.abs(seedingDiff)} spots`
+                          }`;
                     const selectionMatchesTeam =
                       reverseDetailSelection &&
                       Number(reverseDetailSelection.teamId) ===
@@ -10160,29 +10180,13 @@ export function TradingTab({
                                 </div>
                               </div>
                             </div>
-                            <div
-                              className={`mt-2 text-xs ${
-                                seedingDiff === 0
-                                  ? "text-slate-500 dark:text-slate-400"
-                                  : seedingTone === "positive"
-                                  ? "text-emerald-600 dark:text-emerald-300"
-                                  : "text-rose-600 dark:text-rose-300"
-                              }`}
-                            >
-                              {seedingDiff === 0
-                                ? "Seeding unchanged."
-                                : seedingDiff > 0
-                                ? `Moved up ${
-                                    seedingDiff === 1
-                                      ? "1 spot"
-                                      : `${seedingDiff} spots`
-                                  }`
-                                : `Dropped ${
-                                    Math.abs(seedingDiff) === 1
-                                      ? "1 spot"
-                                      : `${Math.abs(seedingDiff)} spots`
-                                  }`}
-                            </div>
+                            {seedingMessage ? (
+                              <div
+                                className={`mt-2 text-xs ${seedingMessageClass}`}
+                              >
+                                {seedingMessage}
+                              </div>
+                            ) : null}
                             {playoffStatus ? (
                               <div className={`mt-1 text-xs font-semibold ${playoffStatusClass}`}>
                                 Playoff berth: {playoffStatus}
