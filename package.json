@@ -1,13 +1,13 @@
 {
-  "name": "react-vite",
+  "name": "leaguevault",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "start": "vite preview --port 4173",
+    "lint": "eslint ."
   },
   "dependencies": {
     "daisyui": "^5.1.26",
