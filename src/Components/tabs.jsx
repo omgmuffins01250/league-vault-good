@@ -7763,6 +7763,62 @@ export function TradingTab({
     [league, espnOwnerByTeamByYear]
   );
 
+  // ---------- Detailed inspector (also excludes BYEs) ----------
+  const weeklyRowsFor = React.useCallback(
+    (seasonKey, playerId) => {
+      const rows = [];
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
+      const ro = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
+        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          if (
+            !Number.isFinite(wk) ||
+            (completedCap != null && wk > completedCap)
+          ) {
+            return;
+          }
+          const entry = safeArr(entries).find(
+            (e) =>
+              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
+          );
+          if (!entry) return;
+          const picks = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "ppr",
+            "pprPts",
+            "value",
+          ];
+          let pts = null;
+          for (const key of picks) {
+            if (Number.isFinite(Number(entry?.[key]))) {
+              pts = Number(entry?.[key]);
+              break;
+            }
+          }
+          rows.push({
+            wk,
+            pts,
+            fantasyTeamId: toInt(teamKey),
+          });
+        });
+      });
+      return rows.sort((a, b) => a.wk - b.wk);
+    },
+    [currentWeekBySeason, espnRostersByYear, league]
+  );
+
   const seasonPtsCacheRef = React.useRef(new Map());
   React.useEffect(() => {
     seasonPtsCacheRef.current = new Map();
@@ -8805,62 +8861,6 @@ export function TradingTab({
     week > 1 ? avgRange(year, pid, 1, week - 1) : null;
   const postPPG = (year, pid, week) =>
     avgRange(year, pid, week, FANTASY_PLAYOFF_END);
-
-  // ---------- Detailed inspector (also excludes BYEs) ----------
-  const weeklyRowsFor = React.useCallback(
-    (seasonKey, playerId) => {
-      const rows = [];
-      const capExclusive = __resolveCurrentWeekExclusiveSimple(
-        league,
-        currentWeekBySeason,
-        seasonKey
-      );
-      const completedCap =
-        Number.isFinite(capExclusive) && capExclusive > 0
-          ? capExclusive - 1
-          : null;
-      const ro = espnRostersByYear?.[seasonKey] || {};
-      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
-        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
-          const wk = toInt(wkRaw);
-          if (
-            !Number.isFinite(wk) ||
-            (completedCap != null && wk > completedCap)
-          ) {
-            return;
-          }
-          const entry = safeArr(entries).find(
-            (e) =>
-              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
-          );
-          if (!entry) return;
-          const picks = [
-            "pts",
-            "points",
-            "totalPoints",
-            "appliedTotal",
-            "ppr",
-            "pprPts",
-            "value",
-          ];
-          let pts = null;
-          for (const key of picks) {
-            if (Number.isFinite(Number(entry?.[key]))) {
-              pts = Number(entry?.[key]);
-              break;
-            }
-          }
-          rows.push({
-            wk,
-            pts,
-            fantasyTeamId: toInt(teamKey),
-          });
-        });
-      });
-      return rows.sort((a, b) => a.wk - b.wk);
-    },
-    [currentWeekBySeason, espnRostersByYear, league]
-  );
 
   const tradePPGExcludingBye = React.useCallback(
     (seasonKey, playerId, tradeWeek) => {
