@@ -1,6 +1,6 @@
 // All tab components bundled in one module.
 // Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import html2canvas from "html2canvas";
 import { PDFDocument } from "pdf-lib";
 import { Card, TableBox } from "./ui.jsx";
@@ -29,6 +29,325 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
+
+// ---------------------------------------------------------------------------
+// Shared snapshot helpers (used by Weekly Outlook + League Members tabs)
+// ---------------------------------------------------------------------------
+
+const COLORISH_PROPS = new Set([
+  "color",
+  "background",
+  "background-color",
+  "background-image",
+  "border-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "column-rule-color",
+  "caret-color",
+  "accent-color",
+  "fill",
+  "stroke",
+  "box-shadow",
+  "text-shadow",
+]);
+
+const hasOKColor = (value) =>
+  typeof value === "string" && /okl(ch|ab)/i.test(value || "");
+
+let sharedColorCtx = null;
+const getColorContext = () => {
+  if (sharedColorCtx) return sharedColorCtx;
+  try {
+    sharedColorCtx = document.createElement("canvas").getContext("2d");
+  } catch {
+    sharedColorCtx = null;
+  }
+  return sharedColorCtx;
+};
+
+const normalizeColorValue = (ctx, value) => {
+  if (!value || !ctx || !hasOKColor(value)) return value;
+  try {
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = value;
+    return ctx.fillStyle;
+  } catch {
+    return value;
+  }
+};
+
+function cloneWithInlineStyles(root, { filter } = {}) {
+  const clone = root.cloneNode(true);
+
+  const walk = (src, dst) => {
+    if (filter && filter(src) === false) {
+      dst.remove();
+      return;
+    }
+    if (src.nodeType !== 1 || dst.nodeType !== 1) return;
+    const cs = getComputedStyle(src);
+
+    const style = dst.style;
+    Array.from(cs).forEach((prop) => {
+      let value = cs.getPropertyValue(prop);
+      if (!value) return;
+
+      if (
+        COLORISH_PROPS.has(prop) ||
+        /color/i.test(prop) ||
+        prop.includes("shadow") ||
+        prop === "background" ||
+        prop.startsWith("border")
+      ) {
+        value = normalizeColorValue(getColorContext(), value);
+        if (prop === "background-image" && hasOKColor(value)) {
+          value = "none";
+        }
+      }
+
+      style.setProperty(prop, value, cs.getPropertyPriority(prop));
+    });
+
+    if (dst.tagName === "IMG") {
+      dst.setAttribute("crossorigin", "anonymous");
+    }
+
+    const srcKids = src.childNodes || [];
+    const dstKids = dst.childNodes || [];
+    for (let i = 0; i < srcKids.length; i++) {
+      if (!dstKids[i]) continue;
+      if (srcKids[i].nodeType === 1) walk(srcKids[i], dstKids[i]);
+    }
+  };
+
+  walk(root, clone);
+  return clone;
+}
+
+async function exportElementToPNG(
+  node,
+  { pixelRatio = 2, backgroundColor = "#ffffff", filter } = {}
+) {
+  const rect = node.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+
+  const cloned = cloneWithInlineStyles(node, { filter });
+
+  cloned.style.background = backgroundColor;
+
+  const wrapper = document.createElement("div");
+  wrapper.style.width = `${width}px`;
+  wrapper.style.height = `${height}px`;
+  wrapper.style.position = "relative";
+  wrapper.style.isolation = "isolate";
+  wrapper.appendChild(cloned);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+  fo.setAttribute("x", "0");
+  fo.setAttribute("y", "0");
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", String(height));
+  fo.appendChild(wrapper);
+  svg.appendChild(fo);
+
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(svg);
+  const svgDataUrl =
+    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+
+  const img = new Image();
+  img.decoding = "async";
+  img.crossOrigin = "anonymous";
+  await new Promise((res, rej) => {
+    img.onload = () => res();
+    img.onerror = (e) => rej(e);
+    img.src = svgDataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(width * pixelRatio));
+  canvas.height = Math.max(1, Math.floor(height * pixelRatio));
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL("image/png");
+}
+
+function useSnapshotDownload({ fileNameFor, missingNodeMessage } = {}) {
+  const captureRef = useRef(null);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!downloadMenuOpen) return undefined;
+
+    const handlePointer = (event) => {
+      if (!downloadMenuRef.current?.contains(event.target)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    const handleKey = (event) => {
+      if (event.key === "Escape") {
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointer);
+    const touchOptions = { passive: true };
+    document.addEventListener("touchstart", handlePointer, touchOptions);
+    document.addEventListener("keydown", handleKey);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("touchstart", handlePointer, touchOptions);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [downloadMenuOpen]);
+
+  const buildFileName = useCallback(
+    (ext) => {
+      if (typeof fileNameFor === "function") return fileNameFor(ext);
+      const stamp = new Date().toISOString().slice(0, 10);
+      return `league-vault-export-${stamp}.${ext}`;
+    },
+    [fileNameFor]
+  );
+
+  const captureImage = useCallback(async () => {
+    const node = captureRef.current;
+    if (!node) {
+      throw new Error(missingNodeMessage || "No content to capture");
+    }
+
+    const dark =
+      document.documentElement.classList.contains("dark") ||
+      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    const backgroundColor = dark ? "rgb(17,17,20)" : "rgb(255,255,255)";
+    const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
+
+    try {
+      await document.fonts?.ready;
+    } catch {}
+
+    const captureWithHtml2Canvas = async () => {
+      const rect = node.getBoundingClientRect();
+      const width = Math.max(1, Math.ceil(rect.width));
+      const height = Math.max(1, Math.ceil(rect.height));
+
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "fixed";
+      wrapper.style.left = "-99999px";
+      wrapper.style.top = "0";
+      wrapper.style.padding = "32px";
+      wrapper.style.background = backgroundColor;
+      wrapper.style.zIndex = "999999";
+      wrapper.style.boxShadow = "0 0 0 1px transparent";
+
+      const clone = cloneWithInlineStyles(node);
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+
+      try {
+        const canvas = await html2canvas(clone, {
+          scale: pixelRatio,
+          width,
+          height,
+          backgroundColor,
+          useCORS: true,
+          windowWidth: width,
+          windowHeight: height,
+          scrollX: 0,
+          scrollY: 0,
+          ignoreElements: (el) =>
+            el?.getAttribute?.("data-snapshot-ignore") === "true",
+        });
+
+        return canvas.toDataURL("image/png");
+      } finally {
+        wrapper.remove();
+      }
+    };
+
+    let dataUrl = null;
+    try {
+      dataUrl = await captureWithHtml2Canvas();
+    } catch (err) {
+      console.warn("Primary snapshot attempt failed, falling back", err);
+      dataUrl = await exportElementToPNG(node, {
+        pixelRatio,
+        backgroundColor,
+        filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
+      });
+    }
+
+    if (!dataUrl) {
+      throw new Error("No snapshot data generated");
+    }
+
+    return dataUrl;
+  }, [captureRef, missingNodeMessage]);
+
+  const downloadPdf = useCallback(async () => {
+    try {
+      const dataUrl = await captureImage();
+      if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+        throw new Error("Snapshot failed or not an image data URL");
+      }
+
+      const resp = await fetch(dataUrl);
+      const bytesU8 = new Uint8Array(await resp.arrayBuffer());
+
+      const pdfDoc = await PDFDocument.create();
+      const isPng = dataUrl.startsWith("data:image/png");
+      const embedded = isPng
+        ? await pdfDoc.embedPng(bytesU8)
+        : await pdfDoc.embedJpg(bytesU8);
+
+      const { width, height } = embedded;
+      const page = pdfDoc.addPage([width, height]);
+      page.drawImage(embedded, { x: 0, y: 0, width, height });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = buildFileName("pdf");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("PDF export failed. See console for details.");
+    }
+  }, [buildFileName, captureImage]);
+
+  return {
+    captureRef,
+    downloadMenuOpen,
+    setDownloadMenuOpen,
+    downloadMenuRef,
+    downloadPdf,
+    captureImage,
+  };
+}
 
 /* NEW: ESPN activity extractor                                       */
 /**
@@ -1042,18 +1361,120 @@ export function MembersTab({ league }) {
   const labelFor = (yr) => `${yr} Team Name`;
   const latestLabel = latest ? `Updated through ${latest}` : null;
 
+  const rawLeagueName =
+    league?.leagueName ||
+    league?.meta?.name ||
+    league?.settings?.leagueName ||
+    league?.name ||
+    "league";
+
+  const leagueSlug = useMemo(() => {
+    const base = String(rawLeagueName || "league").trim();
+    const slug = base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "");
+    return slug || "league";
+  }, [rawLeagueName]);
+
+  const membersFileNameFor = useCallback(
+    (ext) => {
+      const seasonPart = latest ? `-${latest}` : "";
+      return `${leagueSlug}-members${seasonPart}.${ext}`;
+    },
+    [leagueSlug, latest]
+  );
+
+  const {
+    captureRef,
+    downloadMenuOpen,
+    setDownloadMenuOpen,
+    downloadMenuRef,
+    downloadPdf,
+  } = useSnapshotDownload({
+    fileNameFor: membersFileNameFor,
+    missingNodeMessage: "No league members content to capture",
+  });
+
   return (
-    <Card
-      title="League Members"
-      right={
-        latestLabel ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
-            {latestLabel}
-          </span>
-        ) : null
-      }
-    >
-      <div className="space-y-6">
+    <div ref={captureRef} className="space-y-6">
+      <Card
+        title="League Members"
+        right={
+          <div className="flex items-center gap-2">
+            {latestLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/60 dark:border-white/15 bg-white/40 dark:bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300">
+                {latestLabel}
+              </span>
+            ) : null}
+            <div
+              ref={downloadMenuRef}
+              data-snapshot-ignore="true"
+              className="relative flex-shrink-0"
+            >
+              <button
+                type="button"
+                onClick={() => setDownloadMenuOpen((open) => !open)}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-zinc-300/60 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-900/70 hover:bg-white/90 hover:dark:bg-zinc-900/90 shadow-sm"
+                aria-haspopup="menu"
+                aria-expanded={downloadMenuOpen ? "true" : "false"}
+                title="Download options"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M5 20a2 2 0 01-2-2v-1a1 1 0 112 0v1h14v-1a1 1 0 112 0v1a2 2 0 01-2 2H5zm7-3a1 1 0 01-1-1v-6.586l-2.293 2.293a1 1 0 11-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L13 9.414V16a1 1 0 01-1 1z" />
+                </svg>
+                <span className="hidden sm:inline">Download</span>
+                <svg
+                  viewBox="0 0 20 20"
+                  className={`h-3 w-3 transition-transform ${
+                    downloadMenuOpen ? "rotate-180" : ""
+                  }`}
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.976a.75.75 0 111.08 1.04l-4.25 4.55a.75.75 0 01-1.08 0l-4.25-4.55a.75.75 0 01.02-1.06z" />
+                </svg>
+              </button>
+
+              {downloadMenuOpen && (
+                <div
+                  role="menu"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-zinc-200/80 bg-white/95 p-1 text-xs shadow-lg backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDownloadMenuOpen(false);
+                      await downloadPdf();
+                    }}
+                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100/80 hover:dark:bg-zinc-800/80"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 2a2 2 0 00-2 2v16a2 2 0 002 2h8.172a2 2 0 001.414-.586l4.828-4.828A2 2 0 0021 15.172V4a2 2 0 00-2-2H6zm7 18.5V16a1 1 0 011-1h4.5L13 20.5zM8 7a1 1 0 011-1h6a1 1 0 110 2H9a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                    </svg>
+                    <span>PDF</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        }
+      >
         <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
           <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
           <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
@@ -1133,8 +1554,8 @@ export function MembersTab({ league }) {
             </table>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 /* CareerTab — Playful Sport styling (wider + ticks + hover tooltip) */
@@ -15218,335 +15639,7 @@ export function WeeklyOutlookTab({
       .filter(Number.isFinite);
     return weeks.length ? Math.max(...weeks) : 1;
   }, [seasonThisYear, league?.games, currentYear]);
-  const COLORish_PROPS = new Set([
-    "color",
-    "background",
-    "background-color",
-    "background-image",
-    "border-color",
-    "border-top-color",
-    "border-right-color",
-    "border-bottom-color",
-    "border-left-color",
-    "outline-color",
-    "text-decoration-color",
-    "column-rule-color",
-    "caret-color",
-    "accent-color",
-    "fill",
-    "stroke",
-    "box-shadow",
-    "text-shadow",
-  ]);
-
-  const hasOKColor = (value) =>
-    typeof value === "string" && /okl(ch|ab)/i.test(value || "");
-
-  let sharedColorCtx = null;
-  const getColorContext = () => {
-    if (sharedColorCtx) return sharedColorCtx;
-    try {
-      sharedColorCtx = document.createElement("canvas").getContext("2d");
-    } catch {
-      sharedColorCtx = null;
-    }
-    return sharedColorCtx;
-  };
-
-  const normalizeColorValue = (ctx, value) => {
-    if (!value || !ctx || !hasOKColor(value)) return value;
-    try {
-      ctx.fillStyle = "#000";
-      ctx.fillStyle = value;
-      return ctx.fillStyle;
-    } catch {
-      return value;
-    }
-  };
-
-  // Inline computed styles into a deep clone of a node (so the SVG has everything it needs)
-  function cloneWithInlineStyles(root, { filter } = {}) {
-    const clone = root.cloneNode(true);
-
-    const walk = (src, dst) => {
-      if (filter && filter(src) === false) {
-        dst.remove(); // drop ignored nodes
-        return;
-      }
-      if (src.nodeType !== 1 || dst.nodeType !== 1) return;
-      const cs = getComputedStyle(src);
-
-      const style = dst.style;
-      Array.from(cs).forEach((prop) => {
-        let value = cs.getPropertyValue(prop);
-        if (!value) return;
-
-        if (
-          COLORish_PROPS.has(prop) ||
-          /color/i.test(prop) ||
-          prop.includes("shadow") ||
-          prop === "background" ||
-          prop.startsWith("border")
-        ) {
-          value = normalizeColorValue(getColorContext(), value);
-          if (prop === "background-image" && hasOKColor(value)) {
-            // Drop gradients html2canvas / SVG can’t parse yet
-            value = "none";
-          }
-        }
-
-        style.setProperty(prop, value, cs.getPropertyPriority(prop));
-      });
-
-      // ensure images/fonts can load
-      if (dst.tagName === "IMG") {
-        dst.setAttribute("crossorigin", "anonymous");
-      }
-
-      // recurse
-      const srcKids = src.childNodes || [];
-      const dstKids = dst.childNodes || [];
-      for (let i = 0; i < srcKids.length; i++) {
-        if (!dstKids[i]) continue;
-        if (srcKids[i].nodeType === 1) walk(srcKids[i], dstKids[i]); // ELEMENT_NODE
-      }
-    };
-
-    walk(root, clone);
-    return clone;
-  }
-
-  // Render an element to PNG using SVG <foreignObject> + canvas
-  async function exportElementToPNG(
-    node,
-    { pixelRatio = 2, backgroundColor = "#ffffff", filter } = {}
-  ) {
-    const rect = node.getBoundingClientRect();
-    const width = Math.ceil(rect.width);
-    const height = Math.ceil(rect.height);
-
-    // Deep clone with inline styles
-    const cloned = cloneWithInlineStyles(node, { filter });
-
-    // Force a solid background so the PNG isn’t transparent in dark mode
-    cloned.style.background = backgroundColor;
-
-    // Wrap in a container that fixes relative positioning contexts
-    const wrapper = document.createElement("div");
-    wrapper.style.width = `${width}px`;
-    wrapper.style.height = `${height}px`;
-    wrapper.style.position = "relative";
-    wrapper.style.isolation = "isolate"; // prevent blending glitches
-    wrapper.appendChild(cloned);
-
-    // Build SVG with foreignObject
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("width", String(width));
-    svg.setAttribute("height", String(height));
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-
-    const fo = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "foreignObject"
-    );
-    fo.setAttribute("x", "0");
-    fo.setAttribute("y", "0");
-    fo.setAttribute("width", String(width));
-    fo.setAttribute("height", String(height));
-    fo.appendChild(wrapper);
-    svg.appendChild(fo);
-
-    // Serialize SVG to data URL
-    const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(svg);
-    const svgDataUrl =
-      "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
-
-    // Draw to canvas
-    const img = new Image();
-    img.decoding = "async";
-    img.crossOrigin = "anonymous";
-    await new Promise((res, rej) => {
-      img.onload = () => res();
-      img.onerror = (e) => rej(e);
-      img.src = svgDataUrl;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.floor(width * pixelRatio));
-    canvas.height = Math.max(1, Math.floor(height * pixelRatio));
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    // fill bg
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL("image/png");
-  }
-
-  // Screenshot: capture target + handler (robust clone-in-place + html2canvas)
-  // Screenshot: capture target + handler (clone + targeted color normalization)
-  const captureRef = React.useRef(null);
-  const [downloadMenuOpen, setDownloadMenuOpen] = React.useState(false);
-  const downloadMenuRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (!downloadMenuOpen) return undefined;
-
-    const handlePointer = (event) => {
-      if (!downloadMenuRef.current?.contains(event.target)) {
-        setDownloadMenuOpen(false);
-      }
-    };
-
-    const handleKey = (event) => {
-      if (event.key === "Escape") {
-        setDownloadMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointer);
-    const touchOptions = { passive: true };
-    document.addEventListener("touchstart", handlePointer, touchOptions);
-    document.addEventListener("keydown", handleKey);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointer);
-      document.removeEventListener("touchstart", handlePointer, touchOptions);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [downloadMenuOpen]);
-
-  const captureWeeklyOutlookImage = React.useCallback(async () => {
-    const node = captureRef.current;
-    if (!node) {
-      throw new Error("No weekly outlook content to capture");
-    }
-
-    const dark =
-      document.documentElement.classList.contains("dark") ||
-      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-    const backgroundColor = dark ? "rgb(17,17,20)" : "rgb(255,255,255)";
-    const pixelRatio = Math.max(2, window.devicePixelRatio || 1);
-
-    try {
-      await document.fonts?.ready;
-    } catch {}
-
-    const captureWithHtml2Canvas = async () => {
-      const rect = node.getBoundingClientRect();
-      const wrapper = document.createElement("div");
-      wrapper.style.position = "fixed";
-      wrapper.style.left = "-100000px";
-      wrapper.style.top = "0";
-      wrapper.style.width = `${Math.ceil(rect.width)}px`;
-      wrapper.style.pointerEvents = "none";
-      wrapper.style.background = backgroundColor;
-      document.body.appendChild(wrapper);
-
-      try {
-        const clone = node.cloneNode(true);
-        wrapper.appendChild(clone);
-
-        const ctx = document.createElement("canvas").getContext("2d");
-        const toRGB = (val) => {
-          if (!val || !ctx) return val;
-          try {
-            ctx.fillStyle = "#000";
-            ctx.fillStyle = val;
-            return ctx.fillStyle;
-          } catch {
-            return val;
-          }
-        };
-        const hasOK = (s) => typeof s === "string" && /okl(ch|ab)/i.test(s);
-        const COLOR_PROPS = [
-          "color",
-          "backgroundColor",
-          "borderColor",
-          "borderTopColor",
-          "borderRightColor",
-          "borderBottomColor",
-          "borderLeftColor",
-          "outlineColor",
-          "textDecorationColor",
-          "columnRuleColor",
-          "caretColor",
-          "accentColor",
-          "fill",
-          "stroke",
-        ];
-        const win = document.defaultView || window;
-
-        clone.querySelectorAll("*").forEach((el) => {
-          const cs = win.getComputedStyle(el);
-
-          COLOR_PROPS.forEach((p) => {
-            const v = cs[p];
-            if (hasOK(v)) el.style[p] = toRGB(v);
-          });
-
-          const bgi = cs.backgroundImage;
-          if (hasOK(bgi)) {
-            el.style.backgroundImage = "none";
-            el.style.backgroundColor =
-              toRGB(cs.backgroundColor) ||
-              (dark ? "rgb(24,24,27)" : "rgb(255,255,255)");
-          }
-
-          if (hasOK(cs.boxShadow)) el.style.boxShadow = "none";
-          if (hasOK(cs.textShadow)) el.style.textShadow = "none";
-        });
-
-        await new Promise((r) => requestAnimationFrame(r));
-
-        const fullW = Math.ceil(clone.scrollWidth || clone.clientWidth);
-        const fullH = Math.ceil(clone.scrollHeight || clone.clientHeight);
-
-        const canvas = await html2canvas(clone, {
-          backgroundColor,
-          scale: pixelRatio,
-          useCORS: true,
-          removeContainer: true,
-          width: fullW,
-          height: fullH,
-          windowWidth: fullW,
-          windowHeight: fullH,
-          scrollX: 0,
-          scrollY: 0,
-          ignoreElements: (el) =>
-            el?.getAttribute?.("data-snapshot-ignore") === "true",
-        });
-
-        return canvas.toDataURL("image/png");
-      } finally {
-        wrapper.remove();
-      }
-    };
-
-    let dataUrl = null;
-    try {
-      dataUrl = await captureWithHtml2Canvas();
-    } catch (err) {
-      console.warn("Primary snapshot attempt failed, falling back", err);
-      dataUrl = await exportElementToPNG(node, {
-        pixelRatio,
-        backgroundColor,
-        filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
-      });
-    }
-
-    if (!dataUrl) {
-      throw new Error("No snapshot data generated");
-    }
-
-    return dataUrl;
-  }, []);
-
-  const fileNameFor = React.useCallback(
+  const weeklyFileNameFor = useCallback(
     (ext) => {
       const wk = Number(currentWeek) || 0;
       const yr = Number(currentYear) || new Date().getFullYear();
@@ -15555,60 +15648,16 @@ export function WeeklyOutlookTab({
     [currentWeek, currentYear]
   );
 
-  const downloadSnapshot = React.useCallback(async () => {
-    try {
-      const dataUrl = await captureWeeklyOutlookImage();
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = fileNameFor("png");
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (err) {
-      console.error("Snapshot failed:", err);
-      alert("Snapshot failed. See console for details.");
-    }
-  }, [captureWeeklyOutlookImage, fileNameFor]);
-
-  const downloadPdf = React.useCallback(async () => {
-    try {
-      // 1) Capture snapshot -> dataURL (PNG/JPEG)
-      const dataUrl = await captureWeeklyOutlookImage();
-      if (!dataUrl || !dataUrl.startsWith("data:image/")) {
-        throw new Error("Snapshot failed or not an image data URL");
-      }
-
-      // 2) Convert dataURL to bytes without atob (more reliable for large images)
-      const resp = await fetch(dataUrl);
-      const bytesU8 = new Uint8Array(await resp.arrayBuffer());
-
-      // 3) Build PDF and embed the image at its intrinsic size
-      const pdfDoc = await PDFDocument.create();
-      const isPng = dataUrl.startsWith("data:image/png");
-      const embedded = isPng
-        ? await pdfDoc.embedPng(bytesU8)
-        : await pdfDoc.embedJpg(bytesU8);
-
-      const { width, height } = embedded; // intrinsic dims
-      const page = pdfDoc.addPage([width, height]);
-      page.drawImage(embedded, { x: 0, y: 0, width, height });
-
-      // 4) Save and trigger download
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileNameFor("pdf");
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("PDF export failed:", err);
-      alert("PDF export failed. See console for details.");
-    }
-  }, [captureWeeklyOutlookImage, fileNameFor]);
+  const {
+    captureRef,
+    downloadMenuOpen,
+    setDownloadMenuOpen,
+    downloadMenuRef,
+    downloadPdf,
+  } = useSnapshotDownload({
+    fileNameFor: weeklyFileNameFor,
+    missingNodeMessage: "No weekly outlook content to capture",
+  });
 
   // Pull projections directly from stored rows in localStorage
   const projByOwner = React.useMemo(() => {
