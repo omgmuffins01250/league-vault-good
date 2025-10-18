@@ -1,15 +1,34 @@
 import React from "react";
 
 export function SidebarButton({ children, active, onClick, disabled }) {
+  const baseClasses =
+    "group relative flex w-full items-center justify-start gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-left text-sm font-semibold tracking-wide transition-all duration-200 backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/60";
+
+  const stateClasses = disabled
+    ? "cursor-not-allowed border border-white/10 bg-white/5 opacity-40"
+    : active
+    ? "-translate-y-[1px] border border-amber-300/60 bg-gradient-to-r from-amber-200/85 via-amber-100/70 to-white/80 text-amber-900 shadow-[0_24px_55px_-24px_rgba(251,191,36,0.75)] dark:from-amber-500/30 dark:via-amber-400/20 dark:to-amber-500/25 dark:text-amber-100"
+    : "border border-white/10 bg-white/5 text-slate-200/80 hover:-translate-y-[2px] hover:border-white/25 hover:bg-white/10 hover:text-white";
+
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`btn btn-sm btn-block justify-start !px-3 text-left normal-case ${
-        active ? "btn-primary" : "btn-ghost"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`${baseClasses} ${stateClasses}`}
     >
-      {children}
+      <span className="relative z-10 flex items-center gap-2">
+        {children}
+      </span>
+      {!disabled && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-300 ${
+            active
+              ? "bg-[radial-gradient(110%_140%_at_0%_0%,rgba(253,230,138,0.35),transparent_65%),radial-gradient(120%_150%_at_100%_120%,rgba(253,230,138,0.25),transparent_65%)]"
+              : "bg-[radial-gradient(120%_150%_at_0%_0%,rgba(255,255,255,0.12),transparent_70%)] opacity-0 group-hover:opacity-100"
+          }`}
+        />
+      )}
     </button>
   );
 }
