@@ -2573,7 +2573,7 @@ export function H2HTab({ league }) {
                 className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
                 onClick={() => setDetailPair(null)}
               />
-              <div className="relative w-[min(880px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+              <div className="relative w-[min(960px,96vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl">
                 <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(59,130,246,0.22),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(16,185,129,0.18),transparent_60%)]" />
                 <div className="relative">
                   <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 border-b border-white/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
@@ -10299,7 +10299,7 @@ export function TradingTab({
                           </table>
                         </div>
                         {selectedWeekDetail ? (
-                          <div className="space-y-4 rounded-2xl border border-white/45 bg-white/90 p-4 text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.85)] dark:border-white/10 dark:bg-white/[0.08]">
+                          <div className="space-y-4 rounded-2xl border border-white/45 bg-white/90 px-3 py-4 text-sm shadow-[0_18px_42px_-32px_rgba(15,23,42,0.85)] dark:border-white/10 dark:bg-white/[0.08]">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500/80 dark:text-slate-400/80">
@@ -10323,7 +10323,7 @@ export function TradingTab({
                                 ) : null}
                               </div>
                             </div>
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-3 md:grid-cols-2">
                               {renderLineupList({
                                 title: "Actual lineup",
                                 totalPts: selectedWeekDetail.actualPts,
