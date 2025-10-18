@@ -1,5 +1,6 @@
 // src/Components/QASection.jsx
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import BlockTitle from "./BlockTitle.jsx";
 
 const DEFAULT_FAQS = {
   general: [
@@ -119,11 +120,9 @@ export default function QASection({
   return (
     <section id={id} className="vault-panel">
       <div className="vault-panel__inner max-w-6xl mx-auto">
-        <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
-          {title}
-        </h2>
+        <BlockTitle title={title} text="Everything you need to know about LeagueVault" />
 
-        <div className="max-w-xl mx-auto mb-8">
+        <div className="mx-auto mb-10 max-w-xl">
           <label htmlFor={`${id}-search`} className="sr-only">
             Search questions
           </label>
@@ -133,7 +132,7 @@ export default function QASection({
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search for a question"
-            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full rounded-xl border border-slate-600/60 bg-slate-900/40 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-300/70"
           />
         </div>
 
@@ -142,22 +141,22 @@ export default function QASection({
             .filter((section) => section.items.length > 0)
             .map((section) => (
               <div key={section.key}>
-                <h3 className="text-xl font-semibold mb-4">
+                <h3 className="mb-4 text-lg font-semibold text-slate-100">
                   {section.title}
                 </h3>
                 <div className="space-y-3">
                   {section.items.map((item, index) => (
                     <details
                       key={`${section.key}-${index}`}
-                      className="group border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800"
+                      className="group overflow-hidden rounded-xl border border-slate-600/60 bg-slate-900/30 backdrop-blur"
                     >
-                      <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between">
-                        <span className="font-semibold">{item.q}</span>
-                        <span className="ml-3 text-zinc-500 group-open:rotate-180 transition-transform">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-slate-100">
+                        <span className="font-medium">{item.q}</span>
+                        <span className="text-sm text-slate-400 transition-transform group-open:rotate-180">
                           ▼
                         </span>
                       </summary>
-                      <div className="px-4 pb-4 text-sm text-zinc-600 dark:text-zinc-300">
+                      <div className="border-t border-slate-600/40 bg-slate-900/40 px-4 py-3 text-sm text-slate-300/90">
                         {item.a}
                       </div>
                     </details>
@@ -168,14 +167,14 @@ export default function QASection({
         </div>
 
         {!hasMatches && (
-          <p className="text-center text-sm text-zinc-600 dark:text-zinc-300">
+          <p className="mt-8 text-center text-sm text-slate-300/80">
             No questions match your search. Try a different keyword.
           </p>
         )}
 
         {/* Optional CTA */}
-        <div className="mt-8 text-center">
-          <a href="#pricing" className="btn btn-primary">
+        <div className="mt-10 text-center">
+          <a href="#pricing" className="btn btn-vault">
             See Pricing
           </a>
         </div>

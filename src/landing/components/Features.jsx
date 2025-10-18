@@ -80,7 +80,7 @@ const FEATURES = [
 export default function Features() {
   return (
     <section id="features" className="vault-panel">
-    <div className="vault-panel__inner max-w-6xl mx-auto">
+      <div className="vault-panel__inner max-w-6xl mx-auto">
         <BlockTitle
           title="What LeagueVault shows you"
           text="Each tab, explained—tap through a few example screens."
@@ -89,14 +89,14 @@ export default function Features() {
         {/* stacked layout */}
         <div className="space-y-8">
           {FEATURES.map(({ icon, title, blurb, images }) => (
-            <article key={title} className="rounded-2xl bg-white shadow p-6 border">
+            <article key={title} className="vault-card rounded-2xl p-6">
               <div className="flex items-start gap-4">
-                <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-50">
-                  <i className={`${icon} text-xl text-indigo-600`} aria-hidden="true" />
+                <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300">
+                  <i className={`${icon} text-lg`} aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-xl">{title}</h3>
-                  <p className="mt-2 text-slate-600">{blurb}</p>
+                  <h3 className="text-xl font-semibold text-slate-100">{title}</h3>
+                  <p className="mt-2 text-sm md:text-base text-slate-300/90">{blurb}</p>
                 </div>
               </div>
 
