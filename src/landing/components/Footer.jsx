@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const Footer = () => {
   return (
     <footer className="mt-24 border-t border-slate-700/40 bg-slate-950/40">
@@ -54,9 +56,9 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="/signin" className="hover:text-amber-300/80">
+                <Link to="/signin" className="hover:text-amber-300/80">
                   Sign in
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -66,19 +68,19 @@ const Footer = () => {
             </h4>
             <ul className="space-y-2">
               <li>
-                <a href="/terms" className="hover:text-amber-300/80">
+                <Link to="/terms" className="hover:text-amber-300/80">
                   Terms
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/privacy" className="hover:text-amber-300/80">
+                <Link to="/privacy" className="hover:text-amber-300/80">
                   Privacy
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/app" className="hover:text-amber-300/80">
+                <Link to="/app" className="hover:text-amber-300/80">
                   App
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
