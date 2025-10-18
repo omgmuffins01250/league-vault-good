@@ -7593,6 +7593,77 @@ export function TradingTab({
     return idx;
   };
 
+  const buildPosIndexForYear = (year) => {
+    const idx = new Map();
+    const ry = espnRostersByYear?.[year] || {};
+    const readPosFromEntry = (entry) => {
+      const tries = [
+        entry?.defaultPositionId,
+        entry?.playerPoolEntry?.player?.defaultPositionId,
+        entry?.player?.defaultPositionId,
+        entry?.posId,
+        entry?.position,
+        entry?.player?.position,
+      ];
+      for (const cand of tries) {
+        const pos = __coercePosId(cand);
+        if (Number.isFinite(pos)) return pos;
+      }
+      const eligibleSets = [
+        Array.isArray(entry?.eligibleSlots) ? entry.eligibleSlots : null,
+        Array.isArray(entry?.player?.eligibleSlots)
+          ? entry.player.eligibleSlots
+          : null,
+        Array.isArray(entry?.player?.fantasy_positions)
+          ? entry.player.fantasy_positions
+          : null,
+      ];
+      for (const arr of eligibleSets) {
+        if (!Array.isArray(arr)) continue;
+        for (const tok of arr) {
+          const pos = __coercePosId(tok);
+          if (Number.isFinite(pos)) return pos;
+        }
+      }
+      return null;
+    };
+
+    Object.values(ry).forEach((weeks) => {
+      Object.values(weeks || {}).forEach((list) => {
+        safeArr(list).forEach((entry) => {
+          const pid = toInt(entry?.pid ?? entry?.playerId ?? entry?.player?.id);
+          if (!Number.isFinite(pid) || idx.has(pid)) return;
+          const posId = readPosFromEntry(entry);
+          if (Number.isFinite(posId)) idx.set(pid, posId);
+        });
+      });
+    });
+
+    const aq = espnRosterAcqByYear?.[year] || {};
+    Object.values(aq).forEach((teamMap) => {
+      Object.entries(teamMap || {}).forEach(([pidRaw, meta]) => {
+        const pid = toInt(pidRaw);
+        if (!Number.isFinite(pid) || idx.has(pid)) return;
+        const tries = [
+          meta?.defaultPositionId,
+          meta?.posId,
+          meta?.positionId,
+          meta?.position,
+          meta?.slotId,
+        ];
+        for (const cand of tries) {
+          const pos = __coercePosId(cand);
+          if (Number.isFinite(pos)) {
+            idx.set(pid, pos);
+            break;
+          }
+        }
+      });
+    });
+
+    return idx;
+  };
+
   // years we’ll render = union of detailed + any acq entries
   const yearsFromDetailed = Object.keys(espnTradesDetailedBySeason || {}).map(
     (y) => Number(y)
@@ -7605,14 +7676,623 @@ export function TradingTab({
     .sort((a, b) => b - a);
 
   const playerNameIndexByYear = {};
-  yearList.forEach(
-    (yr) => (playerNameIndexByYear[yr] = buildNameIndexForYear(yr))
-  );
+  const playerPosIndexByYear = {};
+  yearList.forEach((yr) => {
+    playerNameIndexByYear[yr] = buildNameIndexForYear(yr);
+    playerPosIndexByYear[yr] = buildPosIndexForYear(yr);
+  });
   const pname = (year, pid) => {
     const id = toInt(pid);
     if (!Number.isFinite(id)) return `#${pid}`;
     return playerNameIndexByYear[year]?.get(id) || `#${id}`;
   };
+  const ppos = (year, pid) => {
+    const id = toInt(pid);
+    if (!Number.isFinite(id)) return null;
+    return playerPosIndexByYear[year]?.get(id) ?? null;
+  };
+
+  const lineupCountsByYear = React.useMemo(() => {
+    const candidates = [];
+    if (league?.espnLineupSlotsByYear)
+      candidates.push(league.espnLineupSlotsByYear);
+    if (league?.lineupSlotsByYear) candidates.push(league.lineupSlotsByYear);
+    if (league?.espnLineupTemplateByYear)
+      candidates.push(league.espnLineupTemplateByYear);
+    if (typeof window !== "undefined") {
+      const src = window.__FL_SOURCES || window.__sources || {};
+      if (src?.lineupSlotsByYear) candidates.push(src.lineupSlotsByYear);
+      if (src?.espnLineupTemplateByYear)
+        candidates.push(src.espnLineupTemplateByYear);
+    }
+    candidates.push(resolveLineupSource(league));
+    const picked = __firstNonEmpty(...candidates);
+    return __normalizeLineupCountsPerSeason(picked || {});
+  }, [league]);
+
+  const startSlotCacheRef = React.useRef(new Map());
+  React.useEffect(() => {
+    startSlotCacheRef.current = new Map();
+  }, [lineupCountsByYear]);
+  const getStartSlotSetForYear = React.useCallback(
+    (season) => {
+      const yr = toInt(season);
+      if (!Number.isFinite(yr)) return new Set(__DEFAULT_START_SLOTS);
+      if (startSlotCacheRef.current.has(yr)) {
+        return startSlotCacheRef.current.get(yr);
+      }
+      const counts =
+        lineupCountsByYear?.[yr] ||
+        lineupCountsByYear?.[String(yr)] ||
+        {};
+      const slots = __buildStartSlots(counts);
+      const set = slots.length
+        ? new Set(slots)
+        : new Set(Array.from(__DEFAULT_START_SLOTS));
+      startSlotCacheRef.current.set(yr, set);
+      return set;
+    },
+    [lineupCountsByYear]
+  );
+
+  const getBenchCapacityForYear = React.useCallback(
+    (season) => {
+      const yr = toInt(season);
+      if (!Number.isFinite(yr)) return null;
+      const counts =
+        lineupCountsByYear?.[yr] ||
+        lineupCountsByYear?.[String(yr)] ||
+        {};
+      const bench = Number(counts?.[SLOT.BENCH]);
+      return Number.isFinite(bench) ? bench : null;
+    },
+    [lineupCountsByYear]
+  );
+
+  const gamesCacheRef = React.useRef(new Map());
+  React.useEffect(() => {
+    gamesCacheRef.current = new Map();
+  }, [league, espnOwnerByTeamByYear]);
+  const gamesForSeason = React.useCallback(
+    (season) => {
+      const yr = toInt(season);
+      if (!Number.isFinite(yr)) return [];
+      if (gamesCacheRef.current.has(yr)) {
+        return gamesCacheRef.current.get(yr);
+      }
+      const games = __collectGamesForSeason(
+        league,
+        yr,
+        espnOwnerByTeamByYear
+      );
+      gamesCacheRef.current.set(yr, games);
+      return games;
+    },
+    [league, espnOwnerByTeamByYear]
+  );
+
+  // ---------- Detailed inspector (also excludes BYEs) ----------
+  const weeklyRowsFor = React.useCallback(
+    (seasonKey, playerId) => {
+      const rows = [];
+      const capExclusive = __resolveCurrentWeekExclusiveSimple(
+        league,
+        currentWeekBySeason,
+        seasonKey
+      );
+      const completedCap =
+        Number.isFinite(capExclusive) && capExclusive > 0
+          ? capExclusive - 1
+          : null;
+      const ro = espnRostersByYear?.[seasonKey] || {};
+      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
+        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
+          const wk = toInt(wkRaw);
+          if (
+            !Number.isFinite(wk) ||
+            (completedCap != null && wk > completedCap)
+          ) {
+            return;
+          }
+          const entry = safeArr(entries).find(
+            (e) =>
+              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
+          );
+          if (!entry) return;
+          const picks = [
+            "pts",
+            "points",
+            "totalPoints",
+            "appliedTotal",
+            "ppr",
+            "pprPts",
+            "value",
+          ];
+          let pts = null;
+          for (const key of picks) {
+            if (Number.isFinite(Number(entry?.[key]))) {
+              pts = Number(entry?.[key]);
+              break;
+            }
+          }
+          rows.push({
+            wk,
+            pts,
+            fantasyTeamId: toInt(teamKey),
+          });
+        });
+      });
+      return rows.sort((a, b) => a.wk - b.wk);
+    },
+    [currentWeekBySeason, espnRostersByYear, league]
+  );
+
+  const seasonPtsCacheRef = React.useRef(new Map());
+  React.useEffect(() => {
+    seasonPtsCacheRef.current = new Map();
+  }, [weeklyRowsFor]);
+  const seasonPtsThroughWeek = React.useCallback(
+    (season, pid, week) => {
+      const yr = toInt(season);
+      const playerId = toInt(pid);
+      const wk = toInt(week);
+      if (
+        !Number.isFinite(yr) ||
+        !Number.isFinite(playerId) ||
+        !Number.isFinite(wk)
+      ) {
+        return 0;
+      }
+      const key = `${yr}|${playerId}|${wk}`;
+      if (seasonPtsCacheRef.current.has(key)) {
+        return seasonPtsCacheRef.current.get(key);
+      }
+      const rows = weeklyRowsFor(yr, playerId) || [];
+      let sum = 0;
+      rows.forEach((row) => {
+        if (!row) return;
+        if (Number(row.wk) > wk) return;
+        const pts = Number(row.pts);
+        if (Number.isFinite(pts)) sum += pts;
+      });
+      seasonPtsCacheRef.current.set(key, sum);
+      return sum;
+    },
+    [weeklyRowsFor]
+  );
+
+  const computeReverseTrade = React.useCallback(
+    (trade) => {
+      const season = toInt(trade?.year);
+      const startWeek = toInt(trade?.week);
+      const leftTeamId = toInt(trade?.leftTeamId);
+      const rightTeamId = toInt(trade?.rightTeamId);
+      if (!Number.isFinite(season) || !Number.isFinite(startWeek)) {
+        return { error: "Missing trade week or season." };
+      }
+      if (!Number.isFinite(leftTeamId) || !Number.isFinite(rightTeamId)) {
+        return { error: "Trade teams unavailable." };
+      }
+
+      const endWeek = Math.max(startWeek, FANTASY_PLAYOFF_END);
+      const startSlotsSet = getStartSlotSetForYear(season);
+      const benchCapacity = getBenchCapacityForYear(season);
+      const seasonRosters = espnRostersByYear?.[season] || {};
+      const tradeTeams = [leftTeamId, rightTeamId];
+      const tradeTeamSet = new Set(tradeTeams);
+      const games = gamesForSeason(season) || [];
+      const gameLookup = new Map();
+      games.forEach((g) => {
+        const week = Number(g?.week);
+        if (!Number.isFinite(week) || week <= 0) return;
+        const t1 = toInt(g?.team1Id);
+        const t2 = toInt(g?.team2Id);
+        const owner1 =
+          (typeof g?.owner1 === "string" && g.owner1.trim()) ||
+          (Number.isFinite(t1) ? ownerNameOf(season, t1) : "");
+        const owner2 =
+          (typeof g?.owner2 === "string" && g.owner2.trim()) ||
+          (Number.isFinite(t2) ? ownerNameOf(season, t2) : "");
+        const score1 = Number(g?.score1);
+        const score2 = Number(g?.score2);
+        if (Number.isFinite(t1)) {
+          gameLookup.set(`${t1}|${week}`, {
+            opponentId: Number.isFinite(t2) ? t2 : null,
+            opponentOwner: owner2,
+            scoreFor: Number.isFinite(score1) ? score1 : null,
+            scoreAgainst: Number.isFinite(score2) ? score2 : null,
+          });
+        }
+        if (Number.isFinite(t2)) {
+          gameLookup.set(`${t2}|${week}`, {
+            opponentId: Number.isFinite(t1) ? t1 : null,
+            opponentOwner: owner1,
+            scoreFor: Number.isFinite(score2) ? score2 : null,
+            scoreAgainst: Number.isFinite(score1) ? score1 : null,
+          });
+        }
+      });
+
+      const receivedByTeam = new Map();
+      const sentByTeam = new Map();
+      const toPidSet = (items) =>
+        new Set(
+          safeArr(items)
+            .map((p) => toInt(p?.pid ?? p?.playerId ?? p?.id))
+            .filter(Number.isFinite)
+        );
+      receivedByTeam.set(leftTeamId, toPidSet(trade?.leftGets));
+      receivedByTeam.set(rightTeamId, toPidSet(trade?.rightGets));
+      sentByTeam.set(leftTeamId, toPidSet(trade?.rightGets));
+      sentByTeam.set(rightTeamId, toPidSet(trade?.leftGets));
+
+      const keyFor = (teamId, week) => `${teamId}|${week}`;
+      const resultByKey = new Map();
+      const aggregateByTeam = new Map();
+      tradeTeams.forEach((teamId) => {
+        aggregateByTeam.set(teamId, {
+          teamId,
+          name: ownerNameOf(season, teamId),
+          weeks: [],
+          actualWins: 0,
+          actualLosses: 0,
+          actualTies: 0,
+          noTradeWins: 0,
+          noTradeLosses: 0,
+          noTradeTies: 0,
+          auditNotes: [],
+        });
+      });
+
+      const actualPointsForTeamWeek = (teamId, week) => {
+        const key = keyFor(teamId, week);
+        if (resultByKey.has(key)) {
+          const rec = resultByKey.get(key);
+          return Number(rec?.actualPts) || 0;
+        }
+        const entries = safeArr(seasonRosters?.[teamId]?.[week]);
+        if (entries.length) {
+          let sum = 0;
+          entries.forEach((entry) => {
+            const slotId = Number(__entrySlotId(entry));
+            if (!startSlotsSet.has(slotId)) return;
+            sum += __entryPts(entry);
+          });
+          if (Number.isFinite(sum)) return sum;
+        }
+        const game = gameLookup.get(key);
+        return Number.isFinite(game?.scoreFor) ? Number(game.scoreFor) : 0;
+      };
+
+      const simulateTeamWeek = (teamId, week) => {
+        const received = receivedByTeam.get(teamId) || new Set();
+        const sent = sentByTeam.get(teamId) || new Set();
+        const entries = safeArr(seasonRosters?.[teamId]?.[week]);
+        const starters = [];
+        const benchMap = new Map();
+        let actualPts = 0;
+
+        entries.forEach((entry) => {
+          const pid = toInt(entry?.pid ?? entry?.playerId ?? entry?.player?.id);
+          if (!Number.isFinite(pid)) return;
+          const slotId = Number(__entrySlotId(entry));
+          const posId = __entryPosId(entry);
+          const pts = __entryPts(entry);
+          if (startSlotsSet.has(slotId)) {
+            starters.push({ pid, slotId, posId, pts });
+            actualPts += pts;
+          } else if (!received.has(pid)) {
+            if (!Number.isFinite(posId)) return;
+            const existing = benchMap.get(pid);
+            if (!existing || pts > existing.pts) {
+              benchMap.set(pid, { pid, posId, pts, source: "bench" });
+            }
+          }
+        });
+
+        sent.forEach((pidRaw) => {
+          const pid = toInt(pidRaw);
+          if (!Number.isFinite(pid)) return;
+          if (received.has(pid)) return; // avoid duplicates
+          const posId = ppos(season, pid);
+          if (!Number.isFinite(posId)) return;
+          const pts = Number(ptsForWeek(season, pid, week)) || 0;
+          const existing = benchMap.get(pid);
+          if (!existing || pts > existing.pts) {
+            benchMap.set(pid, { pid, posId, pts, source: "sent" });
+          }
+        });
+
+        const benchPool = Array.from(benchMap.values()).sort((a, b) => {
+          if (b.pts !== a.pts) return b.pts - a.pts;
+          return a.pid - b.pid;
+        });
+        const usedBench = new Set();
+        const pickBenchForSlot = (slotId) => {
+          for (const candidate of benchPool) {
+            if (usedBench.has(candidate.pid)) continue;
+            if (!Number.isFinite(candidate.posId)) continue;
+            if (__eligible(candidate.posId, slotId)) {
+              usedBench.add(candidate.pid);
+              return candidate;
+            }
+          }
+          return null;
+        };
+
+        let noTradePts = 0;
+        const auditNotes = [];
+        starters.forEach((starter) => {
+          if (!received.has(starter.pid)) {
+            noTradePts += starter.pts;
+            return;
+          }
+          const replacement = pickBenchForSlot(starter.slotId);
+          if (replacement) {
+            noTradePts += replacement.pts;
+          }
+        });
+
+        const benchRemaining = benchPool.filter(
+          (cand) => !usedBench.has(cand.pid)
+        );
+        if (
+          Number.isFinite(benchCapacity) &&
+          benchCapacity != null &&
+          benchRemaining.length > benchCapacity
+        ) {
+          const overflow = benchRemaining.length - benchCapacity;
+          const dropCandidates = benchRemaining
+            .map((cand) => ({
+              ...cand,
+              seasonPts: seasonPtsThroughWeek(season, cand.pid, week),
+            }))
+            .sort((a, b) => {
+              if (a.seasonPts !== b.seasonPts) return a.seasonPts - b.seasonPts;
+              if (a.pts !== b.pts) return a.pts - b.pts;
+              return a.pid - b.pid;
+            });
+          for (let i = 0; i < overflow; i += 1) {
+            const drop = dropCandidates[i];
+            if (!drop) break;
+            usedBench.add(drop.pid);
+            auditNotes.push(
+              `Week ${week}: auto-drop ${pname(season, drop.pid)} to maintain roster limit`
+            );
+          }
+        }
+
+        return {
+          actualPts,
+          noTradePts,
+          auditNotes,
+        };
+      };
+
+      for (let wk = startWeek; wk <= endWeek; wk += 1) {
+        tradeTeams.forEach((teamId) => {
+          const sim = simulateTeamWeek(teamId, wk);
+          const key = keyFor(teamId, wk);
+          resultByKey.set(key, {
+            week: wk,
+            teamId,
+            actualPts: sim.actualPts,
+            noTradePts: sim.noTradePts,
+            auditNotes: sim.auditNotes,
+          });
+        });
+      }
+
+      const resolveResult = (pf, pa) => {
+        if (pf > pa) return "W";
+        if (pf < pa) return "L";
+        return "T";
+      };
+
+      const formatChangeLabel = (from, to) => {
+        if (from === to) return "—";
+        return `${from}→${to}`;
+      };
+
+      for (let wk = startWeek; wk <= endWeek; wk += 1) {
+        tradeTeams.forEach((teamId) => {
+          const key = keyFor(teamId, wk);
+          const record = resultByKey.get(key);
+          if (!record) return;
+          const aggregate = aggregateByTeam.get(teamId);
+          if (!aggregate) return;
+          const game = gameLookup.get(key);
+          const opponentId = Number.isFinite(game?.opponentId)
+            ? Number(game.opponentId)
+            : null;
+          const opponentOwner = game?.opponentOwner ||
+            (Number.isFinite(opponentId)
+              ? ownerNameOf(season, opponentId)
+              : "—");
+          const opponentActual = Number.isFinite(opponentId)
+            ? actualPointsForTeamWeek(opponentId, wk)
+            : Number.isFinite(game?.scoreAgainst)
+            ? Number(game.scoreAgainst)
+            : 0;
+          const opponentNoTrade =
+            opponentId != null && tradeTeamSet.has(opponentId)
+              ? Number(
+                  resultByKey.get(keyFor(opponentId, wk))?.noTradePts ??
+                    opponentActual
+                )
+              : opponentActual;
+
+          const actualResult = resolveResult(
+            record.actualPts,
+            opponentActual
+          );
+          const noTradeResult = resolveResult(
+            record.noTradePts,
+            opponentNoTrade
+          );
+          const changeLabel = formatChangeLabel(actualResult, noTradeResult);
+          const changeType =
+            actualResult === "L" && noTradeResult === "W"
+              ? "positive"
+              : actualResult === "W" && noTradeResult === "L"
+              ? "negative"
+              : "neutral";
+
+          if (actualResult === "W") aggregate.actualWins += 1;
+          else if (actualResult === "L") aggregate.actualLosses += 1;
+          else aggregate.actualTies += 1;
+
+          if (noTradeResult === "W") aggregate.noTradeWins += 1;
+          else if (noTradeResult === "L") aggregate.noTradeLosses += 1;
+          else aggregate.noTradeTies += 1;
+
+          if (Array.isArray(record.auditNotes) && record.auditNotes.length) {
+            record.auditNotes.forEach((note) => {
+              if (!aggregate.auditNotes.includes(note)) {
+                aggregate.auditNotes.push(note);
+              }
+            });
+          }
+
+          aggregate.weeks.push({
+            week: wk,
+            opponentName: opponentOwner || "—",
+            opponentId,
+            actualPts: record.actualPts,
+            noTradePts: record.noTradePts,
+            actualResult,
+            noTradeResult,
+            changeLabel,
+            changeType,
+          });
+        });
+      }
+
+      const teamsOutput = {};
+      aggregateByTeam.forEach((aggregate, teamId) => {
+        aggregate.weeks.sort((a, b) => a.week - b.week);
+        const actualWinEquiv =
+          aggregate.actualWins + aggregate.actualTies * 0.5;
+        const noTradeWinEquiv =
+          aggregate.noTradeWins + aggregate.noTradeTies * 0.5;
+        const deltaWins = Number(
+          (noTradeWinEquiv - actualWinEquiv).toFixed(1)
+        );
+        teamsOutput[teamId] = {
+          teamId,
+          name: aggregate.name,
+          weeks: aggregate.weeks,
+          actualRecord: {
+            wins: aggregate.actualWins,
+            losses: aggregate.actualLosses,
+            ties: aggregate.actualTies,
+            label: `${aggregate.actualWins}-${aggregate.actualLosses}-${aggregate.actualTies}`,
+          },
+          noTradeRecord: {
+            wins: aggregate.noTradeWins,
+            losses: aggregate.noTradeLosses,
+            ties: aggregate.noTradeTies,
+            label: `${aggregate.noTradeWins}-${aggregate.noTradeLosses}-${aggregate.noTradeTies}`,
+          },
+          deltaWins,
+          auditNotes: aggregate.auditNotes,
+        };
+      });
+
+      return {
+        season,
+        startWeek,
+        endWeek,
+      teams: teamsOutput,
+    };
+  },
+  [
+    espnRostersByYear,
+    gamesForSeason,
+    getBenchCapacityForYear,
+    getStartSlotSetForYear,
+    ownerNameOf,
+    pname,
+    ppos,
+    seasonPtsThroughWeek,
+  ]
+  );
+
+  const [reverseModalState, setReverseModalState] = React.useState({
+    open: false,
+    loading: false,
+    trade: null,
+    data: null,
+    error: null,
+  });
+  const [reverseExpandedTeams, setReverseExpandedTeams] = React.useState(
+    () => new Set()
+  );
+  const [reverseInfoOpen, setReverseInfoOpen] = React.useState(false);
+
+  const handleReverseClick = React.useCallback(
+    (trade) => {
+      if (!trade) return;
+      setReverseExpandedTeams(new Set());
+      setReverseInfoOpen(false);
+      setReverseModalState({
+        open: true,
+        loading: true,
+        trade,
+        data: null,
+        error: null,
+      });
+      setTimeout(() => {
+        try {
+          const result = computeReverseTrade(trade);
+          if (result?.error) {
+            setReverseModalState((prev) => ({
+              ...prev,
+              loading: false,
+              data: null,
+              error: result.error,
+            }));
+          } else {
+            setReverseModalState((prev) => ({
+              ...prev,
+              loading: false,
+              data: result,
+              error: null,
+            }));
+          }
+        } catch (err) {
+          setReverseModalState((prev) => ({
+            ...prev,
+            loading: false,
+            data: null,
+            error: err?.message || "Reverse simulation failed.",
+          }));
+        }
+      }, 0);
+    },
+    [computeReverseTrade]
+  );
+
+  const closeReverseModal = React.useCallback(() => {
+    setReverseModalState({
+      open: false,
+      loading: false,
+      trade: null,
+      data: null,
+      error: null,
+    });
+    setReverseExpandedTeams(new Set());
+    setReverseInfoOpen(false);
+  }, []);
+
+  const toggleReverseTeam = React.useCallback((teamId) => {
+    setReverseExpandedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+  }, []);
 
   // ---------------- ownership + trade detection ----------------
   const ownerOfAtWeek = React.useCallback(
@@ -8191,62 +8871,6 @@ export function TradingTab({
   const postPPG = (year, pid, week) =>
     avgRange(year, pid, week, FANTASY_PLAYOFF_END);
 
-  // ---------- Detailed inspector (also excludes BYEs) ----------
-  const weeklyRowsFor = React.useCallback(
-    (seasonKey, playerId) => {
-      const rows = [];
-      const capExclusive = __resolveCurrentWeekExclusiveSimple(
-        league,
-        currentWeekBySeason,
-        seasonKey
-      );
-      const completedCap =
-        Number.isFinite(capExclusive) && capExclusive > 0
-          ? capExclusive - 1
-          : null;
-      const ro = espnRostersByYear?.[seasonKey] || {};
-      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
-        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
-          const wk = toInt(wkRaw);
-          if (
-            !Number.isFinite(wk) ||
-            (completedCap != null && wk > completedCap)
-          ) {
-            return;
-          }
-          const entry = safeArr(entries).find(
-            (e) =>
-              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
-          );
-          if (!entry) return;
-          const picks = [
-            "pts",
-            "points",
-            "totalPoints",
-            "appliedTotal",
-            "ppr",
-            "pprPts",
-            "value",
-          ];
-          let pts = null;
-          for (const key of picks) {
-            if (Number.isFinite(Number(entry?.[key]))) {
-              pts = Number(entry?.[key]);
-              break;
-            }
-          }
-          rows.push({
-            wk,
-            pts,
-            fantasyTeamId: toInt(teamKey),
-          });
-        });
-      });
-      return rows.sort((a, b) => a.wk - b.wk);
-    },
-    [currentWeekBySeason, espnRostersByYear, league]
-  );
-
   const tradePPGExcludingBye = React.useCallback(
     (seasonKey, playerId, tradeWeek) => {
       const pid = toInt(playerId);
@@ -8698,7 +9322,7 @@ export function TradingTab({
     );
   };
 
-  const TradeCard = ({ t }) => {
+  const TradeCard = ({ t, onReverse }) => {
     const leftName = ownerNameOf(t.year, t.leftTeamId);
     const rightName = ownerNameOf(t.year, t.rightTeamId);
 
@@ -8712,8 +9336,17 @@ export function TradingTab({
         <div className="pointer-events-none absolute inset-0 opacity-75 bg-[radial-gradient(115%_150%_at_0%_0%,rgba(56,189,248,0.14),transparent_60%),radial-gradient(140%_120%_at_100%_100%,rgba(16,185,129,0.16),transparent_65%)]" />
         <div className="relative space-y-4 p-4 sm:p-6 text-sm text-slate-700 dark:text-slate-100">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
-              Week {t.week ?? "?"}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
+                Week {t.week ?? "?"}
+              </span>
+              <button
+                type="button"
+                onClick={() => onReverse?.(t)}
+                className="inline-flex items-center rounded-full border border-emerald-400/70 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.26em] text-emerald-600 transition-colors hover:bg-emerald-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-emerald-300/40 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20 dark:focus-visible:ring-offset-zinc-950"
+              >
+                Reverse?
+              </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500/85 dark:text-slate-400/85">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/85 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
@@ -8765,6 +9398,216 @@ export function TradingTab({
                 week={t.week ?? 1}
               />
             </Box>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const reverseInfoText =
+    "We rewind just this trade starting in its week and keep everything else exactly as it happened. We don’t re-pick the whole lineup — we only replace starter spots that were directly created by this trade. Replacements are the best eligible bench players by their actual points that week. Opponents keep their original scores (except the other trade team, which is also recalculated). We summarize your new weekly results and season record from the trade week through Week 17.";
+
+  const formatReversePoints = (value) =>
+    Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "—";
+  const formatDeltaWinsLabel = (delta) => {
+    if (!Number.isFinite(delta)) return "±0.0 wins";
+    const magnitude = Math.abs(delta).toFixed(1);
+    if (delta > 0) return `+${magnitude} wins`;
+    if (delta < 0) return `−${magnitude} wins`;
+    return `±${magnitude} wins`;
+  };
+  const deltaBadgeClass = (delta) => {
+    const base =
+      "inline-flex items-center rounded-full border px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.28em]";
+    if (Number.isFinite(delta) && delta > 0)
+      return `${base} border-emerald-400/70 bg-emerald-500/15 text-emerald-600 dark:text-emerald-200`;
+    if (Number.isFinite(delta) && delta < 0)
+      return `${base} border-rose-400/70 bg-rose-500/15 text-rose-600 dark:text-rose-200`;
+    return `${base} border-white/60 bg-white/75 text-slate-600 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200`;
+  };
+
+  const renderReverseModal = () => {
+    if (!reverseModalState.open) return null;
+    const { trade, loading, data, error } = reverseModalState;
+    const season = data?.season ?? trade?.year;
+    const weekLabel = trade?.week ?? "?";
+    const leftOwner = ownerNameOf(trade?.year, trade?.leftTeamId);
+    const rightOwner = ownerNameOf(trade?.year, trade?.rightTeamId);
+    const teamRecords = data?.teams || {};
+    const teams = trade
+      ? [
+          toInt(trade.leftTeamId),
+          toInt(trade.rightTeamId),
+        ]
+          .map((teamId) => teamRecords?.[teamId])
+          .filter(Boolean)
+      : Object.values(teamRecords || {});
+
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6">
+        <div
+          className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
+          onClick={closeReverseModal}
+        />
+        <div
+          className="relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-white/20 bg-white/95 p-6 text-slate-700 shadow-[0_40px_120px_-50px_rgba(15,23,42,0.85)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80 dark:text-slate-100 reverse-modal-anim"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold tracking-tight text-slate-800 dark:text-slate-100">
+                Reverse Trade — Week {weekLabel}, {season ?? "?"}
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {leftOwner} ↔ {rightOwner}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="How reversal works"
+                  aria-expanded={reverseInfoOpen}
+                  onClick={() => setReverseInfoOpen((v) => !v)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-white/80 text-sm font-semibold text-slate-600 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  i
+                </button>
+                {reverseInfoOpen ? (
+                  <div className="absolute right-0 top-full z-10 mt-2 w-80 rounded-2xl border border-white/30 bg-white/95 p-4 text-xs leading-relaxed text-slate-600 shadow-lg dark:border-white/10 dark:bg-zinc-950/95 dark:text-slate-200">
+                    {reverseInfoText}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={closeReverseModal}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-white/80 text-sm font-semibold text-slate-600 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200 dark:hover:bg-white/10 dark:focus-visible:ring-offset-zinc-950"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            {loading ? (
+              <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                Calculating counterfactual season…
+              </div>
+            ) : error ? (
+              <div className="rounded-2xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:border-rose-400/40 dark:bg-rose-500/10 dark:text-rose-300">
+                {error}
+              </div>
+            ) : teams.length ? (
+              <div className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {teams.map((team) => {
+                    const expanded = reverseExpandedTeams.has(team.teamId);
+                    return (
+                      <div
+                        key={team.teamId}
+                        className="space-y-4 rounded-3xl border border-white/40 bg-white/85 p-4 text-sm shadow-[0_24px_60px_-35px_rgba(15,23,42,0.8)] dark:border-white/10 dark:bg-white/[0.07]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500/80 dark:text-slate-400/80">
+                              Manager
+                            </div>
+                            <div className="truncate text-lg font-semibold text-slate-800 dark:text-slate-100">
+                              {team.name}
+                            </div>
+                          </div>
+                          <span className={deltaBadgeClass(team.deltaWins)}>
+                            {formatDeltaWinsLabel(team.deltaWins)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-2xl border border-white/50 bg-white/80 p-3 dark:border-white/10 dark:bg-white/[0.05]">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500/75 dark:text-slate-400/75">
+                              Actual
+                            </div>
+                            <div className="mt-1 text-xl font-semibold text-slate-800 dark:text-slate-100">
+                              {team.actualRecord.label}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-300/50 bg-emerald-500/10 p-3 dark:border-emerald-300/30 dark:bg-emerald-500/10">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-600/85 dark:text-emerald-200/85">
+                              No-trade
+                            </div>
+                            <div className="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-200">
+                              {team.noTradeRecord.label}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleReverseTeam(team.teamId)}
+                          className="inline-flex items-center rounded-full border border-white/50 bg-white/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-600 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/10 dark:bg-white/[0.07] dark:text-slate-200 dark:hover:bg-white/10 dark:focus-visible:ring-offset-zinc-950"
+                        >
+                          {expanded ? "Hide weeks" : "View weeks"}
+                        </button>
+                        {team.auditNotes?.length ? (
+                          <div className="rounded-2xl border border-amber-300/40 bg-amber-100/20 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-200/30 dark:bg-amber-200/10 dark:text-amber-200">
+                            {team.auditNotes.map((note, idx) => (
+                              <div key={`${team.teamId}-audit-${idx}`}>• {note}</div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {expanded ? (
+                          <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/85 dark:border-white/10 dark:bg-white/[0.06]">
+                            <table className="min-w-full divide-y divide-white/60 text-xs text-slate-600 dark:divide-white/10 dark:text-slate-200">
+                              <thead className="bg-white/60 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">Week</th>
+                                  <th className="px-3 py-2 text-left">Opponent</th>
+                                  <th className="px-3 py-2 text-right">Actual Pts</th>
+                                  <th className="px-3 py-2 text-right">No-trade Pts</th>
+                                  <th className="px-3 py-2 text-center">Result Change</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {team.weeks.map((wk) => {
+                                  const rowBase =
+                                    wk.changeType === "positive"
+                                      ? "bg-emerald-500/15"
+                                      : wk.changeType === "negative"
+                                      ? "bg-rose-500/15"
+                                      : "bg-white/70 dark:bg-white/[0.04]";
+                                  return (
+                                    <tr
+                                      key={`${team.teamId}-${wk.week}`}
+                                      className={`${rowBase} border-b border-white/40 last:border-b-0 dark:border-white/10`}
+                                    >
+                                      <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-100">
+                                        {wk.week}
+                                      </td>
+                                      <td className="px-3 py-2">{wk.opponentName}</td>
+                                      <td className="px-3 py-2 text-right font-mono">
+                                        {formatReversePoints(wk.actualPts)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-mono">
+                                        {formatReversePoints(wk.noTradePts)}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold">
+                                        {wk.changeLabel}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                No counterfactual data available.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -8824,7 +9667,11 @@ export function TradingTab({
                       ) : (
                         <div className="space-y-4">
                           {list.map((t, i) => (
-                            <TradeCard key={`${yr}-${i}`} t={t} />
+                            <TradeCard
+                              key={`${yr}-${i}`}
+                              t={t}
+                              onReverse={handleReverseClick}
+                            />
                           ))}
                         </div>
                       )}
@@ -8836,6 +9683,7 @@ export function TradingTab({
           })}
         </div>
       </Card>
+      {renderReverseModal()}
     </div>
   );
 }
