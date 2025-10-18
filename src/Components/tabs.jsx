@@ -7722,9 +7722,7 @@ export function TradingTab({
         return startSlotCacheRef.current.get(yr);
       }
       const counts =
-        lineupCountsByYear?.[yr] ||
-        lineupCountsByYear?.[String(yr)] ||
-        {};
+        lineupCountsByYear?.[yr] || lineupCountsByYear?.[String(yr)] || {};
       const slots = __buildStartSlots(counts);
       const set = slots.length
         ? new Set(slots)
@@ -7740,9 +7738,7 @@ export function TradingTab({
       const yr = toInt(season);
       if (!Number.isFinite(yr)) return null;
       const counts =
-        lineupCountsByYear?.[yr] ||
-        lineupCountsByYear?.[String(yr)] ||
-        {};
+        lineupCountsByYear?.[yr] || lineupCountsByYear?.[String(yr)] || {};
       const bench = Number(counts?.[SLOT.BENCH]);
       return Number.isFinite(bench) ? bench : null;
     },
@@ -7760,11 +7756,7 @@ export function TradingTab({
       if (gamesCacheRef.current.has(yr)) {
         return gamesCacheRef.current.get(yr);
       }
-      const games = __collectGamesForSeason(
-        league,
-        yr,
-        espnOwnerByTeamByYear
-      );
+      const games = __collectGamesForSeason(league, yr, espnOwnerByTeamByYear);
       gamesCacheRef.current.set(yr, games);
       return games;
     },
@@ -8001,7 +7993,10 @@ export function TradingTab({
             if (!drop) break;
             usedBench.add(drop.pid);
             auditNotes.push(
-              `Week ${week}: auto-drop ${pname(season, drop.pid)} to maintain roster limit`
+              `Week ${week}: auto-drop ${pname(
+                season,
+                drop.pid
+              )} to maintain roster limit`
             );
           }
         }
@@ -8049,7 +8044,8 @@ export function TradingTab({
           const opponentId = Number.isFinite(game?.opponentId)
             ? Number(game.opponentId)
             : null;
-          const opponentOwner = game?.opponentOwner ||
+          const opponentOwner =
+            game?.opponentOwner ||
             (Number.isFinite(opponentId)
               ? ownerNameOf(season, opponentId)
               : "—");
@@ -8066,10 +8062,7 @@ export function TradingTab({
                 )
               : opponentActual;
 
-          const actualResult = resolveResult(
-            record.actualPts,
-            opponentActual
-          );
+          const actualResult = resolveResult(record.actualPts, opponentActual);
           const noTradeResult = resolveResult(
             record.noTradePts,
             opponentNoTrade
@@ -8119,9 +8112,7 @@ export function TradingTab({
           aggregate.actualWins + aggregate.actualTies * 0.5;
         const noTradeWinEquiv =
           aggregate.noTradeWins + aggregate.noTradeTies * 0.5;
-        const deltaWins = Number(
-          (noTradeWinEquiv - actualWinEquiv).toFixed(1)
-        );
+        const deltaWins = Number((noTradeWinEquiv - actualWinEquiv).toFixed(1));
         teamsOutput[teamId] = {
           teamId,
           name: aggregate.name,
@@ -8147,19 +8138,19 @@ export function TradingTab({
         season,
         startWeek,
         endWeek,
-      teams: teamsOutput,
-    };
-  },
-  [
-    espnRostersByYear,
-    gamesForSeason,
-    getBenchCapacityForYear,
-    getStartSlotSetForYear,
-    ownerNameOf,
-    pname,
-    ppos,
-    seasonPtsThroughWeek,
-  ]
+        teams: teamsOutput,
+      };
+    },
+    [
+      espnRostersByYear,
+      gamesForSeason,
+      getBenchCapacityForYear,
+      getStartSlotSetForYear,
+      ownerNameOf,
+      pname,
+      ppos,
+      seasonPtsThroughWeek,
+    ]
   );
 
   const [reverseModalState, setReverseModalState] = React.useState({
@@ -8815,62 +8806,6 @@ export function TradingTab({
   const postPPG = (year, pid, week) =>
     avgRange(year, pid, week, FANTASY_PLAYOFF_END);
 
-  // ---------- Detailed inspector (also excludes BYEs) ----------
-  const weeklyRowsFor = React.useCallback(
-    (seasonKey, playerId) => {
-      const rows = [];
-      const capExclusive = __resolveCurrentWeekExclusiveSimple(
-        league,
-        currentWeekBySeason,
-        seasonKey
-      );
-      const completedCap =
-        Number.isFinite(capExclusive) && capExclusive > 0
-          ? capExclusive - 1
-          : null;
-      const ro = espnRostersByYear?.[seasonKey] || {};
-      Object.entries(ro || {}).forEach(([teamKey, weeks]) => {
-        Object.entries(weeks || {}).forEach(([wkRaw, entries]) => {
-          const wk = toInt(wkRaw);
-          if (
-            !Number.isFinite(wk) ||
-            (completedCap != null && wk > completedCap)
-          ) {
-            return;
-          }
-          const entry = safeArr(entries).find(
-            (e) =>
-              toInt(e?.pid ?? e?.playerId ?? e?.player?.id) === toInt(playerId)
-          );
-          if (!entry) return;
-          const picks = [
-            "pts",
-            "points",
-            "totalPoints",
-            "appliedTotal",
-            "ppr",
-            "pprPts",
-            "value",
-          ];
-          let pts = null;
-          for (const key of picks) {
-            if (Number.isFinite(Number(entry?.[key]))) {
-              pts = Number(entry?.[key]);
-              break;
-            }
-          }
-          rows.push({
-            wk,
-            pts,
-            fantasyTeamId: toInt(teamKey),
-          });
-        });
-      });
-      return rows.sort((a, b) => a.wk - b.wk);
-    },
-    [currentWeekBySeason, espnRostersByYear, league]
-  );
-
   const tradePPGExcludingBye = React.useCallback(
     (seasonKey, playerId, tradeWeek) => {
       const pid = toInt(playerId);
@@ -9178,10 +9113,7 @@ export function TradingTab({
                   completedCap != null
                     ? Math.min(baseSeasonEnd, completedCap)
                     : baseSeasonEnd;
-                const seasonEnd = Math.max(
-                  0,
-                  Math.floor(effectiveSeasonEnd)
-                );
+                const seasonEnd = Math.max(0, Math.floor(effectiveSeasonEnd));
                 const weeks = Array.from(
                   { length: seasonEnd },
                   (_, idx) => idx + 1
@@ -9435,10 +9367,7 @@ export function TradingTab({
     const rightOwner = ownerNameOf(trade?.year, trade?.rightTeamId);
     const teamRecords = data?.teams || {};
     const teams = trade
-      ? [
-          toInt(trade.leftTeamId),
-          toInt(trade.rightTeamId),
-        ]
+      ? [toInt(trade.leftTeamId), toInt(trade.rightTeamId)]
           .map((teamId) => teamRecords?.[teamId])
           .filter(Boolean)
       : Object.values(teamRecords || {});
@@ -9549,7 +9478,9 @@ export function TradingTab({
                         {team.auditNotes?.length ? (
                           <div className="rounded-2xl border border-amber-300/40 bg-amber-100/20 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-200/30 dark:bg-amber-200/10 dark:text-amber-200">
                             {team.auditNotes.map((note, idx) => (
-                              <div key={`${team.teamId}-audit-${idx}`}>• {note}</div>
+                              <div key={`${team.teamId}-audit-${idx}`}>
+                                • {note}
+                              </div>
                             ))}
                           </div>
                         ) : null}
@@ -9559,10 +9490,18 @@ export function TradingTab({
                               <thead className="bg-white/60 text-[10px] uppercase tracking-[0.28em] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
                                 <tr>
                                   <th className="px-3 py-2 text-left">Week</th>
-                                  <th className="px-3 py-2 text-left">Opponent</th>
-                                  <th className="px-3 py-2 text-right">Actual Pts</th>
-                                  <th className="px-3 py-2 text-right">No-trade Pts</th>
-                                  <th className="px-3 py-2 text-center">Result Change</th>
+                                  <th className="px-3 py-2 text-left">
+                                    Opponent
+                                  </th>
+                                  <th className="px-3 py-2 text-right">
+                                    Actual Pts
+                                  </th>
+                                  <th className="px-3 py-2 text-right">
+                                    No-trade Pts
+                                  </th>
+                                  <th className="px-3 py-2 text-center">
+                                    Result Change
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -9581,7 +9520,9 @@ export function TradingTab({
                                       <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-100">
                                         {wk.week}
                                       </td>
-                                      <td className="px-3 py-2">{wk.opponentName}</td>
+                                      <td className="px-3 py-2">
+                                        {wk.opponentName}
+                                      </td>
                                       <td className="px-3 py-2 text-right font-mono">
                                         {formatReversePoints(wk.actualPts)}
                                       </td>
