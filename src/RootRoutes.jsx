@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import ApitonHome from "./ApitonHome.jsx";
 import App from "./App.jsx";
+import Privacy from "./Privacy.jsx";
 import ProfilePage from "./ProfilePage.jsx";
 import ProtectedRoute from "./ProtectedRoute.jsx";
 import SignInPage from "./SignInPage.jsx";
@@ -28,6 +29,7 @@ export default function RootRoutes() {
       />
       <Route path="/signin" element={<SignInPage />} />
       <Route path="/signup" element={<SignUpPage />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
