@@ -3147,8 +3147,8 @@ export default function App() {
         <div className="absolute bottom-[-180px] right-[-120px] h-[620px] w-[620px] rounded-full bg-sky-500/10 blur-[200px]" />
         <div className="absolute top-[12%] left-[-160px] h-[420px] w-[420px] rounded-full bg-amber-400/10 blur-[160px]" />
       </div>
-      <div className="relative z-10 px-4 pb-12 pt-6 sm:px-6 lg:px-10">
-        <div className="mx-auto w-full max-w-6xl space-y-8">
+      <div className="relative z-10 px-3 pb-12 pt-6 sm:px-4 lg:px-6 xl:px-8">
+        <div className="w-full space-y-8">
           {/* NAVBAR */}
           <div className="navbar relative rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
         <div className="flex-1 items-center gap-3">
