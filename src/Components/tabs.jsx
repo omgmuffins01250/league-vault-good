@@ -13823,6 +13823,12 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   // build a resolver that prefers the popup payload’s canonical maps
   const ownerNameResolver = React.useMemo(() => {
     const S = (typeof window !== "undefined" && (window.__sources || {})) || {};
+    const leagueObj =
+      (S.league && typeof S.league === "object" ? S.league : null) ||
+      (S.selectedLeague && typeof S.selectedLeague === "object"
+        ? S.selectedLeague
+        : null) ||
+      {};
     // popup sends canonical maps here
     const ownerByTeamByYear =
       S.ownerByTeamByYear ||
@@ -13834,7 +13840,11 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
 
     // invert teamNamesByOwner for quick teamName -> owner lookup by year
     const teamNameToOwnerByYear = {};
-    Object.entries(teamNamesByOwner || {}).forEach(([owner, byYear]) => {
+    const sourceTeamNames =
+      teamNamesByOwner && typeof teamNamesByOwner === "object"
+        ? teamNamesByOwner
+        : leagueObj?.teamNamesByOwner || {};
+    Object.entries(sourceTeamNames || {}).forEach(([owner, byYear]) => {
       Object.entries(byYear || {}).forEach(([yr, teamName]) => {
         if (!teamNameToOwnerByYear[yr]) teamNameToOwnerByYear[yr] = {};
         if (teamName) teamNameToOwnerByYear[yr][String(teamName)] = owner;
@@ -14412,7 +14422,12 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   const draftSlotSummary = React.useMemo(() => {
     if (typeof window === "undefined") return [];
     const S = window.__sources || {};
-    const league = S.selectedLeague || S.league || {};
+    const league =
+      (S.league && typeof S.league === "object" ? S.league : null) ||
+      (S.selectedLeague && typeof S.selectedLeague === "object"
+        ? S.selectedLeague
+        : null) ||
+      {};
     const placementMapRaw = league?.placementMap || {};
 
     const placementByKey = new Map();
