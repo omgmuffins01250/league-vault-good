@@ -1754,12 +1754,12 @@ export function MembersTab({ league }) {
           </div>
         }
       >
-        <div className="relative overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
-          <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
+        <div className="relative rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
+          <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
           <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
           <div className="relative">
-            <div className="overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3">
+            <div className="max-w-full overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3">
               <table className="min-w-max text-[12px] text-slate-700 dark:text-slate-200">
                 <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
