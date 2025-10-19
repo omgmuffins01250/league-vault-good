@@ -26,6 +26,7 @@ import {
   ReferenceArea,
   BarChart, // + add
   Bar, // + add
+  LabelList,
   ReferenceLine,
   Cell,
 } from "recharts";
@@ -14531,6 +14532,28 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         })),
     [draftSlotSummary]
   );
+  const renderDraftSlotAverageLabel = React.useCallback((props) => {
+    if (!props) return null;
+    const { x = 0, y = 0, width = 0, value } = props;
+    const numericValue =
+      typeof value === "number" ? value : Number.parseFloat(value);
+    if (!Number.isFinite(numericValue)) {
+      return null;
+    }
+    const text = numericValue.toFixed(2);
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 8}
+        fill="rgba(125,211,252,0.95)"
+        fontSize={12}
+        fontWeight={600}
+        textAnchor="middle"
+      >
+        {text}
+      </text>
+    );
+  }, []);
   React.useEffect(() => {
     if (draftSlotSummary.length === 0 && draftSlotView !== "table") {
       setDraftSlotView("table");
@@ -15042,6 +15065,7 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
                         labelFormatter={() => "Avg Finish"}
                       />
                       <Bar dataKey="average" radius={[8, 8, 0, 0]}>
+                        <LabelList content={renderDraftSlotAverageLabel} />
                         {draftSlotChartData.map((entry) => {
                           const isSelected = selectedDraftSlot === entry.slot;
                           return (
