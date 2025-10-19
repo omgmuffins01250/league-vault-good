@@ -1758,79 +1758,81 @@ export function MembersTab({ league }) {
           <div className="pointer-events-none absolute inset-0 opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
           <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
-          <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[660px] text-[12px] text-slate-700 dark:text-slate-200">
-              <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
-                <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
-                  <th className="px-3 py-2 text-left font-semibold ...">
-                    Member
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium">
-                    Yr Joined
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium">
-                    Yrs Played
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium whitespace-nowrap">
-                    Current Team
-                  </th>
-
-                  {seasonsDesc.map((yr) => (
-                    <th
-                      key={`hdr-${yr}`}
-                      className="px-4 py-3 text-center font-medium whitespace-nowrap"
-                    >
-                      {labelFor(yr)}
+          <div className="relative">
+            <div className="overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3">
+              <table className="min-w-max text-[12px] text-slate-700 dark:text-slate-200">
+                <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
+                  <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
+                    <th className="px-3 py-2 text-left font-semibold ...">
+                      Member
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
-                {league.members.map((m) => (
-                  <tr
-                    key={m.id}
-                    className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
-                  >
-                    {/* OWNER (manager) NAME */}
-                    <td className="px-3 py-2 text-left">
-                      <div className="flex flex-col leading-tight">
-                        <span className="text-[14px] font-semibold tracking-tight ...">
-                          {m.name}
-                        </span>
-                      </div>
-                    </td>
+                    <th className="px-3 py-2 text-center font-medium">
+                      Yr Joined
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium">
+                      Yrs Played
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium whitespace-nowrap">
+                      Current Team
+                    </th>
 
-                    <td className="px-3 py-2 text-center tabular-nums font-semibold ...">
-                      {m.joined}
-                    </td>
-
-                    <td className="px-3 py-2 text-center tabular-nums">
-                      <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/10 px-2 py-[2px] text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
-                        {m.yearsPlayed}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-2 text-center">
-                      <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400 dark:text-amber-300 whitespace-nowrap overflow-hidden text-ellipsis">
-                        {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
-                      </span>
-                    </td>
-
-                    {/* Per-season team names, newest -> oldest (with fixed width) */}
                     {seasonsDesc.map((yr) => (
-                      <td
-                        key={`${m.id}-${yr}`}
-                        className="px-4 py-3 text-center"
+                      <th
+                        key={`hdr-${yr}`}
+                        className="px-4 py-3 text-center font-medium whitespace-nowrap"
                       >
-                        <div className="inline-flex min-w-[8.5rem] max-w-[14rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
-                          {teamNames?.[m.name]?.[yr] || "—"}
-                        </div>
-                      </td>
+                        {labelFor(yr)}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
+                  {league.members.map((m) => (
+                    <tr
+                      key={m.id}
+                      className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
+                    >
+                      {/* OWNER (manager) NAME */}
+                      <td className="px-3 py-2 text-left">
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-[14px] font-semibold tracking-tight ...">
+                            {m.name}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-2 text-center tabular-nums font-semibold ...">
+                        {m.joined}
+                      </td>
+
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/10 px-2 py-[2px] text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
+                          {m.yearsPlayed}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-2 text-center">
+                        <span className="inline-flex max-w-[16rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400 dark:text-amber-300 whitespace-nowrap overflow-hidden text-ellipsis">
+                          {m.currentTeam || teamNames?.[m.name]?.[latest] || "—"}
+                        </span>
+                      </td>
+
+                      {/* Per-season team names, newest -> oldest (with fixed width) */}
+                      {seasonsDesc.map((yr) => (
+                        <td
+                          key={`${m.id}-${yr}`}
+                          className="px-4 py-3 text-center"
+                        >
+                          <div className="inline-flex min-w-[8.5rem] max-w-[14rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                            {teamNames?.[m.name]?.[yr] || "—"}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </Card>
