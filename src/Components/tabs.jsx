@@ -935,6 +935,7 @@ export function SetupTab({
   onChangeManagerNicknames,
   leagueIcon,
   onLeagueIconChange,
+  onManagerMergesChanged,
 }) {
   if (!derivedAll) return null;
   const league = selectedLeague && derivedAll?.byLeague?.[selectedLeague];
@@ -1257,6 +1258,7 @@ export function SetupTab({
         <ManagerMergeControl
           leagueMeta={league.meta}
           leagueRows={league.games || []}
+          onChanged={onManagerMergesChanged}
         />
       )}
       {league && (

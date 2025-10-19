@@ -1858,9 +1858,11 @@ export default function App() {
   }, [currentYear, currentWeekBySeason]);
   function rebuildFromStore() {
     const store = readStore();
-    const allRows = Object.values(store.leaguesById).flatMap(
-      (L) => L.rows || []
-    );
+    const leaguesArr = Object.values(store.leaguesById || {});
+    const allRows = leaguesArr.flatMap((L) => {
+      const mergeKey = L?.leagueId ?? L?.leagueKey ?? "";
+      return normalizeAndApplyMergeMap(L?.rows || [], mergeKey);
+    });
     const built = buildFromRows(allRows);
     setDerivedAll(built);
 
@@ -1879,6 +1881,10 @@ export default function App() {
 
     if (nextLeagueId) {
       const rec = store.leaguesById[nextLeagueId];
+      const rowsWithMerges = normalizeAndApplyMergeMap(
+        rec?.rows || [],
+        nextLeagueId ?? rec?.leagueKey
+      );
       let key = rec?.leagueKey || "";
       if (!key) {
         const keys = built?.leagues || [];
@@ -1893,7 +1899,7 @@ export default function App() {
       }
       setSelectedLeagueKey(key);
       setSelectedLeague(key);
-      setRawRows(rec?.rows || []);
+      setRawRows(rowsWithMerges);
       setDraftByYear(rec?.draftByYear || {});
       setAdpSourceByYear(rec?.adpSourceByYear || {});
       setLeagueName(rec?.name || leagueName);
@@ -1920,7 +1926,7 @@ export default function App() {
       const sched =
         rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
           ? rec.espnScheduleByYear
-          : buildScheduleFromRows(rec?.rows || []);
+          : buildScheduleFromRows(rowsWithMerges);
       setScheduleByYear(sched);
       setHiddenManagers(new Set(rec?.hiddenManagers || []));
     } else {
@@ -1952,10 +1958,14 @@ export default function App() {
     store.lastSelectedLeagueId = id;
     writeStore(store);
     const rec = store.leaguesById[id];
+    const rowsWithMerges = normalizeAndApplyMergeMap(
+      rec?.rows || [],
+      id ?? rec?.leagueKey
+    );
     setSelectedLeagueId(id);
     setSelectedLeagueKey(rec.leagueKey || "");
     setSelectedLeague(rec.leagueKey || "");
-    setRawRows(rec.rows || []);
+    setRawRows(rowsWithMerges);
     setDraftByYear(rec.draftByYear || {});
     setAdpSourceByYear(rec.adpSourceByYear || {});
     setLeagueName(rec.name || "Your Fantasy League");
@@ -1982,7 +1992,7 @@ export default function App() {
     const sched =
       rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
         ? rec.espnScheduleByYear
-        : buildScheduleFromRows(rec?.rows || []);
+        : buildScheduleFromRows(rowsWithMerges);
     setScheduleByYear(sched);
     setHiddenManagers(new Set(rec?.hiddenManagers || []));
   }
@@ -2094,51 +2104,65 @@ export default function App() {
       leagueIcon,
     });
   }
+
+  const MERGE_KEY = (leagueId) =>
+    `fl_merge_map::${String(leagueId || "").trim()}`;
+  function loadMergeMap(leagueId) {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage?.getItem(MERGE_KEY(leagueId));
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch {
+      return {};
+    }
+  }
+  function saveMergeMap(leagueId, mapObj) {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(
+        MERGE_KEY(leagueId),
+        JSON.stringify(mapObj || {})
+      );
+    } catch {}
+  }
+  function canonicalize(name, map) {
+    let cur = (name || "").trim();
+    if (!cur) return cur;
+    const seen = new Set();
+    while (map[cur] && !seen.has(cur)) {
+      seen.add(cur);
+      cur = String(map[cur] || "").trim();
+    }
+    return cur || name;
+  }
+  function flattenMergeMap(map) {
+    const flat = {};
+    Object.keys(map || {}).forEach((alias) => {
+      const canon = canonicalize(alias, map);
+      if (canon && alias && alias !== canon) flat[alias] = canon;
+    });
+    return flat;
+  }
+  function applyMergeMap(rows, map) {
+    const keys = Object.keys(map || {});
+    if (!rows || !keys.length) return rows || [];
+    return rows.map((r) => {
+      const mgr = canonicalize(r.manager, map);
+      const opp = canonicalize(r.opponent, map);
+      return { ...r, manager: mgr, opponent: opp };
+    });
+  }
+  function normalizeAndApplyMergeMap(rows, leagueId) {
+    const rawMap = loadMergeMap(leagueId);
+    const flatMap = flattenMergeMap(rawMap);
+    if (JSON.stringify(rawMap) !== JSON.stringify(flatMap)) {
+      saveMergeMap(leagueId, flatMap);
+    }
+    return applyMergeMap(rows || [], flatMap);
+  }
   // ---------------- BOOTSTRAP --------------------
   useEffect(() => {
-    const MERGE_KEY = (leagueId) =>
-      `fl_merge_map::${String(leagueId || "").trim()}`;
-    function loadMergeMap(leagueId) {
-      try {
-        const raw = localStorage.getItem(MERGE_KEY(leagueId));
-        const obj = raw ? JSON.parse(raw) : {};
-        return obj && typeof obj === "object" ? obj : {};
-      } catch {
-        return {};
-      }
-    }
-    function saveMergeMap(leagueId, mapObj) {
-      try {
-        localStorage.setItem(MERGE_KEY(leagueId), JSON.stringify(mapObj || {}));
-      } catch {}
-    }
-    function canonicalize(name, map) {
-      let cur = (name || "").trim();
-      if (!cur) return cur;
-      const seen = new Set();
-      while (map[cur] && !seen.has(cur)) {
-        seen.add(cur);
-        cur = String(map[cur] || "").trim();
-      }
-      return cur || name;
-    }
-    function flattenMergeMap(map) {
-      const flat = {};
-      Object.keys(map || {}).forEach((alias) => {
-        const canon = canonicalize(alias, map);
-        if (canon && alias && alias !== canon) flat[alias] = canon;
-      });
-      return flat;
-    }
-    function applyMergeMap(rows, map) {
-      const keys = Object.keys(map || {});
-      if (!rows || !keys.length) return rows || [];
-      return rows.map((r) => {
-        const mgr = canonicalize(r.manager, map);
-        const opp = canonicalize(r.opponent, map);
-        return { ...r, manager: mgr, opponent: opp };
-      });
-    }
     window.FL_mergeHelpers = {
       MERGE_KEY,
       loadMergeMap,
@@ -3469,6 +3493,7 @@ export default function App() {
                   onChangeManagerNicknames={handleManagerNicknamesChange}
                   leagueIcon={leagueIcon}
                   onLeagueIconChange={handleLeagueIconChange}
+                  onManagerMergesChanged={rebuildFromStore}
                 />
               </ErrorBoundary>
             )}
