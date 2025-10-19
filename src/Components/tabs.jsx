@@ -1913,6 +1913,10 @@ export function MembersTab({ league }) {
                       <th
                         key={`hdr-${yr}`}
                         className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                        style={{
+                          minWidth: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                          width: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                        }}
                       >
                         {labelFor(yr)}
                       </th>
@@ -1955,8 +1959,12 @@ export function MembersTab({ league }) {
                         <td
                           key={`${m.id}-${yr}`}
                           className="px-4 py-3 text-center"
+                          style={{
+                            minWidth: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                            width: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                          }}
                         >
-                          <div className="inline-flex min-w-[8.5rem] max-w-[14rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                          <div className="inline-flex w-full max-w-full items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
                             {teamNames?.[m.name]?.[yr] || "—"}
                           </div>
                         </td>
