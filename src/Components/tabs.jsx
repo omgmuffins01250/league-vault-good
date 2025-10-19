@@ -20349,7 +20349,12 @@ export function LuckIndexTab({
     const comp1Data = React.useMemo(() => {
       const totals = {};
       const details = {};
-      const num = (v) => (Number.isFinite(+v) ? +v : 0);
+      const toNumberOrNull = (value) => {
+        if (value == null) return null;
+        if (typeof value === "string" && value.trim() === "") return null;
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : null;
+      };
 
       const pickTeamId = (value) => {
         const n = Number(value);
@@ -20563,18 +20568,14 @@ export function LuckIndexTab({
           g?.homeScore ??
           null;
 
-        const opp1Proj = num(opp1ProjRaw ?? 0);
-        const opp1Act = num(opp1ActRaw ?? 0);
-        const opp2Proj = num(opp2ProjRaw ?? 0);
-        const opp2Act = num(opp2ActRaw ?? 0);
+        const opp1Proj = toNumberOrNull(opp1ProjRaw);
+        const opp1Act = toNumberOrNull(opp1ActRaw);
+        const opp2Proj = toNumberOrNull(opp2ProjRaw);
+        const opp2Act = toNumberOrNull(opp2ActRaw);
 
-        const d1 = opp1Proj - opp1Act;
-        const d2 = opp2Proj - opp2Act;
-
-        totals[o1] ??= {};
-        totals[o1][seasonNum] = (totals[o1][seasonNum] || 0) + d1;
-        totals[o2] ??= {};
-        totals[o2][seasonNum] = (totals[o2][seasonNum] || 0) + d2;
+        const hasOwner1 = Number.isFinite(opp1Proj) && Number.isFinite(opp1Act);
+        const hasOwner2 = Number.isFinite(opp2Proj) && Number.isFinite(opp2Act);
+        if (!hasOwner1 && !hasOwner2) continue;
 
         const pushDetail = (owner, yr, entry) => {
           details[owner] ??= {};
@@ -20582,23 +20583,33 @@ export function LuckIndexTab({
           details[owner][yr].push(entry);
         };
 
-        pushDetail(o1, seasonNum, {
-          week: weekNum,
-          opponentOwner: o2,
-          opponentTeamId: teamId2,
-          opponentProjected: opp1Proj,
-          opponentActual: opp1Act,
-          diff: d1,
-        });
+        if (hasOwner1) {
+          const d1 = opp1Proj - opp1Act;
+          totals[o1] ??= {};
+          totals[o1][seasonNum] = (totals[o1][seasonNum] || 0) + d1;
+          pushDetail(o1, seasonNum, {
+            week: weekNum,
+            opponentOwner: o2,
+            opponentTeamId: teamId2,
+            opponentProjected: opp1Proj,
+            opponentActual: opp1Act,
+            diff: d1,
+          });
+        }
 
-        pushDetail(o2, seasonNum, {
-          week: weekNum,
-          opponentOwner: o1,
-          opponentTeamId: teamId1,
-          opponentProjected: opp2Proj,
-          opponentActual: opp2Act,
-          diff: d2,
-        });
+        if (hasOwner2) {
+          const d2 = opp2Proj - opp2Act;
+          totals[o2] ??= {};
+          totals[o2][seasonNum] = (totals[o2][seasonNum] || 0) + d2;
+          pushDetail(o2, seasonNum, {
+            week: weekNum,
+            opponentOwner: o1,
+            opponentTeamId: teamId1,
+            opponentProjected: opp2Proj,
+            opponentActual: opp2Act,
+            diff: d2,
+          });
+        }
       }
 
       console.log("[Luck] comp1 (opp proj - opp actual) by owner/year:", totals);
