@@ -1884,10 +1884,13 @@ const minTableW = 700 + seasonsDesc.length * 180;
               className="relative z-10 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
               style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
             >
-              <div className="inline-block align-top shrink-0" style={{ width: `${minTableW}px` }}>
+              <div
+                className="inline-block align-top shrink-0 min-w-max"
+                style={{ minWidth: `${minTableW}px` }}
+              >
                 <table
-                  className="table-fixed whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
-                  style={{ width: "100%" }}
+                  className="whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
+                  style={{ minWidth: "100%", width: "max-content", tableLayout: "auto" }}
                 >
 
                   <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
@@ -1923,7 +1926,7 @@ const minTableW = 700 + seasonsDesc.length * 180;
                     >
                       {/* OWNER (manager) NAME */}
                       <td className="px-3 py-2 text-left">
-                        <div className="flex flex-col leading-tight">
+                        <div className="flex flex-col gap-1 leading-tight">
                           <span className="text-[14px] font-semibold tracking-tight ...">
                             {m.name}
                           </span>
