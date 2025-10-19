@@ -1768,6 +1768,9 @@ class ErrorBoundary extends React.Component {
 export default function App() {
   const [section, setSection] = useState("setup");
   const [leagueName, setLeagueName] = useState("Your Fantasy League");
+  const [leagueFontFamily, setLeagueFontFamily] = useState(
+    '"Inter", "Helvetica Neue", Arial, sans-serif'
+  );
   const [leagueIcon, setLeagueIcon] = useState(makeDefaultLeagueIcon);
   const [derivedAll, setDerivedAll] = useState(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState("");
@@ -3323,7 +3326,10 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <h1 className="text-2xl md:text-4xl font-semibold tracking-tight text-white">
+              <h1
+                className="text-2xl md:text-4xl font-semibold tracking-tight text-white"
+                style={{ fontFamily: leagueFontFamily }}
+              >
                 {leagueName}
               </h1>
             </div>
@@ -3456,6 +3462,7 @@ export default function App() {
                   derivedAll={derivedAll || { leagues: [], byLeague: {} }}
                   selectedLeague={selectedLeague}
                   setSelectedLeague={setSelectedLeague}
+                  activeLeagueName={leagueName}
                   onLegacyCsvMerged={handleLegacyCsvMerged}
                   hiddenManagers={hiddenManagers}
                   onChangeHiddenManagers={(nextSet) => {
@@ -3493,6 +3500,8 @@ export default function App() {
                   onChangeManagerNicknames={handleManagerNicknamesChange}
                   leagueIcon={leagueIcon}
                   onLeagueIconChange={handleLeagueIconChange}
+                  leagueFontFamily={leagueFontFamily}
+                  onChangeLeagueFontFamily={setLeagueFontFamily}
                   onManagerMergesChanged={rebuildFromStore}
                 />
               </ErrorBoundary>

@@ -940,12 +940,48 @@ function resolveDraftMeta(season) {
   };
 }
 
+const LEAGUE_NAME_FONT_OPTIONS = [
+  {
+    label: "Inter — Clean Sans",
+    value: '"Inter", "Helvetica Neue", Arial, sans-serif',
+  },
+  {
+    label: "Poppins — Rounded Sans",
+    value: '"Poppins", "Segoe UI", Tahoma, sans-serif',
+  },
+  {
+    label: "Playfair Display — Elegant Serif",
+    value: '"Playfair Display", "Times New Roman", serif',
+  },
+  {
+    label: "Merriweather — Classic Serif",
+    value: '"Merriweather", Georgia, serif',
+  },
+  {
+    label: "Bebas Neue — Tall Display",
+    value: '"Bebas Neue", "Impact", "Arial Narrow", sans-serif',
+  },
+  {
+    label: "Cinzel — Regal Serif",
+    value: '"Cinzel", "Garamond", serif',
+  },
+  {
+    label: "Fira Code — Tech Mono",
+    value: '"Fira Code", "Source Code Pro", monospace',
+  },
+  {
+    label: "Abril Fatface — Bold Display",
+    value: '"Abril Fatface", "Times New Roman", serif',
+  },
+];
+
 /* SetupTab                                                           */
 /* SetupTab                                                           */
 export function SetupTab({
   derivedAll,
   selectedLeague,
   setSelectedLeague,
+  activeLeagueName,
   onLegacyCsvMerged,
   hiddenManagers = new Set(), // ← add
   onChangeHiddenManagers, // ← add
@@ -953,10 +989,21 @@ export function SetupTab({
   onChangeManagerNicknames,
   leagueIcon,
   onLeagueIconChange,
+  leagueFontFamily,
+  onChangeLeagueFontFamily,
   onManagerMergesChanged,
 }) {
   if (!derivedAll) return null;
   const league = selectedLeague && derivedAll?.byLeague?.[selectedLeague];
+  const displayLeagueName =
+    activeLeagueName ||
+    league?.meta?.name ||
+    league?.leagueName ||
+    league?.settings?.leagueName ||
+    league?.name ||
+    "Your Fantasy League";
+  const activeFontFamily =
+    leagueFontFamily || LEAGUE_NAME_FONT_OPTIONS[0].value;
   const defaultIconGlyph = DEFAULT_LEAGUE_ICONS[0]?.glyph || "🏈";
   const presetSelection =
     leagueIcon?.type !== "upload" && leagueIcon?.value
@@ -1292,6 +1339,41 @@ export function SetupTab({
           nicknamesByOwner={managerNicknames}
           onChangeNicknames={onChangeManagerNicknames}
         />
+      )}
+      {league && (
+        <Card title="League name font">
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Try different font pairings and instantly preview how your league
+              name looks in the dashboard header.
+            </p>
+            <select
+              aria-label="Select league name font"
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm transition focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/70 dark:border-zinc-700 dark:bg-zinc-950"
+              value={activeFontFamily}
+              onChange={(event) =>
+                onChangeLeagueFontFamily?.(event.target.value)
+              }
+            >
+              {LEAGUE_NAME_FONT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-center shadow-inner dark:border-white/5 dark:bg-zinc-900/60">
+              <div
+                className="text-xl font-semibold text-white sm:text-2xl"
+                style={{ fontFamily: activeFontFamily }}
+              >
+                {displayLeagueName}
+              </div>
+              <div className="mt-2 text-xs uppercase tracking-[0.28em] text-zinc-400">
+                Header preview
+              </div>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );
