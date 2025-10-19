@@ -430,6 +430,23 @@ const ordinal = (n) => {
   return `${n}th`;
 };
 
+const overallPickFromRow = (row) => {
+  if (!row || typeof row !== "object") return null;
+  const candidates = [
+    row?.overall,
+    row?.overallPick,
+    row?.overallPickNumber,
+    row?.pickNumber,
+    row?.draftOverall,
+    row?.pick,
+  ];
+  for (const val of candidates) {
+    const num = Number(val);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
+};
+
 /* HideManagerControl — choose which managers are hidden across tabs */
 function HideManagerControl({
   owners = [],
@@ -14392,6 +14409,114 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     normName,
   ]);
 
+  const draftSlotSummary = React.useMemo(() => {
+    if (typeof window === "undefined") return [];
+    const S = window.__sources || {};
+    const league = S.selectedLeague || S.league || {};
+    const placementMapRaw = league?.placementMap || {};
+
+    const placementByKey = new Map();
+    Object.entries(placementMapRaw || {}).forEach(([ownerName, byYear]) => {
+      const raw = String(ownerName || "");
+      const canonOwner = canonicalize(raw);
+      const normCanon = normName(canonOwner);
+      const normRaw = normName(raw);
+      Object.entries(byYear || {}).forEach(([yrStr, place]) => {
+        const yr = Number(yrStr);
+        const finish = Number(place);
+        if (!Number.isFinite(yr) || !Number.isFinite(finish) || finish <= 0) return;
+        if (canonOwner) placementByKey.set(`${canonOwner}__${yr}`, finish);
+        if (normCanon) placementByKey.set(`${normCanon}__${yr}`, finish);
+        if (normRaw) placementByKey.set(`${normRaw}__${yr}`, finish);
+      });
+    });
+
+    const slotMap = new Map();
+
+    Object.entries(draftByYear || {}).forEach(([yrStr, picks]) => {
+      const yr = Number(yrStr);
+      if (!Number.isFinite(yr)) return;
+      const list = Array.isArray(picks) ? picks : [];
+      const firstRound = list
+        .filter((r) => Number(r?.round) === 1)
+        .sort((a, b) => {
+          const ao = overallPickFromRow(a) ?? Infinity;
+          const bo = overallPickFromRow(b) ?? Infinity;
+          return ao - bo;
+        });
+      const usedSlots = new Set();
+      firstRound.forEach((pick) => {
+        const slot = overallPickFromRow(pick);
+        if (!Number.isFinite(slot) || slot <= 0 || usedSlots.has(slot)) return;
+        usedSlots.add(slot);
+
+        const owner = ownerNameResolver(pick, yr) || "—";
+        if (!owner || owner === "—") return;
+        const ownerNorm = normName(owner);
+        if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return;
+
+        const canonOwner = canonicalize(owner);
+        const finish =
+          placementByKey.get(`${canonOwner}__${yr}`) ||
+          placementByKey.get(`${ownerNorm}__${yr}`);
+        if (!Number.isFinite(finish)) return;
+
+        if (!slotMap.has(slot)) {
+          slotMap.set(slot, { total: 0, count: 0, entries: [] });
+        }
+        const bucket = slotMap.get(slot);
+        bucket.total += finish;
+        bucket.count += 1;
+        bucket.entries.push({
+          owner: ownerDisplay(owner),
+          year: yr,
+          finish,
+        });
+      });
+    });
+
+    const rows = Array.from(slotMap.entries())
+      .map(([slot, info]) => {
+        const detail = info.entries
+          .slice()
+          .sort(
+            (a, b) =>
+              b.year - a.year || a.owner.localeCompare(b.owner)
+          );
+        return {
+          slot: Number(slot),
+          average: info.count ? info.total / info.count : null,
+          count: info.count,
+          entries: detail,
+        };
+      })
+      .sort((a, b) => a.slot - b.slot);
+
+    return rows;
+  }, [
+    draftByYear,
+    ownerNameResolver,
+    canonicalize,
+    normName,
+    hiddenSet,
+    hiddenNormSet,
+    ownerDisplay,
+  ]);
+
+  const [selectedDraftSlot, setSelectedDraftSlot] = React.useState(null);
+  React.useEffect(() => {
+    if (selectedDraftSlot == null) return;
+    if (!draftSlotSummary.some((row) => row.slot === selectedDraftSlot)) {
+      setSelectedDraftSlot(null);
+    }
+  }, [draftSlotSummary, selectedDraftSlot]);
+
+  const selectedDraftSlotRow = React.useMemo(
+    () =>
+      draftSlotSummary.find((row) => row.slot === selectedDraftSlot) || null,
+    [draftSlotSummary, selectedDraftSlot]
+  );
+
   // ---------- breakdown helpers ----------
   const contribForPick = React.useCallback(
     (r) => {
@@ -14814,6 +14939,105 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
             </table>
           </Panel>
         </div>
+
+        <Panel
+          title="Draft Slot Outcomes"
+          subtitle="Average final finish by first-round draft position. Click a pick to see who drafted there."
+        >
+          <div className="bg-white/75 dark:bg-zinc-950/40">
+            <table className="w-full text-sm text-slate-700 dark:text-slate-200">
+              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                <tr>
+                  <th className="py-2 pl-3 text-left">Pick #</th>
+                  <th className="py-2 pr-3 text-right">Avg Finish</th>
+                  <th className="py-2 pr-3 text-right">Seasons</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/60 dark:divide-white/10">
+                {draftSlotSummary.map((row) => {
+                  const isSelected = selectedDraftSlot === row.slot;
+                  return (
+                    <tr
+                      key={row.slot}
+                      className={`cursor-pointer transition ${
+                        isSelected
+                          ? "bg-white/70 dark:bg-sky-500/25"
+                          : "hover:bg-white/60 dark:hover:bg-sky-500/20"
+                      }`}
+                      onClick={() =>
+                        setSelectedDraftSlot(isSelected ? null : row.slot)
+                      }
+                      title="Click to view seasons for this pick"
+                    >
+                      <td className="py-2 pl-3 font-semibold tabular-nums">
+                        #{row.slot}
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {row.average != null ? row.average.toFixed(2) : "—"}
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {row.count}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {draftSlotSummary.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="py-3 text-center text-slate-500 dark:text-slate-400"
+                    >
+                      No seasons with both draft order and final finishes were
+                      found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {selectedDraftSlotRow ? (
+              <div className="border-t border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-950/45 backdrop-blur-sm">
+                <div className="flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200">
+                  <span>
+                    Pick #{selectedDraftSlotRow.slot} — {selectedDraftSlotRow.count}
+                    {" "}
+                    season{selectedDraftSlotRow.count === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-[10px] font-medium uppercase tracking-[0.32em] text-sky-600 transition hover:text-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:text-sky-300 dark:hover:text-sky-200"
+                    onClick={() => setSelectedDraftSlot(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <table className="w-full text-sm text-slate-700 dark:text-slate-200">
+                  <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                    <tr>
+                      <th className="py-2 pl-3 text-left">Year</th>
+                      <th className="py-2 text-left">Manager</th>
+                      <th className="py-2 pr-3 text-right">Finish</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/60 dark:divide-white/10">
+                    {selectedDraftSlotRow.entries.map((entry) => (
+                      <tr key={`${entry.year}-${entry.owner}`}>
+                        <td className="py-2 pl-3 tabular-nums">{entry.year}</td>
+                        <td className="py-2">{entry.owner}</td>
+                        <td className="py-2 pr-3 text-right font-semibold tabular-nums">
+                          {ordinal(Number(entry.finish))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : draftSlotSummary.length > 0 ? (
+              <div className="border-t border-white/60 dark:border-white/10 px-4 py-3 text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300 bg-white/70 dark:bg-zinc-950/45 backdrop-blur-sm">
+                Click a row to view the managers who drafted at that spot.
+              </div>
+            ) : null}
+          </div>
+        </Panel>
 
         {/* Help modal */}
         {showExplain && (
