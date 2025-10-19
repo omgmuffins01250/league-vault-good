@@ -3150,76 +3150,76 @@ export default function App() {
       <div className="relative z-10 px-3 pb-12 pt-6 sm:px-4 lg:px-6 xl:px-8">
         <div className="w-full space-y-8">
           {/* NAVBAR */}
-          <div className="navbar relative rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
-        <div className="flex-1 items-center gap-3">
-          {leagueOptions.length > 0 && (
-            <div className="dropdown">
-              <label
-                tabIndex={0}
-                className="btn btn-sm btn-outline normal-case"
-              >
-                <span className="truncate max-w-[220px]">
-                  {leagueOptions.find(
-                    (o) =>
-                      o.id ===
-                      (selectedLeagueId || storeSnapshot.lastSelectedLeagueId)
-                  )?.name ||
-                    leagueName ||
-                    "Select league"}
-                </span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 opacity-70"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </label>
+          <div className="relative flex w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
+            <div className="flex flex-1 items-center gap-3">
+              {leagueOptions.length > 0 && (
+                <div className="dropdown">
+                  <label
+                    tabIndex={0}
+                    className="btn btn-sm btn-outline normal-case"
+                  >
+                    <span className="truncate max-w-[220px]">
+                      {leagueOptions.find(
+                        (o) =>
+                          o.id ===
+                          (selectedLeagueId || storeSnapshot.lastSelectedLeagueId)
+                      )?.name ||
+                        leagueName ||
+                        "Select league"}
+                    </span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 opacity-70"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </label>
 
-              <ul
-                tabIndex={0}
-                className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-80 overflow-auto"
-              >
-                {leagueOptions.map((opt) => (
-                  <li key={opt.id} className="p-0">
-                    <div className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-base-200 rounded">
-                      <button
-                        onClick={() => switchLeagueById(opt.id)}
-                        className={`flex-1 text-left truncate text-sm ${
-                          opt.id === selectedLeagueId ? "font-semibold" : ""
-                        }`}
-                        title={opt.name}
-                      >
-                        {opt.name}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCurrentLeague(opt.id)}
-                        className="shrink-0 text-red-500 hover:text-red-600 ml-1"
-                        title="Delete this league"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                  <ul
+                    tabIndex={0}
+                    className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-80 overflow-auto"
+                  >
+                    {leagueOptions.map((opt) => (
+                      <li key={opt.id} className="p-0">
+                        <div className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-base-200 rounded">
+                          <button
+                            onClick={() => switchLeagueById(opt.id)}
+                            className={`flex-1 text-left truncate text-sm ${
+                              opt.id === selectedLeagueId ? "font-semibold" : ""
+                            }`}
+                            title={opt.name}
+                          >
+                            {opt.name}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCurrentLeague(opt.id)}
+                            className="shrink-0 text-red-500 hover:text-red-600 ml-1"
+                            title="Delete this league"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <h1 className="text-2xl md:text-4xl font-semibold tracking-tight text-white">
-            {leagueName}
-          </h1>
-        </div>
-        <div className="flex-none">
-          <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
-        </div>
-      </div>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <h1 className="text-2xl md:text-4xl font-semibold tracking-tight text-white">
+                {leagueName}
+              </h1>
+            </div>
+            <div className="flex-shrink-0">
+              <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
+            </div>
+          </div>
           {/* PAGE HEADER */}
           <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 shadow-[0_26px_75px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-3">
