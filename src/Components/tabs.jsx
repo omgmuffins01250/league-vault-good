@@ -1678,9 +1678,14 @@ export function MembersTab({ league }) {
   const teamNames = league.teamNamesByOwner || {}; // { owner -> { season -> team_name } }
   const latest = seasons.length ? Math.max(...seasons) : null;
   const seasonsDescRaw = [...seasons].sort((a, b) => b - a);
-  const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
-  const labelFor = (yr) => `${yr} Team Name`;
-  const latestLabel = latest ? `Updated through ${latest}` : null;
+const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
+const labelFor = (yr) => `${yr} Team Name`;
+const latestLabel = latest ? `Updated through ${latest}` : null;
+
+// force the members table to be wider than the viewport so it can scroll
+// base for fixed columns + per-year column width
+const minTableW = 700 + seasonsDesc.length * 180;
+
   const membersLength = league.members?.length ?? 0;
   const seasonsKey = seasonsDesc.join("|");
 
@@ -1871,7 +1876,7 @@ export function MembersTab({ league }) {
                 className="pointer-events-none absolute inset-y-3 right-1 z-20 w-6 rounded-r-2xl bg-gradient-to-l from-white/70 via-white/40 to-transparent dark:from-zinc-950/80 dark:via-zinc-950/50"
               />
             ) : null}
-            <div
+           <div
   ref={tableScrollRef}
   role="region"
   tabIndex={scrollState.canScroll ? 0 : -1}
@@ -1880,7 +1885,10 @@ export function MembersTab({ league }) {
   style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
 >
 
-<table className="w-max whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200">
+<table
+  className="table-auto whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
+  style={{ minWidth: `${minTableW}px` }}
+>
                 <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
                     <th className="px-3 py-2 text-left font-semibold ...">
