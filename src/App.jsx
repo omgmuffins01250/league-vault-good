@@ -1,5 +1,6 @@
 // App.jsx
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   SidebarButton,
   Footer,
@@ -1576,6 +1577,9 @@ function UserMenu({
   const [open, setOpen] = React.useState(false);
   const btnRef = React.useRef(null);
   const menuRef = React.useRef(null);
+  const [menuPosition, setMenuPosition] = React.useState({ top: 0, right: 0 });
+  const portalTarget =
+    typeof document !== "undefined" ? document.body : null;
 
   React.useEffect(() => {
     const onClick = (e) => {
@@ -1594,6 +1598,25 @@ function UserMenu({
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  React.useLayoutEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    const updatePosition = () => {
+      if (!btnRef.current) return;
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + 8,
+        right: Math.max(window.innerWidth - rect.right, 8),
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
     };
   }, [open]);
 
@@ -1635,17 +1658,19 @@ function UserMenu({
         </svg>
       </button>
 
-      {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          className="absolute right-0 mt-2 w-56 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden z-50"
-        >
-          <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Signed in as
-            <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
-              {user?.name || "You"}
-            </div>
+      {open && portalTarget &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ top: menuPosition.top, right: menuPosition.right }}
+            className="fixed z-[120] w-56 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden"
+          >
+            <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Signed in as
+              <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
+                {user?.name || "You"}
+              </div>
             {user?.email ? <div className="truncate">{user.email}</div> : null}
           </div>
           <div className="h-px bg-zinc-200 dark:bg-zinc-800" />
@@ -1702,8 +1727,9 @@ function UserMenu({
           >
             Sign out
           </button>
-        </div>
-      )}
+          </div>,
+          portalTarget
+        )}
     </div>
   );
 }
@@ -1747,6 +1773,7 @@ export default function App() {
   const [selectedLeagueId, setSelectedLeagueId] = useState("");
   const [selectedLeagueKey, setSelectedLeagueKey] = useState("");
   const [selectedLeague, setSelectedLeague] = useState("");
+  const [leagueMenuOpen, setLeagueMenuOpen] = useState(false);
   const [managerNicknames, setManagerNicknames] = useState({});
   const [moneyInputs, setMoneyInputs] = useState({});
   const [error, setError] = useState("");
@@ -1767,6 +1794,8 @@ export default function App() {
   const [hiddenManagers, setHiddenManagers] = useState(new Set());
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
+  const leagueMenuButtonRef = React.useRef(null);
+  const leagueMenuRef = React.useRef(null);
   const currentYear = React.useMemo(() => {
     const yrs = Object.keys(currentWeekBySeason || {})
       .map(Number)
@@ -1798,6 +1827,29 @@ export default function App() {
       };
     });
   }, [scheduleByYear, currentYear]);
+
+  React.useEffect(() => {
+    if (!leagueMenuOpen) return;
+    const handleClick = (event) => {
+      if (
+        leagueMenuRef.current &&
+        !leagueMenuRef.current.contains(event.target) &&
+        leagueMenuButtonRef.current &&
+        !leagueMenuButtonRef.current.contains(event.target)
+      ) {
+        setLeagueMenuOpen(false);
+      }
+    };
+    const handleKey = (event) => {
+      if (event.key === "Escape") setLeagueMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [leagueMenuOpen]);
 
   const seasonThisYear = React.useMemo(() => {
     if (!currentYear) return null;
@@ -2969,6 +3021,12 @@ export default function App() {
     name: L.name || `League ${L.leagueId}`,
   }));
 
+  React.useEffect(() => {
+    if (!leagueOptions.length && leagueMenuOpen) {
+      setLeagueMenuOpen(false);
+    }
+  }, [leagueOptions.length, leagueMenuOpen]);
+
   function getCurrentLeagueIdentity() {
     const meta = derivedAll?.byLeague?.[selectedLeague]?.meta || {};
 
@@ -3134,6 +3192,7 @@ export default function App() {
     leagueIcon?.type === "preset" && leagueIcon?.value
       ? leagueIcon.value
       : leagueIcon?.previousPreset || DEFAULT_LEAGUE_ICON_GLYPH;
+  const activeLeagueId = selectedLeagueId || storeSnapshot.lastSelectedLeagueId;
   return (
     <div
       data-theme="luxury"
@@ -3153,23 +3212,27 @@ export default function App() {
           <div className="relative flex w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
             <div className="flex flex-1 items-center gap-3">
               {leagueOptions.length > 0 && (
-                <div className="dropdown">
-                  <label
-                    tabIndex={0}
-                    className="btn btn-sm btn-outline normal-case"
+                <div className="relative">
+                  <button
+                    ref={leagueMenuButtonRef}
+                    type="button"
+                    onClick={() => setLeagueMenuOpen((prev) => !prev)}
+                    className="btn btn-sm btn-outline normal-case flex items-center gap-2"
+                    aria-haspopup="listbox"
+                    aria-expanded={leagueMenuOpen ? "true" : "false"}
                   >
                     <span className="truncate max-w-[220px]">
                       {leagueOptions.find(
-                        (o) =>
-                          o.id ===
-                          (selectedLeagueId || storeSnapshot.lastSelectedLeagueId)
+                        (o) => o.id === activeLeagueId
                       )?.name ||
                         leagueName ||
                         "Select league"}
                     </span>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 opacity-70"
+                      className={`h-4 w-4 opacity-70 transition ${
+                        leagueMenuOpen ? "rotate-180" : ""
+                      }`}
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -3179,35 +3242,46 @@ export default function App() {
                         clipRule="evenodd"
                       />
                     </svg>
-                  </label>
+                  </button>
 
-                  <ul
-                    tabIndex={0}
-                    className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-64 max-h-80 overflow-auto"
-                  >
-                    {leagueOptions.map((opt) => (
-                      <li key={opt.id} className="p-0">
-                        <div className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-base-200 rounded">
-                          <button
-                            onClick={() => switchLeagueById(opt.id)}
-                            className={`flex-1 text-left truncate text-sm ${
-                              opt.id === selectedLeagueId ? "font-semibold" : ""
-                            }`}
-                            title={opt.name}
-                          >
-                            {opt.name}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCurrentLeague(opt.id)}
-                            className="shrink-0 text-red-500 hover:text-red-600 ml-1"
-                            title="Delete this league"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  {leagueMenuOpen && (
+                    <div
+                      ref={leagueMenuRef}
+                      className="absolute right-0 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border border-white/10 bg-zinc-900/95 text-sm text-white shadow-lg backdrop-blur-xl z-50"
+                      role="listbox"
+                    >
+                      <ul className="py-1">
+                        {leagueOptions.map((opt) => (
+                          <li key={opt.id} className="flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                switchLeagueById(opt.id);
+                                setLeagueMenuOpen(false);
+                              }}
+                              className={`flex-1 text-left truncate ${
+                                opt.id === activeLeagueId ? "font-semibold" : ""
+                              }`}
+                              title={opt.name}
+                            >
+                              {opt.name}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleDeleteCurrentLeague(opt.id);
+                                setLeagueMenuOpen(false);
+                              }}
+                              className="shrink-0 text-rose-400 transition hover:text-rose-300"
+                              title="Delete this league"
+                            >
+                              🗑️
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
