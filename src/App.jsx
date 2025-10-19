@@ -1797,6 +1797,23 @@ export default function App() {
   const [hiddenManagers, setHiddenManagers] = useState(new Set());
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const root = document.documentElement;
+    if (!root) return undefined;
+
+    if (!leagueFontFamily) {
+      root.style.removeProperty("--league-font-family");
+      return undefined;
+    }
+
+    root.style.setProperty("--league-font-family", leagueFontFamily);
+    return () => {
+      root.style.removeProperty("--league-font-family");
+    };
+  }, [leagueFontFamily]);
+
   const leagueMenuButtonRef = React.useRef(null);
   const leagueMenuRef = React.useRef(null);
   const currentYear = React.useMemo(() => {
@@ -3328,7 +3345,7 @@ export default function App() {
               </div>
               <h1
                 className="text-2xl md:text-4xl font-semibold tracking-tight text-white"
-                style={{ fontFamily: leagueFontFamily }}
+                style={{ fontFamily: leagueFontFamily || "var(--league-font-family)" }}
               >
                 {leagueName}
               </h1>
