@@ -3408,7 +3408,7 @@ export default function App() {
               <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
             </div>
           </div>
-          <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
             {/* SIDEBAR */}
             <aside className="space-y-2 rounded-3xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl shadow-[0_26px_75px_-50px_rgba(8,12,24,0.85)]">
             <SidebarButton
@@ -3524,7 +3524,7 @@ export default function App() {
               Scenario
             </SidebarButton>
           </aside>
-          <main className="space-y-6">
+          <main className="space-y-6 min-w-0">
             {/* Setup should always render */}
             {section === "setup" && (
               <ErrorBoundary name="SetupTab">

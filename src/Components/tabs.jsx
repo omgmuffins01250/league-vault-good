@@ -1784,8 +1784,7 @@ export function MembersTab({ league }) {
   return (
     <div
       ref={captureRef}
-      className="space-y-6 w-full"
-      style={{ paddingRight: "1in" }}
+      className="space-y-6 w-full min-w-0 pr-4 sm:pr-6 lg:pr-[1in]"
     >
       <Card
         className="min-w-0"
