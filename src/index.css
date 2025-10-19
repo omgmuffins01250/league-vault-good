@@ -111,3 +111,48 @@ a:hover {
   transform-origin: center;
   will-change: transform, filter, opacity;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Custom scrollbar styling                                                  */
+/* -------------------------------------------------------------------------- */
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.8) rgba(241, 245, 249, 0.4);
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.7) rgba(39, 39, 42, 0.5);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.5);
+  border-radius: 9999px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(63, 63, 70, 0.45);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.75);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.85);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(226, 232, 240, 0.75);
+}
