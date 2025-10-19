@@ -81,6 +81,39 @@ const normalizeColorValue = (ctx, value) => {
   }
 };
 
+function useHorizontalWheelScroll(ref) {
+  useEffect(() => {
+    const node = ref?.current;
+    if (!node) return;
+
+    const handleWheel = (event) => {
+      if (event.defaultPrevented || event.shiftKey) return;
+      if (!node) return;
+
+      const canScroll = node.scrollWidth - node.clientWidth > 1;
+      if (!canScroll) return;
+
+      const absDeltaY = Math.abs(event.deltaY || 0);
+      const absDeltaX = Math.abs(event.deltaX || 0);
+
+      if (absDeltaY <= absDeltaX) return;
+
+      const previous = node.scrollLeft;
+      node.scrollLeft += event.deltaY;
+
+      if (node.scrollLeft !== previous) {
+        event.preventDefault();
+      }
+    };
+
+    node.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+    };
+  }, [ref]);
+}
+
 function cloneWithInlineStyles(root, { filter } = {}) {
   const clone = root.cloneNode(true);
 
@@ -1639,6 +1672,8 @@ export function MembersTab({ league }) {
   const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
   const labelFor = (yr) => `${yr} Team Name`;
   const latestLabel = latest ? `Updated through ${latest}` : null;
+  const membersLength = league.members?.length ?? 0;
+  const seasonsKey = seasonsDesc.join("|");
 
   const rawLeagueName =
     league?.leagueName ||
@@ -1674,6 +1709,62 @@ export function MembersTab({ league }) {
     fileNameFor: membersFileNameFor,
     missingNodeMessage: "No league members content to capture",
   });
+
+  const tableScrollRef = useRef(null);
+  const [scrollState, setScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
+
+  useHorizontalWheelScroll(tableScrollRef);
+
+  useEffect(() => {
+    const node = tableScrollRef.current;
+    if (!node) return;
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [tableScrollRef, membersLength, seasonsKey]);
 
   return (
     <div ref={captureRef} className="space-y-6">
@@ -1759,7 +1850,26 @@ export function MembersTab({ league }) {
           <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
           <div className="relative">
-            <div className="max-w-full overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3">
+            {scrollState.canScroll && !scrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-3 left-1 z-20 w-6 rounded-l-2xl bg-gradient-to-r from-white/70 via-white/40 to-transparent dark:from-zinc-950/80 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {scrollState.canScroll && !scrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-3 right-1 z-20 w-6 rounded-r-2xl bg-gradient-to-l from-white/70 via-white/40 to-transparent dark:from-zinc-950/80 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={tableScrollRef}
+              role="region"
+              tabIndex={scrollState.canScroll ? 0 : -1}
+              aria-label="League members table"
+              className="max-w-full overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
+              style={{ scrollbarGutter: "stable both-edges" }}
+            >
               <table className="min-w-max text-[12px] text-slate-700 dark:text-slate-200">
                 <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
