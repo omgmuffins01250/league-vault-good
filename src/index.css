@@ -19,9 +19,33 @@ body {
   min-width: 320px;
   min-height: 100vh;
   display: block;
-  /* remove the hard-coded white */
-  background-color: hsl(var(--b1) / 1);   /* follows DaisyUI theme */
-  color: hsl(var(--bc) / 1);              /* follows DaisyUI theme */
+  background-color: hsl(var(--color-base-100, 222 47% 11%) / 1);
+  color: hsl(var(--color-base-content, 210 40% 98%) / 1);
+}
+
+.vault-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(800px 400px at 15% 10%, rgba(92, 105, 255, 0.12), transparent 60%),
+    radial-gradient(900px 480px at 85% 35%, rgba(255, 209, 92, 0.1), transparent 65%),
+    linear-gradient(180deg, #05070d 0%, #0a101a 55%, #05070d 100%);
+}
+
+.vault-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(600px 320px at 50% -10%, rgba(255, 255, 255, 0.12), transparent 60%);
+  mix-blend-mode: screen;
+  opacity: 0.4;
+}
+
+.vault-page__inner {
+  position: relative;
+  z-index: 1;
 }
 
 /* Optional: keep your link/button tweaks or remove them if you prefer Tailwind */
