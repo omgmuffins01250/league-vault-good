@@ -944,34 +944,170 @@ const LEAGUE_NAME_FONT_OPTIONS = [
   {
     label: "Inter — Clean Sans",
     value: '"Inter", "Helvetica Neue", Arial, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap",
   },
   {
     label: "Poppins — Rounded Sans",
     value: '"Poppins", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap",
   },
   {
     label: "Playfair Display — Elegant Serif",
     value: '"Playfair Display", "Times New Roman", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap",
   },
   {
     label: "Merriweather — Classic Serif",
     value: '"Merriweather", Georgia, serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap",
   },
   {
     label: "Bebas Neue — Tall Display",
     value: '"Bebas Neue", "Impact", "Arial Narrow", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap",
   },
   {
     label: "Cinzel — Regal Serif",
     value: '"Cinzel", "Garamond", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap",
   },
   {
     label: "Fira Code — Tech Mono",
     value: '"Fira Code", "Source Code Pro", monospace',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600&display=swap",
   },
   {
     label: "Abril Fatface — Bold Display",
     value: '"Abril Fatface", "Times New Roman", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Abril+Fatface&display=swap",
+  },
+  {
+    label: "Montserrat — Modern Sans",
+    value: '"Montserrat", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap",
+  },
+  {
+    label: "Raleway — Elegant Sans",
+    value: '"Raleway", "Helvetica Neue", Arial, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Raleway:wght@500;700&display=swap",
+  },
+  {
+    label: "Lato — Friendly Sans",
+    value: '"Lato", "Helvetica Neue", Arial, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap",
+  },
+  {
+    label: "Source Sans Pro — Workhorse Sans",
+    value: '"Source Sans Pro", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap",
+  },
+  {
+    label: "Nunito — Soft Sans",
+    value: '"Nunito", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Nunito:wght@500;700&display=swap",
+  },
+  {
+    label: "Rubik — Rounded Sans",
+    value: '"Rubik", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Rubik:wght@500;700&display=swap",
+  },
+  {
+    label: "Quicksand — Playful Sans",
+    value: '"Quicksand", "Trebuchet MS", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&display=swap",
+  },
+  {
+    label: "Sora — Futuristic Sans",
+    value: '"Sora", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Sora:wght@500;700&display=swap",
+  },
+  {
+    label: "Josefin Sans — Art Deco Sans",
+    value: '"Josefin Sans", "Gill Sans", "Trebuchet MS", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@500;700&display=swap",
+  },
+  {
+    label: "Manrope — Contemporary Sans",
+    value: '"Manrope", "Segoe UI", Tahoma, sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@500;700&display=swap",
+  },
+  {
+    label: "DM Serif Display — Dramatic Serif",
+    value: '"DM Serif Display", "Times New Roman", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap",
+  },
+  {
+    label: "Lora — Graceful Serif",
+    value: '"Lora", Georgia, serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Lora:wght@500;700&display=swap",
+  },
+  {
+    label: "Spectral — Literary Serif",
+    value: '"Spectral", Georgia, serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Spectral:wght@500;700&display=swap",
+  },
+  {
+    label: "Crimson Text — Editorial Serif",
+    value: '"Crimson Text", Georgia, serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Crimson+Text:wght@600;700&display=swap",
+  },
+  {
+    label: "Libre Baskerville — Bookish Serif",
+    value: '"Libre Baskerville", "Times New Roman", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap",
+  },
+  {
+    label: "Cormorant Garamond — Classic Serif",
+    value: '"Cormorant Garamond", "Garamond", serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;700&display=swap",
+  },
+  {
+    label: "Oswald — Condensed Sans",
+    value: '"Oswald", "Arial Narrow", "Helvetica Neue", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap",
+  },
+  {
+    label: "Teko — Athletic Sans",
+    value: '"Teko", "Arial Narrow", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Teko:wght@500;700&display=swap",
+  },
+  {
+    label: "Bungee — Statement Display",
+    value: '"Bungee", "Impact", "Arial Black", sans-serif',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Bungee&display=swap",
+  },
+  {
+    label: "Pacifico — Handwritten Script",
+    value: '"Pacifico", "Brush Script MT", cursive',
+    importUrl:
+      "https://fonts.googleapis.com/css2?family=Pacifico&display=swap",
   },
 ];
 
@@ -993,6 +1129,27 @@ export function SetupTab({
   onChangeLeagueFontFamily,
   onManagerMergesChanged,
 }) {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const head = document.head;
+    if (!head) return;
+
+    const existingHrefs = new Set(
+      Array.from(head.querySelectorAll("link[data-league-font]"))
+        .map((link) => link.getAttribute("href"))
+        .filter(Boolean)
+    );
+
+    LEAGUE_NAME_FONT_OPTIONS.forEach((option) => {
+      if (!option.importUrl || existingHrefs.has(option.importUrl)) return;
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = option.importUrl;
+      link.setAttribute("data-league-font", "true");
+      head.appendChild(link);
+    });
+  }, []);
+
   if (!derivedAll) return null;
   const league = selectedLeague && derivedAll?.byLeague?.[selectedLeague];
   const displayLeagueName =
