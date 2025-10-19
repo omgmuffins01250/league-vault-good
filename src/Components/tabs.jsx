@@ -1861,7 +1861,7 @@ const minTableW = 700 + seasonsDesc.length * 180;
       >
         <div className="relative rounded-2xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/70 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.85)]">
           <div className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] opacity-80 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.18),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(147,197,253,0.14),transparent_55%)]" />
-<div className="absolute inset-0 z-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          <div className="absolute inset-0 z-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
           <div className="relative">
             {scrollState.canScroll && !scrollState.atStart ? (
@@ -1876,23 +1876,21 @@ const minTableW = 700 + seasonsDesc.length * 180;
                 className="pointer-events-none absolute inset-y-3 right-1 z-20 w-6 rounded-r-2xl bg-gradient-to-l from-white/70 via-white/40 to-transparent dark:from-zinc-950/80 dark:via-zinc-950/50"
               />
             ) : null}
-<div
-  ref={tableScrollRef}
-  role="region"
-  tabIndex={scrollState.canScroll ? 0 : -1}
-  aria-label="League members table"
-  className="relative z-10 max-w-full overflow-x-scroll overflow-y-hidden overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
-  style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
->
+            <div
+              ref={tableScrollRef}
+              role="region"
+              tabIndex={scrollState.canScroll ? 0 : -1}
+              aria-label="League members table"
+              className="relative z-10 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
+              style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="inline-block align-top shrink-0" style={{ width: `${minTableW}px` }}>
+                <table
+                  className="table-fixed whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
+                  style={{ width: "100%" }}
+                >
 
-
-<div className="inline-block align-top shrink-0" style={{ width: `${minTableW}px` }}>
-  <table
-    className="table-fixed whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
-    style={{ width: "100%" }}
-  >
-
-                <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
+                  <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
                     <th className="px-3 py-2 text-left font-semibold ...">
                       Member
@@ -1963,6 +1961,7 @@ const minTableW = 700 + seasonsDesc.length * 180;
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </div>
