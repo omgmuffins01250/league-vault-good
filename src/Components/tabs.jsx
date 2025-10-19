@@ -19592,6 +19592,24 @@ export function LuckIndexTab({
       ),
     [league?.hiddenManagers]
   );
+  const normalizeOwnerNameLoose = React.useCallback((value) => {
+    if (value == null) return null;
+    const str = String(value).trim();
+    if (!str) return null;
+    const canonical = canonicalizeOwner(str);
+    return canonical || str;
+  }, []);
+  const isHiddenManager = React.useCallback(
+    (name) => {
+      if (!name) return false;
+      const trimmed = String(name).trim();
+      if (!trimmed) return false;
+      if (hiddenManagersSet.has(trimmed)) return true;
+      const canonical = canonicalizeOwner(trimmed);
+      return canonical ? hiddenManagersSet.has(canonical) : false;
+    },
+    [hiddenManagersSet]
+  );
   React.useEffect(() => {
     if (!league) return;
     const aliases =
@@ -19635,20 +19653,102 @@ export function LuckIndexTab({
         g(league, "ownerByTeamByYear", season, String(teamId)) ||
         g(league, "ownerByTeamByYear", String(season), String(teamId)) ||
         null;
-      if (!fallback) return null;
-      const canonical = canonicalizeOwner(fallback);
-      return canonical || fallback;
-    },
-    [league, ownerMapsVersion]
-  );
+      if (fallback) {
+        const canonical = canonicalizeOwner(fallback);
+        return canonical || fallback;
+      }
 
-  const normalizeOwnerNameLoose = (value) => {
-    if (value == null) return null;
-    const str = String(value).trim();
-    if (!str) return null;
-    const canonical = canonicalizeOwner(str);
-    return canonical || str;
-  };
+      const seasonObj =
+        g(league, "seasonsByYear", season) ||
+        g(league, "seasonsByYear", String(season));
+      const numericTeamId = Number(teamId);
+      if (seasonObj && Number.isFinite(numericTeamId)) {
+        const teams = Array.isArray(seasonObj?.teams)
+          ? seasonObj.teams
+          : [];
+        const matchTeam = teams.find((team) => {
+          const candidates = [team?.id, team?.teamId, team?.teamID];
+          return candidates.some(
+            (cand) => Number(cand) === numericTeamId
+          );
+        });
+
+        const members = Array.isArray(seasonObj?.members)
+          ? seasonObj.members
+          : [];
+        const normalizeFromMembers = (id) => {
+          if (id == null) return null;
+          const idStr = String(id);
+          const member = members.find((m) => String(m?.id) === idStr);
+          if (!member) return null;
+          const parts = [member?.firstName, member?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const candidates = [
+            parts,
+            member?.fullName,
+            member?.displayName,
+            member?.nickname,
+          ];
+          for (const cand of candidates) {
+            const normalized = normalizeOwnerNameLoose(cand);
+            if (normalized) return normalized;
+          }
+          return null;
+        };
+
+        if (matchTeam) {
+          const ownerCandidates = [];
+          ownerCandidates.push(
+            matchTeam?.owner,
+            matchTeam?.ownerName,
+            matchTeam?.teamOwner,
+            matchTeam?.teamManager,
+            matchTeam?.manager,
+            matchTeam?.managerName,
+            matchTeam?.primaryOwnerName
+          );
+          if (Array.isArray(matchTeam?.owners)) {
+            matchTeam.owners.forEach((owner) => {
+              ownerCandidates.push(
+                owner?.displayName,
+                owner?.fullName,
+                owner?.nickname,
+                owner?.firstName && owner?.lastName
+                  ? `${owner.firstName} ${owner.lastName}`
+                  : null
+              );
+            });
+          }
+
+          for (const cand of ownerCandidates) {
+            const normalized = normalizeOwnerNameLoose(cand);
+            if (normalized) return normalized;
+          }
+
+          const ownerIds = [];
+          if (matchTeam?.primaryOwner != null)
+            ownerIds.push(matchTeam.primaryOwner);
+          if (matchTeam?.ownerId != null) ownerIds.push(matchTeam.ownerId);
+          if (Array.isArray(matchTeam?.owners)) {
+            matchTeam.owners.forEach((owner) => {
+              if (owner?.id != null) ownerIds.push(owner.id);
+              if (owner?.ownerId != null) ownerIds.push(owner.ownerId);
+              if (owner?.memberId != null) ownerIds.push(owner.memberId);
+            });
+          }
+          for (const id of ownerIds) {
+            const normalized = normalizeFromMembers(id);
+            if (normalized) return normalized;
+          }
+        }
+      }
+
+      return null;
+    },
+    [league, ownerMapsVersion, normalizeOwnerNameLoose]
+  );
 
   function getGamesFlexible(league) {
     const pickTeamId = (value) => {
@@ -20245,18 +20345,27 @@ export function LuckIndexTab({
 
   const ownersBase = React.useMemo(() => {
     const set = new Set();
+    const pushOwner = (value) => {
+      const normalized = normalizeOwnerNameLoose(value);
+      if (!normalized) return;
+      if (isHiddenManager(normalized)) return;
+      set.add(normalized);
+    };
     (rawRows || []).forEach((row) => {
-      if (row?.manager) set.add(row.manager);
+      pushOwner(row?.manager);
     });
     Object.values(league?.ownerByTeamByYear || {}).forEach((byTeam) => {
       Object.values(byTeam || {}).forEach((owner) => {
-        if (owner) set.add(owner);
+        pushOwner(owner);
       });
     });
-    return Array.from(set)
-      .filter((name) => !hiddenManagersSet.has(name))
-      .sort((a, b) => a.localeCompare(b));
-  }, [league, rawRows, hiddenManagersSet]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [
+    league,
+    rawRows,
+    normalizeOwnerNameLoose,
+    isHiddenManager,
+  ]);
   const START_SLOTS = React.useMemo(
     () => new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]),
     []
@@ -20945,13 +21054,24 @@ export function LuckIndexTab({
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
   const owners = React.useMemo(() => {
-    const s = new Set(ownersBase);
-    Object.keys(comp1ByOwnerYear || {}).forEach((o) => s.add(o));
-    Object.keys(injuryByOwnerYear || {}).forEach((o) => s.add(o));
-    return Array.from(s)
-      .filter((name) => !hiddenManagersSet.has(name))
-      .sort((a, b) => a.localeCompare(b));
-  }, [ownersBase, comp1ByOwnerYear, injuryByOwnerYear, hiddenManagersSet]);
+    const s = new Set();
+    const pushOwner = (value) => {
+      const normalized = normalizeOwnerNameLoose(value);
+      if (!normalized) return;
+      if (isHiddenManager(normalized)) return;
+      s.add(normalized);
+    };
+    ownersBase.forEach((name) => pushOwner(name));
+    Object.keys(comp1ByOwnerYear || {}).forEach((o) => pushOwner(o));
+    Object.keys(injuryByOwnerYear || {}).forEach((o) => pushOwner(o));
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [
+    ownersBase,
+    comp1ByOwnerYear,
+    injuryByOwnerYear,
+    normalizeOwnerNameLoose,
+    isHiddenManager,
+  ]);
   const [comp1Detail, setComp1Detail] = React.useState(null);
   React.useEffect(() => {
     if (comp1Detail?.owner && hiddenManagersSet.has(comp1Detail.owner)) {
