@@ -1686,7 +1686,8 @@ export function MembersTab({ league }) {
   // base for fixed columns + per-year column width
   const minTableW = 700 + seasonsDesc.length * 180;
 
-  const membersLength = league.members?.length ?? 0;
+  const members = league.members ?? [];
+  const membersLength = members.length;
   const seasonsKey = seasonsDesc.join("|");
 
   const rawLeagueName =
@@ -1920,7 +1921,7 @@ export function MembersTab({ league }) {
                   </tr>
                 </thead>
                 <tbody className="[&>tr]:border-b [&>tr]:border-white/30 dark:[&>tr]:border-white/10">
-                  {league.members.map((m) => (
+                  {members.map((m) => (
                     <tr
                       key={m.id}
                       className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
