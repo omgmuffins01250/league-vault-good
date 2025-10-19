@@ -1784,7 +1784,7 @@ export function MembersTab({ league }) {
   return (
     <div
       ref={captureRef}
-      className="space-y-6 w-full min-w-0 pr-4 sm:pr-6 lg:pr-[1in]"
+      className="space-y-6 w-full min-w-0 pr-4 sm:pr-5 lg:pr-10"
     >
       <Card
         className="min-w-0"
@@ -1901,7 +1901,9 @@ export function MembersTab({ league }) {
 
                   <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
-                    <th className="px-3 py-2 text-left font-semibold ...">
+                    <th
+                      className="sticky left-0 z-30 px-3 py-2 text-left font-semibold bg-white/80 dark:bg-zinc-950/75 backdrop-blur-sm shadow-[inset_-1px_0_0_rgba(148,163,184,0.35)] dark:shadow-[inset_-1px_0_0_rgba(148,163,184,0.25)]"
+                    >
                       Member
                     </th>
                     <th className="px-3 py-2 text-center font-medium">
@@ -1931,7 +1933,9 @@ export function MembersTab({ league }) {
                       className="odd:bg-white/60 dark:odd:bg-white/5 transition-all duration-150 hover:bg-amber-50/90 dark:hover:bg-amber-500/10 hover:shadow-[0_12px_40px_-30px_rgba(251,191,36,0.75)]"
                     >
                       {/* OWNER (manager) NAME */}
-                      <td className="px-3 py-2 text-left">
+                      <td
+                        className="sticky left-0 z-20 px-3 py-2 text-left bg-white/75 dark:bg-zinc-950/65 backdrop-blur-sm shadow-[inset_-1px_0_0_rgba(148,163,184,0.2)] dark:shadow-[inset_-1px_0_0_rgba(148,163,184,0.18)]"
+                      >
                         <div className="flex flex-col gap-1 leading-tight">
                           <span className="text-[14px] font-semibold tracking-tight ...">
                             {m.name}
