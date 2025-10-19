@@ -1782,8 +1782,13 @@ export function MembersTab({ league }) {
   }, [tableScrollRef, membersLength, seasonsKey]);
 
   return (
-    <div ref={captureRef} className="space-y-6">
+    <div
+      ref={captureRef}
+      className="space-y-6 w-full"
+      style={{ paddingRight: "1in" }}
+    >
       <Card
+        className="min-w-0"
         title="League Members"
         allowOverflow
         right={
