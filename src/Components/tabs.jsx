@@ -1881,7 +1881,7 @@ const minTableW = 700 + seasonsDesc.length * 180;
               role="region"
               tabIndex={scrollState.canScroll ? 0 : -1}
               aria-label="League members table"
-              className="relative z-10 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
+              className="relative z-10 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50 custom-scrollbar"
               style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
             >
               <div
