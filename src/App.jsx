@@ -3209,8 +3209,8 @@ export default function App() {
       <div className="relative z-10 px-3 pb-12 pt-6 sm:px-4 lg:px-6 xl:px-8">
         <div className="w-full space-y-8">
           {/* NAVBAR */}
-          <div className="relative flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl">
-            <div className="flex flex-1 items-center gap-3">
+          <div className="relative grid w-full items-center gap-4 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-[0_30px_90px_-45px_rgba(8,12,24,0.85)] backdrop-blur-xl grid-cols-1 md:grid-cols-[auto_1fr_auto]">
+            <div className="flex items-center justify-center gap-3 md:justify-start">
               {leagueOptions.length > 0 && (
                 <div className="relative">
                   <button
@@ -3285,7 +3285,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center gap-3 text-center">
               <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-900/90 text-white shadow-inner dark:bg-white/90 dark:text-zinc-900">
                 {headerIconIsUpload ? (
                   <img
@@ -3303,7 +3303,7 @@ export default function App() {
                 {leagueName}
               </h1>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex justify-center md:justify-end">
               <UserMenu user={{ name: "You" /* or pull from your auth */ }} />
             </div>
           </div>
