@@ -19584,6 +19584,7 @@ export function LuckIndexTab({
   draftByYear = {},
 }) {
   if (!league) return null;
+  const [ownerMapsVersion, setOwnerMapsVersion] = React.useState(0);
   const hiddenManagersSet = React.useMemo(
     () =>
       new Set(
@@ -19602,10 +19603,11 @@ export function LuckIndexTab({
         espnOwnerByTeamByYear: league.ownerByTeamByYear || {},
         manualAliases: aliases,
       });
+      setOwnerMapsVersion((v) => v + 1);
     } catch (err) {
       console.warn("LuckIndex primeOwnerMaps failed", err);
     }
-  }, [league]);
+  }, [league, league?.ownerByTeamByYear]);
   if (typeof window !== "undefined") {
     window.__LDEBUG = {
       rostersByYear,
@@ -19637,7 +19639,7 @@ export function LuckIndexTab({
       const canonical = canonicalizeOwner(fallback);
       return canonical || fallback;
     },
-    [league]
+    [league, ownerMapsVersion]
   );
 
   const normalizeOwnerNameLoose = (value) => {
