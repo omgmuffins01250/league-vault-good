@@ -19637,6 +19637,133 @@ export function LuckIndexTab({
   }
 
   // unified owner resolver: prefer ownerMaps; fallback to league.ownerByTeamByYear
+  const managerBySeasonTeam = React.useMemo(() => {
+    const map = {};
+    const assign = (seasonRaw, teamRaw, name) => {
+      const seasonNum = Number(seasonRaw);
+      const teamId = Number(teamRaw);
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
+      let candidate = name;
+      if (candidate && typeof candidate === "object") {
+        candidate =
+          candidate?.name ??
+          candidate?.owner ??
+          candidate?.ownerName ??
+          candidate?.manager ??
+          candidate?.teamManager ??
+          candidate?.displayName ??
+          candidate?.fullName ??
+          candidate?.nickname ??
+          null;
+      }
+      const normalized = normalizeOwnerNameLoose(candidate);
+      if (!normalized) return;
+      map[seasonNum] ??= {};
+      if (!map[seasonNum][teamId]) {
+        map[seasonNum][teamId] = normalized;
+      }
+    };
+
+    const consumeOwnerMap = (seasonRaw, ownerMap = {}) => {
+      Object.entries(ownerMap || {}).forEach(([teamKey, nm]) => {
+        assign(seasonRaw, teamKey, nm);
+      });
+    };
+
+    try {
+      if (typeof window !== "undefined" && window.__ownerMaps?.mapFor) {
+        const seasons = new Set();
+        Object.keys(league?.ownerByTeamByYear || {}).forEach((s) =>
+          seasons.add(Number(s))
+        );
+        Object.keys(league?.seasonsByYear || {}).forEach((s) =>
+          seasons.add(Number(s))
+        );
+        seasons.forEach((seasonNum) => {
+          if (!Number.isFinite(seasonNum)) return;
+          const rawMap = window.__ownerMaps.mapFor(seasonNum) || {};
+          consumeOwnerMap(seasonNum, rawMap);
+        });
+      }
+    } catch (err) {
+      console.warn("LuckIndex manager map from ownerMaps failed", err);
+    }
+
+    Object.entries(league?.ownerByTeamByYear || {}).forEach(
+      ([seasonKey, ownerMap]) => {
+        consumeOwnerMap(seasonKey, ownerMap);
+      }
+    );
+
+    Object.entries(league?.seasonsByYear || {}).forEach(
+      ([seasonKey, seasonValue]) => {
+        const seasonNum = Number(seasonKey);
+        const teams = Array.isArray(seasonValue?.teams)
+          ? seasonValue.teams
+          : [];
+        teams.forEach((team) => {
+          const teamIdCandidate =
+            team?.id ?? team?.teamId ?? team?.teamID ?? team?.team?.id;
+          if (!Number.isFinite(Number(teamIdCandidate))) return;
+          const candidates = [
+            team?.owner,
+            team?.ownerName,
+            team?.teamManager,
+            team?.teamOwner,
+            team?.manager,
+            team?.primaryOwnerName,
+          ];
+          if (Array.isArray(team?.owners)) {
+            team.owners.forEach((owner) => {
+              candidates.push(
+                owner?.displayName,
+                owner?.fullName,
+                owner?.nickname,
+                owner?.firstName && owner?.lastName
+                  ? `${owner.firstName} ${owner.lastName}`
+                  : null
+              );
+            });
+          }
+          for (const cand of candidates) {
+            if (!cand) continue;
+            assign(seasonNum, teamIdCandidate, cand);
+            break;
+          }
+        });
+      }
+    );
+
+    (rawRows || []).forEach((row) => {
+      const seasonCand =
+        row?.season ??
+        row?.year ??
+        row?.season_id ??
+        row?.seasonId ??
+        row?.seasonYear;
+      const teamCand =
+        row?.team_id ??
+        row?.teamId ??
+        row?.team ??
+        row?.teamID ??
+        row?.tid;
+      const managerCand =
+        row?.manager ??
+        row?.manager_name ??
+        row?.owner ??
+        row?.owner_name ??
+        row?.ownerName ??
+        row?.team_owner ??
+        row?.team_manager ??
+        row?.teamManager ??
+        row?.manager1 ??
+        row?.managerName;
+      assign(seasonCand, teamCand, managerCand);
+    });
+
+    return map;
+  }, [league, rawRows, normalizeOwnerNameLoose, ownerMapsVersion]);
+
   const ownerNameOf = React.useCallback(
     (season, teamId) => {
       try {
@@ -19645,6 +19772,8 @@ export function LuckIndexTab({
           if (nm) return nm;
         }
       } catch {}
+      const fromMap = managerBySeasonTeam?.[Number(season)]?.[Number(teamId)];
+      if (fromMap) return fromMap;
       const g = (obj, ...ks) =>
         ks.reduce((o, k) => (o == null ? o : o[k]), obj);
       const fallback =
@@ -19747,7 +19876,12 @@ export function LuckIndexTab({
 
       return null;
     },
-    [league, ownerMapsVersion, normalizeOwnerNameLoose]
+    [
+      league,
+      ownerMapsVersion,
+      normalizeOwnerNameLoose,
+      managerBySeasonTeam,
+    ]
   );
 
   function getGamesFlexible(league) {
@@ -20359,12 +20493,16 @@ export function LuckIndexTab({
         pushOwner(owner);
       });
     });
+    Object.values(managerBySeasonTeam || {}).forEach((byTeam) => {
+      Object.values(byTeam || {}).forEach((owner) => pushOwner(owner));
+    });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [
     league,
     rawRows,
     normalizeOwnerNameLoose,
     isHiddenManager,
+    managerBySeasonTeam,
   ]);
   const START_SLOTS = React.useMemo(
     () => new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]),
