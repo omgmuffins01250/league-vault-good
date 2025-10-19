@@ -1872,14 +1872,15 @@ export function MembersTab({ league }) {
               />
             ) : null}
             <div
-              ref={tableScrollRef}
-              role="region"
-              tabIndex={scrollState.canScroll ? 0 : -1}
-              aria-label="League members table"
-              className="max-w-full overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
-              style={{ scrollbarGutter: "stable both-edges" }}
-            >
-              <table className="min-w-max text-[12px] text-slate-700 dark:text-slate-200">
+  ref={tableScrollRef}
+  role="region"
+  tabIndex={scrollState.canScroll ? 0 : -1}
+  aria-label="League members table"
+  className="max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 pb-3 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50"
+  style={{ scrollbarGutter: "stable both-edges", WebkitOverflowScrolling: "touch" }}
+>
+
+<table className="w-max whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200">
                 <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
                   <tr className="bg-white/70 dark:bg-zinc-950/60 backdrop-blur sticky top-0">
                     <th className="px-3 py-2 text-left font-semibold ...">
