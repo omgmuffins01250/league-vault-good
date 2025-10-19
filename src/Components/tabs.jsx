@@ -14518,7 +14518,24 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     ownerDisplay,
   ]);
 
+  const [draftSlotView, setDraftSlotView] = React.useState("table");
   const [selectedDraftSlot, setSelectedDraftSlot] = React.useState(null);
+  const draftSlotChartData = React.useMemo(
+    () =>
+      draftSlotSummary
+        .filter((row) => Number.isFinite(row.average))
+        .map((row) => ({
+          slot: row.slot,
+          average: row.average,
+          count: row.count,
+        })),
+    [draftSlotSummary]
+  );
+  React.useEffect(() => {
+    if (draftSlotSummary.length === 0 && draftSlotView !== "table") {
+      setDraftSlotView("table");
+    }
+  }, [draftSlotSummary, draftSlotView]);
   React.useEffect(() => {
     if (selectedDraftSlot == null) return;
     if (!draftSlotSummary.some((row) => row.slot === selectedDraftSlot)) {
@@ -14958,57 +14975,152 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
         <Panel
           title="Draft Slot Outcomes"
           subtitle="Average final finish by first-round draft position. Click a pick to see who drafted there."
+          right={
+            draftSlotSummary.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`${goldToggleCls(draftSlotView === "table")} cursor-pointer`}
+                  aria-pressed={draftSlotView === "table"}
+                  onClick={() => setDraftSlotView("table")}
+                >
+                  Table
+                </button>
+                <button
+                  type="button"
+                  className={`${goldToggleCls(draftSlotView === "chart")} cursor-pointer`}
+                  aria-pressed={draftSlotView === "chart"}
+                  onClick={() => setDraftSlotView("chart")}
+                >
+                  Chart
+                </button>
+              </div>
+            )
+          }
         >
           <div className="bg-white/75 dark:bg-zinc-950/40">
-            <table className="w-full text-sm text-slate-700 dark:text-slate-200">
-              <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
-                <tr>
-                  <th className="py-2 pl-3 text-left">Pick #</th>
-                  <th className="py-2 pr-3 text-right">Avg Finish</th>
-                  <th className="py-2 pr-3 text-right">Seasons</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/60 dark:divide-white/10">
-                {draftSlotSummary.map((row) => {
-                  const isSelected = selectedDraftSlot === row.slot;
-                  return (
-                    <tr
-                      key={row.slot}
-                      className={`cursor-pointer transition ${
-                        isSelected
-                          ? "bg-white/70 dark:bg-sky-500/25"
-                          : "hover:bg-white/60 dark:hover:bg-sky-500/20"
-                      }`}
-                      onClick={() =>
-                        setSelectedDraftSlot(isSelected ? null : row.slot)
-                      }
-                      title="Click to view seasons for this pick"
+            {draftSlotView === "chart" ? (
+              <div className="h-[320px] w-full">
+                <div className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={draftSlotChartData}
+                      margin={{ top: 12, right: 24, bottom: 24, left: 8 }}
                     >
-                      <td className="py-2 pl-3 font-semibold tabular-nums">
-                        #{row.slot}
-                      </td>
-                      <td className="py-2 pr-3 text-right tabular-nums">
-                        {row.average != null ? row.average.toFixed(2) : "—"}
-                      </td>
-                      <td className="py-2 pr-3 text-right tabular-nums">
-                        {row.count}
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        opacity={0.2}
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="slot"
+                        tickFormatter={(v) => `#${v}`}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        axisLine={{ stroke: "rgba(148,163,184,0.45)" }}
+                        tickLine={{ stroke: "rgba(148,163,184,0.45)" }}
+                      />
+                      <YAxis
+                        tickFormatter={(v) => v.toFixed ? v.toFixed(1) : v}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        axisLine={{ stroke: "rgba(148,163,184,0.45)" }}
+                        tickLine={{ stroke: "rgba(148,163,184,0.45)" }}
+                        allowDecimals
+                      />
+                      <Tooltip
+                        cursor={{ fill: "rgba(14,165,233,0.08)" }}
+                        contentStyle={{
+                          background: "rgba(15,23,42,0.92)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          color: "#e2e8f0",
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                        }}
+                        formatter={(value, _name, info) => [
+                          Number.isFinite(value) ? value.toFixed(2) : "—",
+                          `Pick #${info?.payload?.slot ?? "—"}`,
+                        ]}
+                        labelFormatter={() => "Avg Finish"}
+                      />
+                      <Bar dataKey="average" radius={[8, 8, 0, 0]}>
+                        {draftSlotChartData.map((entry) => {
+                          const isSelected = selectedDraftSlot === entry.slot;
+                          return (
+                            <Cell
+                              key={entry.slot}
+                              cursor="pointer"
+                              fill={
+                                isSelected
+                                  ? "rgba(56,189,248,0.95)"
+                                  : "rgba(125,211,252,0.75)"
+                              }
+                              stroke={
+                                isSelected ? "rgba(14,165,233,1)" : "transparent"
+                              }
+                              strokeWidth={isSelected ? 2 : 0}
+                              onClick={() =>
+                                setSelectedDraftSlot((prev) =>
+                                  prev === entry.slot ? null : entry.slot
+                                )
+                              }
+                            />
+                          );
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : (
+              <table className="w-full text-sm text-slate-700 dark:text-slate-200">
+                <thead className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-300">
+                  <tr>
+                    <th className="py-2 pl-3 text-left">Pick #</th>
+                    <th className="py-2 pr-3 text-right">Avg Finish</th>
+                    <th className="py-2 pr-3 text-right">Seasons</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200/60 dark:divide-white/10">
+                  {draftSlotSummary.map((row) => {
+                    const isSelected = selectedDraftSlot === row.slot;
+                    return (
+                      <tr
+                        key={row.slot}
+                        className={`cursor-pointer transition ${
+                          isSelected
+                            ? "bg-white/70 dark:bg-sky-500/25"
+                            : "hover:bg-white/60 dark:hover:bg-sky-500/20"
+                        }`}
+                        onClick={() =>
+                          setSelectedDraftSlot(isSelected ? null : row.slot)
+                        }
+                        title="Click to view seasons for this pick"
+                      >
+                        <td className="py-2 pl-3 font-semibold tabular-nums">
+                          #{row.slot}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.average != null ? row.average.toFixed(2) : "—"}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.count}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {draftSlotSummary.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="py-3 text-center text-slate-500 dark:text-slate-400"
+                      >
+                        No seasons with both draft order and final finishes were
+                        found.
                       </td>
                     </tr>
-                  );
-                })}
-                {draftSlotSummary.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="py-3 text-center text-slate-500 dark:text-slate-400"
-                    >
-                      No seasons with both draft order and final finishes were
-                      found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            )}
             {selectedDraftSlotRow ? (
               <div className="border-t border-white/60 dark:border-white/10 bg-white/70 dark:bg-zinc-950/45 backdrop-blur-sm">
                 <div className="flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200">
@@ -15048,7 +15160,9 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
               </div>
             ) : draftSlotSummary.length > 0 ? (
               <div className="border-t border-white/60 dark:border-white/10 px-4 py-3 text-[11px] uppercase tracking-[0.28em] text-slate-500 dark:text-slate-300 bg-white/70 dark:bg-zinc-950/45 backdrop-blur-sm">
-                Click a row to view the managers who drafted at that spot.
+                {draftSlotView === "chart"
+                  ? "Click a bar to view the managers who drafted at that spot."
+                  : "Click a row to view the managers who drafted at that spot."}
               </div>
             ) : null}
           </div>
