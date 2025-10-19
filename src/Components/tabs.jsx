@@ -1682,12 +1682,9 @@ export function MembersTab({ league }) {
   const labelFor = (yr) => `${yr} Team Name`;
   const latestLabel = latest ? `Updated through ${latest}` : null;
 
-  // ensure each season column stays wide enough that the table needs to scroll
-  const SEASON_COLUMN_MIN_WIDTH = 176; // px
-
   // force the members table to be wider than the viewport so it can scroll
   // base for fixed columns + per-year column width
-  const minTableW = 700 + seasonsDesc.length * SEASON_COLUMN_MIN_WIDTH;
+  const minTableW = 700 + seasonsDesc.length * 180;
 
   const membersLength = league.members?.length ?? 0;
   const seasonsKey = seasonsDesc.join("|");
@@ -1894,11 +1891,7 @@ export function MembersTab({ league }) {
               >
                 <table
                   className="whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
-                  style={{
-                    minWidth: "100%",
-                    width: "max-content",
-                    tableLayout: "auto",
-                  }}
+                  style={{ minWidth: "100%", width: "max-content", tableLayout: "auto" }}
                 >
 
                   <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
