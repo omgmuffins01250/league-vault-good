@@ -19616,68 +19616,309 @@ export function LuckIndexTab({
     [league]
   );
 
+  const normalizeOwnerNameLoose = (value) => {
+    if (value == null) return null;
+    const str = String(value).trim();
+    if (!str) return null;
+    const canonical = canonicalizeOwner(str);
+    return canonical || str;
+  };
+
   function getGamesFlexible(league) {
-    const out = [];
+    const pickTeamId = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+
+    const extractTeamInfo = (
+      side,
+      {
+        week = null,
+        projectedKey = null,
+        fallbackIds = [],
+        fallbackOwners = [],
+        extraProjected = [],
+        extraScores = [],
+      } = {}
+    ) => {
+      const idCandidates = [];
+      if (side && typeof side === "object") {
+        idCandidates.push(
+          side.teamId,
+          side.team?.id,
+          side.team?.teamId,
+          side.id,
+          side.teamID,
+          side.team?.teamID
+        );
+      }
+      idCandidates.push(...fallbackIds);
+      let teamId = null;
+      for (const cand of idCandidates) {
+        const picked = pickTeamId(cand);
+        if (picked != null) {
+          teamId = picked;
+          break;
+        }
+      }
+
+      const ownerCandidates = [];
+      if (side && typeof side === "object") {
+        ownerCandidates.push(
+          side.ownerName,
+          side.owner,
+          side.manager,
+          side.teamManager,
+          side.primaryOwner,
+          side.teamOwner,
+          side.ownerFull,
+          side.owner_display,
+          side.member,
+          side.managerName,
+          side.team_manager
+        );
+        if (Array.isArray(side.owners) && side.owners.length) {
+          const first = side.owners[0];
+          ownerCandidates.push(
+            first?.displayName,
+            first?.fullName,
+            first?.nickname,
+            first?.firstName && first?.lastName
+              ? `${first.firstName} ${first.lastName}`
+              : null
+          );
+        }
+        if (Array.isArray(side.team?.owners) && side.team.owners.length) {
+          const first = side.team.owners[0];
+          ownerCandidates.push(
+            first?.displayName,
+            first?.fullName,
+            first?.nickname,
+            first?.firstName && first?.lastName
+              ? `${first.firstName} ${first.lastName}`
+              : null
+          );
+        }
+      }
+      ownerCandidates.push(...fallbackOwners);
+      let ownerName = null;
+      for (const cand of ownerCandidates) {
+        const normalized = normalizeOwnerNameLoose(cand);
+        if (normalized) {
+          ownerName = normalized;
+          break;
+        }
+      }
+
+      const projectedCandidates = [];
+      if (side && typeof side === "object") {
+        projectedCandidates.push(
+          side.projected,
+          side.proj,
+          side.projection,
+          side.projectedScore,
+          side.scoreProjected,
+          side.projectedPoints,
+          side.projectedTotal,
+          side.projectedFor,
+          side.projected_pf,
+          side.totalProjectedPointsLive,
+          side.totalProjectedPoints,
+          side.totalProjectedScore,
+          side.overallProjectedScore,
+          side.pointsProjected,
+          side.pfProjected,
+          side.pointsForProjected,
+          side.projectedPointsLive,
+          side.projectedScoreTotal
+        );
+        if (side.projectedPointsByScoringPeriod && week != null) {
+          projectedCandidates.push(
+            side.projectedPointsByScoringPeriod?.[week]
+          );
+        }
+        if (side.__proj != null) {
+          if (typeof side.__proj === "number") {
+            projectedCandidates.push(side.__proj);
+          } else if (
+            projectedKey &&
+            typeof side.__proj === "object" &&
+            side.__proj[projectedKey] != null
+          ) {
+            projectedCandidates.push(side.__proj[projectedKey]);
+          }
+        }
+      }
+      projectedCandidates.push(...extraProjected);
+      let projected = null;
+      for (const cand of projectedCandidates) {
+        const n = Number(cand);
+        if (Number.isFinite(n)) {
+          projected = n;
+          break;
+        }
+      }
+
+      const scoreCandidates = [];
+      if (side && typeof side === "object") {
+        scoreCandidates.push(
+          side.score,
+          side.totalPointsLive,
+          side.totalPoints,
+          side.total,
+          side.pointsFor,
+          side.pf,
+          side.points,
+          side.pointsScored,
+          side.points_for,
+          side.scoreFor,
+          side.score_total
+        );
+        if (week != null) {
+          scoreCandidates.push(
+            side.pointsByScoringPeriod?.[week],
+            side.totalPointsByScoringPeriod?.[week]
+          );
+        }
+      }
+      scoreCandidates.push(...extraScores);
+      let score = 0;
+      for (const cand of scoreCandidates) {
+        const n = Number(cand);
+        if (Number.isFinite(n)) {
+          score = n;
+          break;
+        }
+      }
+
+      return {
+        teamId: teamId != null ? teamId : null,
+        ownerName: ownerName || null,
+        projected: projected != null ? projected : null,
+        score,
+      };
+    };
+
+    const buildGameRecord = ({
+      season,
+      week,
+      home,
+      away,
+      isPlayoff,
+      fallbackIds = {},
+      fallbackOwners = {},
+      extraProjected = {},
+      extraScores = {},
+    }) => {
+      const wk = Number(week);
+      const yr = Number(season);
+      if (!Number.isFinite(yr) || !Number.isFinite(wk) || wk <= 0) return null;
+
+      const team1 = extractTeamInfo(home, {
+        week: wk,
+        projectedKey: "home",
+        fallbackIds: fallbackIds.home || [],
+        fallbackOwners: fallbackOwners.home || [],
+        extraProjected: extraProjected.home || [],
+        extraScores: extraScores.home || [],
+      });
+      const team2 = extractTeamInfo(away, {
+        week: wk,
+        projectedKey: "away",
+        fallbackIds: fallbackIds.away || [],
+        fallbackOwners: fallbackOwners.away || [],
+        extraProjected: extraProjected.away || [],
+        extraScores: extraScores.away || [],
+      });
+
+      if (!team1.teamId && !team1.ownerName) return null;
+      if (!team2.teamId && !team2.ownerName) return null;
+
+      return {
+        season: yr,
+        week: wk,
+        team1: {
+          teamId: team1.teamId,
+          ownerName: team1.ownerName,
+          score: Number.isFinite(team1.score) ? team1.score : 0,
+          projected:
+            team1.projected != null && Number.isFinite(team1.projected)
+              ? team1.projected
+              : null,
+        },
+        team2: {
+          teamId: team2.teamId,
+          ownerName: team2.ownerName,
+          score: Number.isFinite(team2.score) ? team2.score : 0,
+          projected:
+            team2.projected != null && Number.isFinite(team2.projected)
+              ? team2.projected
+              : null,
+        },
+        is_playoff: Boolean(isPlayoff),
+      };
+    };
 
     // 1) Already-normalized games (must include team objects/ids)
     if (Array.isArray(league?.games) && league.games.length) {
       const normalized = [];
       for (const g of league.games) {
-        const season = Number(g?.season ?? g?.year);
-        const week = Number(
-          g?.week ?? g?.matchupPeriodId ?? g?.scoringPeriodId ?? g?.period
-        );
+        const season = g?.season ?? g?.year;
+        const week =
+          g?.week ?? g?.matchupPeriodId ?? g?.scoringPeriodId ?? g?.period;
         const raw1 = g?.team1 ?? g?.home ?? g?.homeTeam ?? g?.team1Id ?? null;
         const raw2 = g?.team2 ?? g?.away ?? g?.awayTeam ?? g?.team2Id ?? null;
 
-        const teamId1 = Number(
-          raw1?.teamId ?? raw1?.team?.id ?? raw1?.id ?? raw1
-        );
-        const teamId2 = Number(
-          raw2?.teamId ?? raw2?.team?.id ?? raw2?.id ?? raw2
-        );
-
-        if (!season || !week || !teamId1 || !teamId2) continue;
-
-        const score1 = Number(
-          raw1?.score ??
-            raw1?.totalPoints ??
-            g?.team1Score ??
-            g?.homeScore ??
-            g?.pf ??
-            g?.pointsFor ??
-            0
-        );
-        const score2 = Number(
-          raw2?.score ??
-            raw2?.totalPoints ??
-            g?.team2Score ??
-            g?.awayScore ??
-            g?.pa ??
-            g?.pointsAgainst ??
-            0
-        );
-
-        normalized.push({
+        const record = buildGameRecord({
           season,
           week,
-          team1: {
-            teamId: teamId1,
-            score: Number.isFinite(score1) ? score1 : 0,
-            projected: Number.isFinite(projected1) ? projected1 : null,
-          },
-          team2: {
-            teamId: teamId2,
-            score: Number.isFinite(score2) ? score2 : 0,
-            projected: Number.isFinite(projected2) ? projected2 : null,
-          },
-          is_playoff:
+          home: raw1,
+          away: raw2,
+          isPlayoff:
             g?.is_playoff ??
             g?.isPlayoff ??
             g?.playoffMatchup ??
             (typeof g?.playoffTierType === "string" &&
               g.playoffTierType.toUpperCase() !== "NONE"),
+          fallbackIds: {
+            home: [g?.team1Id, g?.homeTeamId, g?.teamId1, g?.homeId],
+            away: [g?.team2Id, g?.awayTeamId, g?.teamId2, g?.awayId],
+          },
+          fallbackOwners: {
+            home: [
+              g?.team1Owner,
+              g?.homeOwner,
+              g?.owner1,
+              g?.team1OwnerName,
+            ],
+            away: [
+              g?.team2Owner,
+              g?.awayOwner,
+              g?.owner2,
+              g?.team2OwnerName,
+            ],
+          },
+          extraProjected: {
+            home: [g?.team1Projected, g?.homeProjected],
+            away: [g?.team2Projected, g?.awayProjected],
+          },
+          extraScores: {
+            home: [
+              g?.team1Score,
+              g?.homeScore,
+              g?.pf,
+              g?.pointsFor,
+            ],
+            away: [
+              g?.team2Score,
+              g?.awayScore,
+              g?.pa,
+              g?.pointsAgainst,
+            ],
+          },
         });
+
+        if (record) normalized.push(record);
       }
       if (normalized.length) {
         console.log(
@@ -19688,49 +19929,112 @@ export function LuckIndexTab({
       }
     }
 
-    // 2) seasonsByYear[year].schedule[]
-    const sb = league?.seasonsByYear;
-    if (sb && typeof sb === "object") {
-      for (const [yStr, seasonObj] of Object.entries(sb)) {
-        const y = Number(yStr);
-        const sched = seasonObj?.schedule || [];
-        for (const m of sched) {
-          const w = Number(
-            m?.matchupPeriodId ?? m?.scoringPeriodId ?? m?.week ?? 0
-          );
-          const h = m?.home ?? m?.homeTeam ?? {};
-          const a = m?.away ?? m?.awayTeam ?? {};
+    const scheduleSources = [
+      {
+        label: "league.seasonsByYear.schedule",
+        data: league?.seasonsByYear,
+        extractor: (seasonObj) => seasonObj?.schedule || [],
+      },
+      {
+        label: "league.scheduleByYear",
+        data: league?.scheduleByYear,
+        extractor: (arr) => arr || [],
+      },
+      {
+        label: "league.espnScheduleByYear",
+        data: league?.espnScheduleByYear,
+        extractor: (arr) => arr || [],
+      },
+    ];
 
-          const t1 = Number(h?.teamId ?? h?.team?.id ?? h?.id);
-          const t2 = Number(a?.teamId ?? a?.team?.id ?? a?.id);
+    for (const source of scheduleSources) {
+      if (!source.data || typeof source.data !== "object") continue;
+      const normalized = [];
+      for (const [yStr, seasonData] of Object.entries(source.data || {})) {
+        const seasonNum = Number(yStr);
+        if (!Number.isFinite(seasonNum)) continue;
+        const gamesArr = source.extractor(seasonData) || [];
+        for (const m of gamesArr) {
+          const week =
+            m?.matchupPeriodId ??
+            m?.scoringPeriodId ??
+            m?.week ??
+            m?.period ??
+            m?.matchupPeriod ??
+            0;
+          const home = m?.home ?? m?.homeTeam ?? m?.team1 ?? m?.teamOne ?? {};
+          const away = m?.away ?? m?.awayTeam ?? m?.team2 ?? m?.teamTwo ?? {};
 
-          // prefer totalPoints for each side; fall back to pointsByScoringPeriod[week]
-          const pickSideScore = (side) => {
-            const total = Number(side?.totalPoints);
-            if (Number.isFinite(total)) return total;
-            const byWk = side?.pointsByScoringPeriod;
-            const wkVal = Number(byWk?.[w]);
-            return Number.isFinite(wkVal) ? wkVal : 0;
-          };
-          const s1 = pickSideScore(h);
-          const s2 = pickSideScore(a);
-          const p1 = pickSideProjected(h);
-          const p2 = pickSideProjected(a);
+          const record = buildGameRecord({
+            season: seasonNum,
+            week,
+            home,
+            away,
+            isPlayoff:
+              m?.playoffTierType && m.playoffTierType !== "NONE"
+                ? true
+                : m?.isPlayoff ?? m?.is_playoff ?? false,
+            fallbackIds: {
+              home: [
+                m?.homeTeamId,
+                m?.team1Id,
+                m?.teamOneId,
+                m?.team1?.teamId,
+              ],
+              away: [
+                m?.awayTeamId,
+                m?.team2Id,
+                m?.teamTwoId,
+                m?.team2?.teamId,
+              ],
+            },
+            fallbackOwners: {
+              home: [
+                m?.homeOwner,
+                m?.team1Owner,
+                m?.teamOneOwner,
+                m?.home?.ownerName,
+              ],
+              away: [
+                m?.awayOwner,
+                m?.team2Owner,
+                m?.teamTwoOwner,
+                m?.away?.ownerName,
+              ],
+            },
+            extraProjected: {
+              home: [
+                m?.homeProjected,
+                m?.team1Projected,
+                m?.__proj?.home,
+              ],
+              away: [
+                m?.awayProjected,
+                m?.team2Projected,
+                m?.__proj?.away,
+              ],
+            },
+            extraScores: {
+              home: [
+                m?.homeScore,
+                m?.team1Score,
+                m?.home?.totalPoints,
+              ],
+              away: [
+                m?.awayScore,
+                m?.team2Score,
+                m?.away?.totalPoints,
+              ],
+            },
+          });
 
-          if (y && w && t1 && t2) {
-            out.push({
-              season: y,
-              week: w,
-              team1: { teamId: t1, score: s1, projected: p1 },
-              team2: { teamId: t2, score: s2, projected: p2 },
-              is_playoff: m?.playoffTierType && m.playoffTierType !== "NONE",
-            });
-          }
+          if (record) normalized.push(record);
         }
       }
-      if (out.length) {
-        console.log("[Luck] using seasonsByYear.schedule:", out.length);
-        return out;
+
+      if (normalized.length) {
+        console.log(`[Luck] using ${source.label}:`, normalized.length);
+        return normalized;
       }
     }
 
@@ -19738,39 +20042,52 @@ export function LuckIndexTab({
     try {
       const payload = parsePayloadString(window.name) || {};
       const seasons = payload?.seasons || payload?.seasonObjs || [];
+      const normalized = [];
       for (const s of seasons) {
-        const y = Number(s?.seasonId);
+        const seasonNum = Number(s?.seasonId);
+        if (!Number.isFinite(seasonNum)) continue;
         for (const m of s?.schedule || []) {
-          const w = Number(
-            m?.matchupPeriodId ?? m?.scoringPeriodId ?? m?.week ?? 0
-          );
-          const h = m?.home ?? m?.homeTeam ?? {};
-          const a = m?.away ?? m?.awayTeam ?? {};
-          const t1 = Number(h?.teamId ?? h?.team?.id ?? h?.id);
-          const t2 = Number(a?.teamId ?? a?.team?.id ?? a?.id);
-          const s1 = Number(h?.totalPoints ?? 0) || 0;
-          const s2 = Number(a?.totalPoints ?? 0) || 0;
-          if (y && w && t1 && t2) {
-            out.push({
-              season: y,
-              week: w,
-              team1: { teamId: t1, score: s1 },
-              team2: { teamId: t2, score: s2 },
-              is_playoff: m?.playoffTierType && m.playoffTierType !== "NONE",
-            });
-          }
+          const week =
+            m?.matchupPeriodId ??
+            m?.scoringPeriodId ??
+            m?.week ??
+            m?.period ??
+            0;
+          const home = m?.home ?? m?.homeTeam ?? {};
+          const away = m?.away ?? m?.awayTeam ?? {};
+
+          const record = buildGameRecord({
+            season: seasonNum,
+            week,
+            home,
+            away,
+            isPlayoff:
+              m?.playoffTierType && m.playoffTierType !== "NONE"
+                ? true
+                : m?.isPlayoff ?? m?.is_playoff ?? false,
+            fallbackOwners: {
+              home: [home?.ownerName, m?.homeOwner],
+              away: [away?.ownerName, m?.awayOwner],
+            },
+            extraScores: {
+              home: [home?.totalPoints],
+              away: [away?.totalPoints],
+            },
+          });
+
+          if (record) normalized.push(record);
         }
       }
-      if (out.length) {
-        console.log("[Luck] using window.name seasons:", out.length);
-        return out;
+      if (normalized.length) {
+        console.log("[Luck] using window.name seasons:", normalized.length);
+        return normalized;
       }
     } catch {}
 
     console.warn(
-      "[Luck] No games found. Expect league.seasonsByYear[year].schedule[]"
+      "[Luck] No games found. Expect league schedule data via seasonsByYear/scheduleByYear"
     );
-    return out;
+    return [];
   }
   const get = React.useCallback(
     (obj, ...keys) => keys.reduce((o, k) => (o == null ? o : o[k]), obj),
@@ -20029,84 +20346,269 @@ export function LuckIndexTab({
     return map;
   }, [draftByYear]);
 
-  const comp1Data = React.useMemo(() => {
-    const totals = {};
-    const details = {};
-    const num = (v) => (Number.isFinite(+v) ? +v : 0);
+    const comp1Data = React.useMemo(() => {
+      const totals = {};
+      const details = {};
+      const num = (v) => (Number.isFinite(+v) ? +v : 0);
 
-    // helper to fetch totals with string/number keys
-    const getTotals = (y, t, w) =>
-      get(teamWeekTotals, y, t, w) ??
-      get(teamWeekTotals, y, t, String(w)) ??
-      get(teamWeekTotals, y, String(t), w) ??
-      get(teamWeekTotals, y, String(t), String(w)) ??
-      get(teamWeekTotals, String(y), t, w) ??
-      get(teamWeekTotals, String(y), t, String(w)) ??
-      get(teamWeekTotals, String(y), String(t), w) ??
-      get(teamWeekTotals, String(y), String(t), String(w)) ??
-      null;
-
-    for (const g of games || []) {
-      const y = num(g?.season);
-      const w = num(g?.week);
-      const t1 = num(g?.team1?.teamId ?? g?.t1 ?? g?.team1);
-      const t2 = num(g?.team2?.teamId ?? g?.t2 ?? g?.team2);
-      if (!y || !w || !t1 || !t2) continue;
-
-      // respect currentWeek cap
-      const capExclusive = resolveCurrentWeekExclusive(y);
-      if (capExclusive > 0 && w >= capExclusive) continue;
-      // resolve owners
-      const o1 = ownerNameOf(y, t1);
-      const o2 = ownerNameOf(y, t2);
-      if (!o1 || !o2) continue;
-
-      // opponent totals (proj/actual); if missing, fall back to boxscore actual and proj=0
-      const tOpp1 = getTotals(y, t2, w);
-      const tOpp2 = getTotals(y, t1, w);
-
-      const opp1Proj = num(tOpp1?.proj ?? 0);
-      const opp1Act = num(tOpp1?.actual ?? g?.team2?.score ?? 0);
-
-      const opp2Proj = num(tOpp2?.proj ?? 0);
-      const opp2Act = num(tOpp2?.actual ?? g?.team1?.score ?? 0);
-
-      const d1 = opp1Proj - opp1Act; // + means your opponent underperformed (you were lucky)
-      const d2 = opp2Proj - opp2Act;
-
-      totals[o1] ??= {};
-      totals[o1][y] = (totals[o1][y] || 0) + d1;
-      totals[o2] ??= {};
-      totals[o2][y] = (totals[o2][y] || 0) + d2;
-
-      const pushDetail = (owner, yr, entry) => {
-        details[owner] ??= {};
-        details[owner][yr] ??= [];
-        details[owner][yr].push(entry);
+      const pickTeamId = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? n : null;
       };
 
-      pushDetail(o1, y, {
-        week: w,
-        opponentOwner: o2,
-        opponentTeamId: t2,
-        opponentProjected: opp1Proj,
-        opponentActual: opp1Act,
-        diff: d1,
-      });
+      const resolveTeamId = (side, extras = []) => {
+        const candidates = [];
+        if (side && typeof side === "object") {
+          candidates.push(
+            side.teamId,
+            side.team?.id,
+            side.team?.teamId,
+            side.id,
+            side.teamID,
+            side.team?.teamID
+          );
+        }
+        candidates.push(...extras);
+        for (const cand of candidates) {
+          const picked = pickTeamId(cand);
+          if (picked != null) return picked;
+        }
+        return null;
+      };
 
-      pushDetail(o2, y, {
-        week: w,
-        opponentOwner: o1,
-        opponentTeamId: t1,
-        opponentProjected: opp2Proj,
-        opponentActual: opp2Act,
-        diff: d2,
-      });
-    }
+      const resolveOwner = (season, teamId, side, extras = []) => {
+        const fromId = teamId != null ? ownerNameOf(season, teamId) : null;
+        if (fromId) return fromId;
+        const candidates = [];
+        if (side && typeof side === "object") {
+          candidates.push(
+            side.ownerName,
+            side.owner,
+            side.manager,
+            side.teamManager,
+            side.primaryOwner,
+            side.teamOwner,
+            side.ownerFull,
+            side.owner_display,
+            side.member,
+            side.managerName,
+            side.team_manager
+          );
+          if (Array.isArray(side.owners) && side.owners.length) {
+            const first = side.owners[0];
+            candidates.push(
+              first?.displayName,
+              first?.fullName,
+              first?.nickname,
+              first?.firstName && first?.lastName
+                ? `${first.firstName} ${first.lastName}`
+                : null
+            );
+          }
+          if (Array.isArray(side.team?.owners) && side.team.owners.length) {
+            const first = side.team.owners[0];
+            candidates.push(
+              first?.displayName,
+              first?.fullName,
+              first?.nickname,
+              first?.firstName && first?.lastName
+                ? `${first.firstName} ${first.lastName}`
+                : null
+            );
+          }
+        }
+        candidates.push(...extras);
+        for (const cand of candidates) {
+          const normalized = normalizeOwnerNameLoose(cand);
+          if (normalized) return normalized;
+        }
+        return null;
+      };
 
-    console.log("[Luck] comp1 (opp proj - opp actual) by owner/year:", totals);
-    return { totals, details };
-  }, [games, teamWeekTotals, resolveCurrentWeekExclusive, ownerNameOf]);
+      const fallbackProjected = (side, week, extras = []) => {
+        const candidates = [];
+        if (side && typeof side === "object") {
+          candidates.push(
+            side.projected,
+            side.proj,
+            side.projection,
+            side.projectedScore,
+            side.scoreProjected,
+            side.projectedPoints,
+            side.projectedTotal,
+            side.projectedFor,
+            side.projected_pf,
+            side.totalProjectedPointsLive,
+            side.totalProjectedPoints,
+            side.totalProjectedScore,
+            side.overallProjectedScore,
+            side.pointsProjected,
+            side.pfProjected,
+            side.pointsForProjected,
+            side.projectedPointsLive,
+            side.projectedScoreTotal
+          );
+          if (week != null) {
+            candidates.push(
+              side.projectedPointsByScoringPeriod?.[week],
+              side.projectedTotalsByScoringPeriod?.[week]
+            );
+          }
+          if (side.__proj != null) {
+            if (typeof side.__proj === "number") {
+              candidates.push(side.__proj);
+            } else if (typeof side.__proj === "object") {
+              candidates.push(side.__proj.home, side.__proj.away);
+            }
+          }
+        }
+        candidates.push(...extras);
+        for (const cand of candidates) {
+          const n = Number(cand);
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+
+      const coerceSide = (...candidates) => {
+        for (const candidate of candidates) {
+          if (candidate && typeof candidate === "object") return candidate;
+        }
+        return {};
+      };
+
+      // helper to fetch totals with string/number keys
+      const getTotals = (y, t, w) =>
+        get(teamWeekTotals, y, t, w) ??
+        get(teamWeekTotals, y, t, String(w)) ??
+        get(teamWeekTotals, y, String(t), w) ??
+        get(teamWeekTotals, y, String(t), String(w)) ??
+        get(teamWeekTotals, String(y), t, w) ??
+        get(teamWeekTotals, String(y), t, String(w)) ??
+        get(teamWeekTotals, String(y), String(t), w) ??
+        get(teamWeekTotals, String(y), String(t), String(w)) ??
+        null;
+
+      for (const g of games || []) {
+        const seasonRaw = g?.season ?? g?.year;
+        const weekRaw = g?.week ?? g?.matchupPeriodId ?? g?.scoringPeriodId;
+        const seasonNum = Number(seasonRaw);
+        const weekNum = Number(weekRaw);
+        if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) continue;
+        if (weekNum <= 0) continue;
+
+        const capExclusive = resolveCurrentWeekExclusive(seasonNum);
+        if (capExclusive > 0 && weekNum >= capExclusive) continue;
+
+        const team1Side = coerceSide(g?.team1, g?.home, g?.homeTeam);
+        const team2Side = coerceSide(g?.team2, g?.away, g?.awayTeam);
+
+        const teamId1 = resolveTeamId(team1Side, [
+          g?.team1Id,
+          g?.homeTeamId,
+          g?.t1,
+          g?.team1,
+        ]);
+        const teamId2 = resolveTeamId(team2Side, [
+          g?.team2Id,
+          g?.awayTeamId,
+          g?.t2,
+          g?.team2,
+        ]);
+
+        const o1 = resolveOwner(seasonNum, teamId1, team1Side, [
+          g?.team1Owner,
+          g?.homeOwner,
+          g?.owner1,
+          g?.team1OwnerName,
+        ]);
+        const o2 = resolveOwner(seasonNum, teamId2, team2Side, [
+          g?.team2Owner,
+          g?.awayOwner,
+          g?.owner2,
+          g?.team2OwnerName,
+        ]);
+        if (!o1 || !o2) continue;
+
+        const tOpp1 =
+          teamId2 != null ? getTotals(seasonNum, teamId2, weekNum) : null;
+        const tOpp2 =
+          teamId1 != null ? getTotals(seasonNum, teamId1, weekNum) : null;
+
+        const opp1ProjRaw =
+          tOpp1?.proj ??
+          fallbackProjected(team2Side, weekNum, [
+            g?.team2Projected,
+            g?.awayProjected,
+            g?.__proj?.away,
+          ]);
+        const opp1ActRaw =
+          tOpp1?.actual ??
+          team2Side?.score ??
+          g?.team2Score ??
+          g?.awayScore ??
+          null;
+
+        const opp2ProjRaw =
+          tOpp2?.proj ??
+          fallbackProjected(team1Side, weekNum, [
+            g?.team1Projected,
+            g?.homeProjected,
+            g?.__proj?.home,
+          ]);
+        const opp2ActRaw =
+          tOpp2?.actual ??
+          team1Side?.score ??
+          g?.team1Score ??
+          g?.homeScore ??
+          null;
+
+        const opp1Proj = num(opp1ProjRaw ?? 0);
+        const opp1Act = num(opp1ActRaw ?? 0);
+        const opp2Proj = num(opp2ProjRaw ?? 0);
+        const opp2Act = num(opp2ActRaw ?? 0);
+
+        const d1 = opp1Proj - opp1Act;
+        const d2 = opp2Proj - opp2Act;
+
+        totals[o1] ??= {};
+        totals[o1][seasonNum] = (totals[o1][seasonNum] || 0) + d1;
+        totals[o2] ??= {};
+        totals[o2][seasonNum] = (totals[o2][seasonNum] || 0) + d2;
+
+        const pushDetail = (owner, yr, entry) => {
+          details[owner] ??= {};
+          details[owner][yr] ??= [];
+          details[owner][yr].push(entry);
+        };
+
+        pushDetail(o1, seasonNum, {
+          week: weekNum,
+          opponentOwner: o2,
+          opponentTeamId: teamId2,
+          opponentProjected: opp1Proj,
+          opponentActual: opp1Act,
+          diff: d1,
+        });
+
+        pushDetail(o2, seasonNum, {
+          week: weekNum,
+          opponentOwner: o1,
+          opponentTeamId: teamId1,
+          opponentProjected: opp2Proj,
+          opponentActual: opp2Act,
+          diff: d2,
+        });
+      }
+
+      console.log("[Luck] comp1 (opp proj - opp actual) by owner/year:", totals);
+      return { totals, details };
+    }, [
+      games,
+      teamWeekTotals,
+      resolveCurrentWeekExclusive,
+      ownerNameOf,
+    ]);
   const comp2Data = React.useMemo(() => {
     const totals = {};
     const details = {};
