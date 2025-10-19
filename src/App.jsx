@@ -38,6 +38,8 @@ const DEFAULT_LEAGUE_ICON_OBJECT = {
   type: "preset",
   value: DEFAULT_LEAGUE_ICON_GLYPH,
 };
+const DEFAULT_LEAGUE_FONT_FAMILY =
+  '"Inter", "Helvetica Neue", Arial, sans-serif';
 function makeDefaultLeagueIcon() {
   return { ...DEFAULT_LEAGUE_ICON_OBJECT };
 }
@@ -478,6 +480,7 @@ function upsertLeague({
   espnScheduleByYear: scheduleByYear,
   hiddenManagers,
   managerNicknames,
+  leagueFontFamily,
   leagueIcon,
   espnTradesDetailedBySeason,
   espnProTeamsByYear,
@@ -545,6 +548,10 @@ function upsertLeague({
             type: "preset",
             value: DEFAULT_LEAGUE_ICON_GLYPH,
           },
+    leagueFontFamily:
+      typeof leagueFontFamily === "string" && leagueFontFamily.trim()
+        ? leagueFontFamily.trim()
+        : prev.leagueFontFamily || DEFAULT_LEAGUE_FONT_FAMILY,
   };
   store.lastSelectedLeagueId = leagueId;
   writeStore(store);
@@ -1769,7 +1776,7 @@ export default function App() {
   const [section, setSection] = useState("setup");
   const [leagueName, setLeagueName] = useState("Your Fantasy League");
   const [leagueFontFamily, setLeagueFontFamily] = useState(
-    '"Inter", "Helvetica Neue", Arial, sans-serif'
+    DEFAULT_LEAGUE_FONT_FAMILY
   );
   const [leagueIcon, setLeagueIcon] = useState(makeDefaultLeagueIcon);
   const [derivedAll, setDerivedAll] = useState(null);
@@ -1923,6 +1930,9 @@ export default function App() {
       setDraftByYear(rec?.draftByYear || {});
       setAdpSourceByYear(rec?.adpSourceByYear || {});
       setLeagueName(rec?.name || leagueName);
+      setLeagueFontFamily(
+        rec?.leagueFontFamily || DEFAULT_LEAGUE_FONT_FAMILY
+      );
       const iconFromStore =
         rec?.leagueIcon && typeof rec.leagueIcon === "object"
           ? normalizeLeagueIcon(rec.leagueIcon, makeDefaultLeagueIcon())
@@ -1969,6 +1979,7 @@ export default function App() {
       setScheduleByYear({});
       setLeagueIcon(makeDefaultLeagueIcon());
       setManagerNicknames({});
+      setLeagueFontFamily(DEFAULT_LEAGUE_FONT_FAMILY);
     }
   }
 
@@ -1989,6 +2000,7 @@ export default function App() {
     setDraftByYear(rec.draftByYear || {});
     setAdpSourceByYear(rec.adpSourceByYear || {});
     setLeagueName(rec.name || "Your Fantasy League");
+    setLeagueFontFamily(rec.leagueFontFamily || DEFAULT_LEAGUE_FONT_FAMILY);
     const iconFromStore =
       rec?.leagueIcon && typeof rec.leagueIcon === "object"
         ? normalizeLeagueIcon(rec.leagueIcon, makeDefaultLeagueIcon())
@@ -2035,6 +2047,7 @@ export default function App() {
     setOwnerByTeamByYear({});
     setLeagueName("Your Fantasy League");
     setLeagueIcon(makeDefaultLeagueIcon());
+    setLeagueFontFamily(DEFAULT_LEAGUE_FONT_FAMILY);
     rebuildFromStore();
     setLineupSlotsByYear({});
     setHiddenManagers(new Set());
@@ -2088,6 +2101,7 @@ export default function App() {
         hiddenManagers: Array.from(hiddenManagers),
         managerNicknames,
         leagueIcon,
+        leagueFontFamily,
       });
       return next;
     });
@@ -2122,6 +2136,7 @@ export default function App() {
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames: normalized,
       leagueIcon,
+      leagueFontFamily,
     });
   }
 
@@ -2774,6 +2789,7 @@ export default function App() {
           espnScheduleByYear: scheduleForSave,
           managerNicknames,
           leagueIcon,
+          leagueFontFamily,
           espnTradesDetailedBySeason: data.espnTradesDetailedBySeason || {},
           espnProTeamsByYear: proTeamsPayload,
         });
@@ -3164,6 +3180,7 @@ export default function App() {
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon,
+      leagueFontFamily,
     });
   }
 
@@ -3196,6 +3213,42 @@ export default function App() {
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon,
+      leagueFontFamily,
+    });
+  }
+
+  function handleLeagueFontFamilyChange(nextFontFamily) {
+    const trimmed =
+      typeof nextFontFamily === "string" ? nextFontFamily.trim() : "";
+    const resolved = trimmed || DEFAULT_LEAGUE_FONT_FAMILY;
+    setLeagueFontFamily(resolved);
+    const { leagueId, leagueName, platform, scoring } =
+      getCurrentLeagueIdentity();
+    upsertLeague({
+      leagueId,
+      leagueKey: selectedLeague,
+      name: leagueName,
+      platform,
+      scoring,
+      rows: rawRows,
+      draftByYear,
+      adpSourceByYear,
+      moneyInputs,
+      activityBySeason,
+      espnOwnerByTeamByYear: ownerByTeamByYear,
+      espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
+      espnTeamNamesByOwner: teamNamesByOwner,
+      espnRostersByYear: rostersByYear,
+      espnLineupSlotsByYear: lineupSlotsByYear,
+      espnRosterAcqByYear: rosterAcqByYear,
+      espnPlayoffTeamsBySeason: playoffTeamsBySeason,
+      playoffTeamsOverrides: playoffTeamsOverrides,
+      espnCurrentWeekBySeason: currentWeekBySeason,
+      espnScheduleByYear: scheduleByYear,
+      hiddenManagers: Array.from(hiddenManagers),
+      managerNicknames,
+      leagueIcon,
+      leagueFontFamily: resolved,
     });
   }
 
@@ -3226,6 +3279,7 @@ export default function App() {
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon: normalized,
+      leagueFontFamily,
     });
   }
   const headerIconIsUpload =
@@ -3518,7 +3572,7 @@ export default function App() {
                   leagueIcon={leagueIcon}
                   onLeagueIconChange={handleLeagueIconChange}
                   leagueFontFamily={leagueFontFamily}
-                  onChangeLeagueFontFamily={setLeagueFontFamily}
+                  onChangeLeagueFontFamily={handleLeagueFontFamilyChange}
                   onManagerMergesChanged={rebuildFromStore}
                 />
               </ErrorBoundary>
