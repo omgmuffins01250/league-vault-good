@@ -72,13 +72,25 @@ const getColorContext = () => {
 
 const normalizeColorValue = (ctx, value) => {
   if (!value || !ctx || !hasOKColor(value)) return value;
-  try {
-    ctx.fillStyle = "#000";
-    ctx.fillStyle = value;
-    return ctx.fillStyle;
-  } catch {
-    return value;
+
+  const convertToken = (token) => {
+    try {
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = token;
+      return ctx.fillStyle;
+    } catch {
+      return token;
+    }
+  };
+
+  const tokenRe = /okl(?:ab|ch)\([^)]*\)/gi;
+  if (!tokenRe.test(value)) {
+    // Simple color string; convert directly.
+    return convertToken(value);
   }
+
+  tokenRe.lastIndex = 0;
+  return value.replace(tokenRe, (match) => convertToken(match));
 };
 
 function useHorizontalWheelScroll(ref) {
@@ -138,9 +150,6 @@ function cloneWithInlineStyles(root, { filter } = {}) {
         prop.startsWith("border")
       ) {
         value = normalizeColorValue(getColorContext(), value);
-        if (prop === "background-image" && hasOKColor(value)) {
-          value = "none";
-        }
       }
 
       style.setProperty(prop, value, cs.getPropertyPriority(prop));
