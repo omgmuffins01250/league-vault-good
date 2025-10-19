@@ -1678,13 +1678,13 @@ export function MembersTab({ league }) {
   const teamNames = league.teamNamesByOwner || {}; // { owner -> { season -> team_name } }
   const latest = seasons.length ? Math.max(...seasons) : null;
   const seasonsDescRaw = [...seasons].sort((a, b) => b - a);
-const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
-const labelFor = (yr) => `${yr} Team Name`;
-const latestLabel = latest ? `Updated through ${latest}` : null;
+  const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
+  const labelFor = (yr) => `${yr} Team Name`;
+  const latestLabel = latest ? `Updated through ${latest}` : null;
 
-// force the members table to be wider than the viewport so it can scroll
-// base for fixed columns + per-year column width
-const minTableW = 700 + seasonsDesc.length * 180;
+  // force the members table to be wider than the viewport so it can scroll
+  // base for fixed columns + per-year column width
+  const minTableW = 700 + seasonsDesc.length * 180;
 
   const membersLength = league.members?.length ?? 0;
   const seasonsKey = seasonsDesc.join("|");
@@ -1886,11 +1886,11 @@ const minTableW = 700 + seasonsDesc.length * 180;
             >
               <div
                 className="inline-block align-top shrink-0"
-                style={{ minWidth: `${minTableW}px` }}
+                style={{ minWidth: `${minTableW}px`, width: "max-content" }}
               >
                 <table
                   className="whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
-                  style={{ minWidth: "100%", tableLayout: "auto" }}
+                  style={{ minWidth: "100%", width: "max-content", tableLayout: "auto" }}
                 >
 
                   <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
