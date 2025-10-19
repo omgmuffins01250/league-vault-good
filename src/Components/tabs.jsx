@@ -1784,7 +1784,7 @@ export function MembersTab({ league }) {
   return (
     <div
       ref={captureRef}
-      className="space-y-6 w-full min-w-0 pr-4 sm:pr-5 lg:pr-10"
+      className="space-y-6 w-full min-w-0 pr-1 sm:pr-2 lg:pr-3"
     >
       <Card
         className="min-w-0"
