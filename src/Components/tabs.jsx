@@ -1155,6 +1155,18 @@ export function SetupTab({
         </select>
       </Card>
       {league && (
+        <LeagueDetailsCard
+          league={league}
+          scoringDisplay={scoringDisplay}
+          hasRosterSlots={hasRosterSlots}
+          rosterSlots={rosterSlots}
+          hasExtraGeneralInfos={hasExtraGeneralInfos}
+          extraGeneralInfos={extraGeneralInfos}
+          showMore={showMore}
+          setShowMore={setShowMore}
+        />
+      )}
+      {league && (
         <Card title="League icon">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/60 bg-white/90 text-3xl shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)] dark:border-white/10 dark:bg-zinc-900/70">
@@ -1261,59 +1273,67 @@ export function SetupTab({
           onChangeNicknames={onChangeManagerNicknames}
         />
       )}
-      {league && (
-        <Card title="League details">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-            <Info label="League Name" value={league.meta.name} />
-            <Info label="League Size" value={league.meta.size} />
-            <Info label="Start Season" value={league.meta.startSeason} />
-            <Info label="Years Running" value={league.meta.yearsRunning} />
-            <Info label="Platform" value={league.meta.platform} />
-            <Info label="Scoring" value={scoringDisplay || "Standard"} />
-          </div>
-          {hasRosterSlots && (
-            <div className="mt-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                Roster Slots
-              </div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
-                {rosterSlots.map((slot) => (
-                  <Info key={slot.key} label={slot.label} value={slot.count} />
-                ))}
-              </div>
-            </div>
-          )}
-          {hasExtraGeneralInfos && (
-            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-              <div className="flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => setShowMore((prev) => !prev)}
-                  aria-expanded={showMore}
-                >
-                  {showMore ? "Hide details" : "See more details"}
-                </button>
-                <div className="text-lg leading-none text-zinc-400">
-                  {showMore ? "−" : "+"}
-                </div>
-              </div>
-              {showMore && (
-                <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
-                  {extraGeneralInfos.map((info) => (
-                    <Info
-                      key={info.label}
-                      label={info.label}
-                      value={info.value}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
-      )}
     </div>
+  );
+}
+
+function LeagueDetailsCard({
+  league,
+  scoringDisplay,
+  hasRosterSlots,
+  rosterSlots,
+  hasExtraGeneralInfos,
+  extraGeneralInfos,
+  showMore,
+  setShowMore,
+}) {
+  return (
+    <Card title="League details">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <Info label="League Name" value={league.meta.name} />
+        <Info label="League Size" value={league.meta.size} />
+        <Info label="Start Season" value={league.meta.startSeason} />
+        <Info label="Years Running" value={league.meta.yearsRunning} />
+        <Info label="Platform" value={league.meta.platform} />
+        <Info label="Scoring" value={scoringDisplay || "Standard"} />
+      </div>
+      {hasRosterSlots && (
+        <div className="mt-4">
+          <div className="text-xs uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+            Roster Slots
+          </div>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+            {rosterSlots.map((slot) => (
+              <Info key={slot.key} label={slot.label} value={slot.count} />
+            ))}
+          </div>
+        </div>
+      )}
+      {hasExtraGeneralInfos && (
+        <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setShowMore((prev) => !prev)}
+              aria-expanded={showMore}
+            >
+              {showMore ? "Hide details" : "See more details"}
+            </button>
+            <div className="text-lg leading-none text-zinc-400">
+              {showMore ? "−" : "+"}
+            </div>
+          </div>
+          {showMore && (
+            <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
+              {extraGeneralInfos.map((info) => (
+                <Info key={info.label} label={info.label} value={info.value} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 function Info({ label, value }) {
