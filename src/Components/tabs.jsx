@@ -1784,6 +1784,7 @@ export function MembersTab({ league }) {
     <div ref={captureRef} className="space-y-6">
       <Card
         title="League Members"
+        allowOverflow
         right={
           <div className="flex items-center gap-2">
             {latestLabel ? (
