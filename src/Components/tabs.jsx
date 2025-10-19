@@ -1678,13 +1678,16 @@ export function MembersTab({ league }) {
   const teamNames = league.teamNamesByOwner || {}; // { owner -> { season -> team_name } }
   const latest = seasons.length ? Math.max(...seasons) : null;
   const seasonsDescRaw = [...seasons].sort((a, b) => b - a);
-const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
-const labelFor = (yr) => `${yr} Team Name`;
-const latestLabel = latest ? `Updated through ${latest}` : null;
+  const seasonsDesc = seasonsDescRaw.filter((yr) => yr !== latest); // ← hides newest column
+  const labelFor = (yr) => `${yr} Team Name`;
+  const latestLabel = latest ? `Updated through ${latest}` : null;
 
-// force the members table to be wider than the viewport so it can scroll
-// base for fixed columns + per-year column width
-const minTableW = 700 + seasonsDesc.length * 180;
+  // ensure each season column stays wide enough that the table needs to scroll
+  const SEASON_COLUMN_MIN_WIDTH = 176; // px
+
+  // force the members table to be wider than the viewport so it can scroll
+  // base for fixed columns + per-year column width
+  const minTableW = 700 + seasonsDesc.length * SEASON_COLUMN_MIN_WIDTH;
 
   const membersLength = league.members?.length ?? 0;
   const seasonsKey = seasonsDesc.join("|");
@@ -1784,6 +1787,7 @@ const minTableW = 700 + seasonsDesc.length * 180;
     <div ref={captureRef} className="space-y-6">
       <Card
         title="League Members"
+        allowOverflow
         right={
           <div className="flex items-center gap-2">
             {latestLabel ? (
@@ -1886,11 +1890,15 @@ const minTableW = 700 + seasonsDesc.length * 180;
             >
               <div
                 className="inline-block align-top shrink-0"
-                style={{ minWidth: `${minTableW}px` }}
+                style={{ minWidth: `${minTableW}px`, width: "max-content" }}
               >
                 <table
                   className="whitespace-nowrap text-[12px] text-slate-700 dark:text-slate-200"
-                  style={{ minWidth: "100%", tableLayout: "auto" }}
+                  style={{
+                    minWidth: "100%",
+                    width: "max-content",
+                    tableLayout: "auto",
+                  }}
                 >
 
                   <thead className="text-[10px] uppercase tracking-[0.22em] text-slate-500/90 dark:text-slate-400/80">
@@ -1912,6 +1920,10 @@ const minTableW = 700 + seasonsDesc.length * 180;
                       <th
                         key={`hdr-${yr}`}
                         className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                        style={{
+                          minWidth: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                          width: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                        }}
                       >
                         {labelFor(yr)}
                       </th>
@@ -1954,8 +1966,12 @@ const minTableW = 700 + seasonsDesc.length * 180;
                         <td
                           key={`${m.id}-${yr}`}
                           className="px-4 py-3 text-center"
+                          style={{
+                            minWidth: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                            width: `${SEASON_COLUMN_MIN_WIDTH}px`,
+                          }}
                         >
-                          <div className="inline-flex min-w-[8.5rem] max-w-[14rem] items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                          <div className="inline-flex w-full max-w-full items-center justify-center rounded-full bg-slate-900/5 dark:bg-white/10 px-2.5 py-[3px] text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
                             {teamNames?.[m.name]?.[yr] || "—"}
                           </div>
                         </td>

@@ -33,7 +33,14 @@ export function SidebarButton({ children, active, onClick, disabled }) {
   );
 }
 
-export function Card({ className = "", children, title, subtitle, right }) {
+export function Card({
+  className = "",
+  children,
+  title,
+  subtitle,
+  right,
+  allowOverflow = false,
+}) {
   const isTitlePrimitive =
     typeof title === "string" || typeof title === "number";
   const titleNode =
@@ -71,10 +78,17 @@ export function Card({ className = "", children, title, subtitle, right }) {
         )
       : right;
 
+  const cardClasses = [
+    "relative",
+    allowOverflow ? null : "overflow-hidden",
+    "rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div
-      className={`relative overflow-hidden rounded-3xl border border-white/30 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl ${className}`}
-    >
+    <div className={cardClasses}>
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-80 bg-[radial-gradient(110%_130%_at_0%_0%,rgba(92,105,134,0.16),transparent_60%),radial-gradient(120%_140%_at_100%_100%,rgba(135,151,176,0.12),transparent_60%)]" />
         <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
