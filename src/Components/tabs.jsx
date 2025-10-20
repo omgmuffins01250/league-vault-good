@@ -2367,13 +2367,9 @@ export function CareerTab({ league }) {
 
   // ---------- Win% by own scoring buckets (per manager, per season) ----------
   // Buckets: 10, 20, ..., 200 (200 means 200+)
-  const bucketStops = React.useMemo(
+  const bucketStopsAll = React.useMemo(
     () => Array.from({ length: 20 }, (_, i) => (i + 1) * 10), // 10..200
     []
-  );
-  const bucketLabels = React.useMemo(
-    () => bucketStops.map((b) => (b === 200 ? "200+" : String(b))),
-    [bucketStops]
   );
   // Build per-owner rows and an overall aggregator.
   // If Year = "ALL", collapse to ONE row per owner across all seasons.
@@ -2433,6 +2429,19 @@ export function CareerTab({ league }) {
       isAll,
     };
   }, [filteredGames, selectedNames, wpYear]);
+
+  const activeBucketStops = React.useMemo(
+    () =>
+      bucketStopsAll.filter(
+        (stop) => (wpRowsAndOverall.overallBuckets?.[stop]?.games || 0) > 0
+      ),
+    [bucketStopsAll, wpRowsAndOverall]
+  );
+
+  const activeBucketLabels = React.useMemo(
+    () => activeBucketStops.map((b) => (b === 200 ? "200+" : String(b))),
+    [activeBucketStops]
+  );
 
   const fmtPct0 = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 
@@ -2906,14 +2915,14 @@ export function CareerTab({ league }) {
             const innerH = H - M.top - M.bottom;
 
             const xPos = (i) =>
-              M.left + (i / (bucketStops.length - 1)) * innerW;
+              M.left + (i / (bucketStopsAll.length - 1)) * innerW;
 
             const yPos = (p) => {
               const v = Math.max(0, Math.min(1, Number(p) || 0));
               return M.top + (1 - v) * innerH;
             };
 
-            const pts = bucketStops.map((stop, i) => {
+            const pts = bucketStopsAll.map((stop, i) => {
               const cell = wpRowsAndOverall.overallBuckets[stop];
               const pct =
                 cell && cell.games > 0 ? cell.wins / cell.games : null;
@@ -2969,7 +2978,7 @@ export function CareerTab({ league }) {
                   </g>
                 ))}
                 {/* x labels every 20 points */}
-                {bucketStops.map((stop, i) =>
+                {bucketStopsAll.map((stop, i) =>
                   stop % 20 === 0 ? (
                     <text
                       key={stop}
@@ -3019,7 +3028,7 @@ export function CareerTab({ league }) {
                 <tr>
                   <th className="px-2 py-2 text-left">Member</th>
                   <th className="px-2 py-2 text-center">Season</th>
-                  {bucketLabels.map((lbl) => (
+                  {activeBucketLabels.map((lbl) => (
                     <th key={lbl} className="px-2 py-2 text-center">
                       {lbl}
                     </th>
@@ -3035,7 +3044,7 @@ export function CareerTab({ league }) {
                   <td className="px-2 py-1 text-center">
                     {wpRowsAndOverall.label}
                   </td>
-                  {bucketStops.map((stop) => {
+                  {activeBucketStops.map((stop) => {
                     const cell = wpRowsAndOverall.overallBuckets[stop];
                     const pct =
                       cell && cell.games > 0 ? cell.wins / cell.games : null;
@@ -3067,7 +3076,7 @@ export function CareerTab({ league }) {
                       {row.owner}
                     </td>
                     <td className="px-2 py-1 text-center">{row.season}</td>
-                    {bucketStops.map((stop) => {
+                    {activeBucketStops.map((stop) => {
                       const cell = row.buckets[stop];
                       const pct =
                         cell && cell.games > 0 ? cell.wins / cell.games : null;
@@ -3093,7 +3102,7 @@ export function CareerTab({ league }) {
                 {wpRowsAndOverall.rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={2 + bucketStops.length}
+                      colSpan={2 + activeBucketStops.length}
                       className="px-3 py-6 text-center text-zinc-500"
                     >
                       No games for {wpRowsAndOverall.label} in the current
