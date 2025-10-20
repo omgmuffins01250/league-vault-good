@@ -3908,7 +3908,7 @@ export function PlacementsTab({
     return out; // Map(owner -> array)
   }, [owners, seasons, league?.placementMap]);
   // Years that actually have final placements (exclude empty/in-progress years)
-  // Years that actually have final placements (must be exactly 1..N with no gaps)
+  // Allows ties by only requiring a champion and a full field of finishers
   const seasonsChart = React.useMemo(() => {
     const out = [];
     for (const yr of seasons || []) {
@@ -3922,10 +3922,12 @@ export function PlacementsTab({
       const max = Math.max(...places);
       const min = Math.min(...places);
 
-      // Completed if we have exactly one of each rank 1..max (no gaps/dupes)
-      const set = new Set(places);
+      // Treat as complete when a champion exists and we have placements for the full field
+      const uniqueCount = new Set(places).size;
       const looksComplete =
-        min === 1 && set.size === max && places.length === max;
+        min === 1 &&
+        places.length >= max &&
+        uniqueCount >= Math.min(max, 2);
 
       if (looksComplete) out.push(yr);
     }
