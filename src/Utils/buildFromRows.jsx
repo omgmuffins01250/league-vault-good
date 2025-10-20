@@ -84,6 +84,29 @@ function guessOpponentManagerField(obj) {
   return "";
 }
 
+function parsePlacementValue(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "number") {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n <= 0) return null;
+    if (n > 200) return null;
+    return n;
+  }
+
+  const str = String(raw || "").trim();
+  if (!str) return null;
+
+  const match = str.match(/\d+/);
+  if (!match) return null;
+
+  const n = Number(match[0]);
+  if (!Number.isFinite(n)) return null;
+  if (n <= 0) return null;
+  if (n > 200) return null;
+  return n;
+}
+
 /* ---------------- Playoff flag helpers ---------------- */
 function __fl_readBool(v) {
   if (v === true || v === 1) return true;
@@ -354,8 +377,27 @@ export function buildFromRows(rowsIn) {
     rLeague.forEach((r) => {
       const o = getOwner(r);
       const season = Number(r.season);
-      const place = Number(r.final_rank ?? r.place ?? r.rank);
-      if (!o || !season || !place) return;
+      const rawPlacement =
+        firstNonEmpty(r, [
+          "final_rank",
+          "finalRank",
+          "final_rank_overall",
+          "final_standing",
+          "finalStanding",
+          "final_standings",
+          "finalStandings",
+          "place",
+          "rank",
+          "finish",
+          "season_finish",
+          "seasonFinish",
+          "standing",
+          "final_pos",
+          "finalPos",
+        ]) ?? r.final_rank ?? r.place ?? r.rank;
+      const place = parsePlacementValue(rawPlacement);
+      if (!o || !Number.isFinite(season) || season <= 0) return;
+      if (!Number.isFinite(place)) return;
       placementMap[o][season] = place;
     });
 
