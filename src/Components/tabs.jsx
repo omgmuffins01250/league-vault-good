@@ -3660,6 +3660,11 @@ export function PlacementsTab({
     if (!pm || typeof pm !== "object") return [];
     return Object.keys(pm).filter((name) => !hiddenManagersSet.has(name));
   }, [league?.placementMap, hiddenManagersSet]);
+  const allOwnersRaw = React.useMemo(() => {
+    const pm = league?.placementMap;
+    if (!pm || typeof pm !== "object") return [];
+    return Object.keys(pm);
+  }, [league?.placementMap]);
   const maxPlaceBySeason = React.useMemo(() => {
     const out = {};
     (seasons || []).forEach((yr) => {
@@ -3912,8 +3917,8 @@ export function PlacementsTab({
   const seasonsChart = React.useMemo(() => {
     const out = [];
     for (const yr of seasons || []) {
-      // collect all numeric placements for this year
-      const places = (allOwnersForPlacements || [])
+      // collect all numeric placements for this year (ignore hidden toggles)
+      const places = (allOwnersRaw || [])
         .map((o) => Number(league?.placementMap?.[o]?.[yr]))
         .filter((p) => Number.isFinite(p) && p > 0);
 
@@ -3932,7 +3937,7 @@ export function PlacementsTab({
       if (looksComplete) out.push(yr);
     }
     return out;
-  }, [seasons, allOwnersForPlacements, league?.placementMap]);
+  }, [seasons, allOwnersRaw, league?.placementMap]);
 
   const chartRows = React.useMemo(() => {
     return (seasonsChart || []).map((yr) => {
