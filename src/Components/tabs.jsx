@@ -7258,7 +7258,7 @@ export function RecordsTab({ league }) {
   const modalMap = {
     weeklyHigh: {
       title: "Highest Points (week) — more",
-      items: topWeeklyHighAll.slice(5, 25),
+      items: topWeeklyHighAll.slice(0, 25),
       render: (g) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7285,7 +7285,7 @@ export function RecordsTab({ league }) {
 
     weeklyWinners: {
       title: "Most Highest-Scoring Weeks — more",
-      items: topWeeklyWinnersAll.slice(5, 25),
+      items: topWeeklyWinnersAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7300,7 +7300,7 @@ export function RecordsTab({ league }) {
 
     weeklyLow: {
       title: "Lowest Points (week) — more",
-      items: topWeeklyLowAll.slice(5, 25),
+      items: topWeeklyLowAll.slice(0, 25),
       render: (g) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7326,7 +7326,7 @@ export function RecordsTab({ league }) {
     },
     seasonPFHigh: {
       title: "Highest Points (season) — more",
-      items: topSeasonPFHighAll.slice(5, 25),
+      items: topSeasonPFHighAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7340,7 +7340,7 @@ export function RecordsTab({ league }) {
     },
     seasonPFLow: {
       title: "Lowest Points (season) — more",
-      items: topSeasonPFLowAll.slice(5, 25),
+      items: topSeasonPFLowAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7354,7 +7354,7 @@ export function RecordsTab({ league }) {
     },
     winsHigh: {
       title: "Most Wins (season) — more",
-      items: topSeasonWinsHighAll.slice(5, 25),
+      items: topSeasonWinsHighAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7368,7 +7368,7 @@ export function RecordsTab({ league }) {
     },
     winsLow: {
       title: "Least Wins (season) — more",
-      items: topSeasonWinsLowAll.slice(5, 25),
+      items: topSeasonWinsLowAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7382,7 +7382,7 @@ export function RecordsTab({ league }) {
     },
     streaks: {
       title: "Longest Win Streak — more",
-      items: longestStreaks.slice(5, 25),
+      items: longestStreaks.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7397,7 +7397,7 @@ export function RecordsTab({ league }) {
     },
     players: {
       title: "Highest Scoring Player — more",
-      items: highestScoringPlayersAll.slice(5, 25),
+      items: highestScoringPlayersAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7412,7 +7412,7 @@ export function RecordsTab({ league }) {
     },
     diff: {
       title: "Largest Win Differential — more",
-      items: largestDiffAll.slice(5, 25),
+      items: largestDiffAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7427,7 +7427,7 @@ export function RecordsTab({ league }) {
     },
     pa: {
       title: "League Punching Bag — more (Highest Points Against, season)",
-      items: topPunchingBagAll.slice(5, 25),
+      items: topPunchingBagAll.slice(0, 25),
       render: (r) => (
         <div className="flex flex-wrap items-baseline gap-2 leading-tight">
           <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -7441,7 +7441,7 @@ export function RecordsTab({ league }) {
     },
     poapps: {
       title: "Most Playoff Appearances — more",
-      items: poArr.slice(5, 25),
+      items: poArr.slice(0, 25),
       render: (r) => {
         const [owner, cnt] = r;
         return (
