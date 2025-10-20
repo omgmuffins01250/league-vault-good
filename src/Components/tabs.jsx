@@ -7892,7 +7892,7 @@ export function RecordsTab({ league }) {
                 {activeModal.items.length ? (
                   <ol className="space-y-2">
                     {activeModal.items.map((item, i) => {
-                      const place = i + 6;
+                      const place = i + 1;
                       return (
                         <li key={i}>
                           <div className="flex items-center gap-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/75 dark:bg-white/[0.07] px-4 py-2 shadow-[0_24px_65px_-40px_rgba(15,23,42,0.95)]">
