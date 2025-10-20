@@ -288,6 +288,16 @@ function useSnapshotDownload({ fileNameFor, missingNodeMessage } = {}) {
       await document.fonts?.ready;
     } catch {}
 
+    const filterIgnored = (el) =>
+      el?.getAttribute?.("data-snapshot-ignore") !== "true";
+
+    const captureWithExport = async () =>
+      exportElementToPNG(node, {
+        pixelRatio,
+        backgroundColor,
+        filter: filterIgnored,
+      });
+
     const captureWithHtml2Canvas = async () => {
       const rect = node.getBoundingClientRect();
       const width = Math.max(1, Math.ceil(rect.width));
@@ -317,8 +327,7 @@ function useSnapshotDownload({ fileNameFor, missingNodeMessage } = {}) {
           windowHeight: height,
           scrollX: 0,
           scrollY: 0,
-          ignoreElements: (el) =>
-            el?.getAttribute?.("data-snapshot-ignore") === "true",
+          ignoreElements: (el) => !filterIgnored(el),
         });
 
         return canvas.toDataURL("image/png");
@@ -329,14 +338,16 @@ function useSnapshotDownload({ fileNameFor, missingNodeMessage } = {}) {
 
     let dataUrl = null;
     try {
-      dataUrl = await captureWithHtml2Canvas();
+      dataUrl = await captureWithExport();
     } catch (err) {
-      console.warn("Primary snapshot attempt failed, falling back", err);
-      dataUrl = await exportElementToPNG(node, {
-        pixelRatio,
-        backgroundColor,
-        filter: (el) => el?.getAttribute?.("data-snapshot-ignore") !== "true",
-      });
+      console.warn(
+        "Primary snapshot attempt failed, falling back to html2canvas",
+        err,
+      );
+    }
+
+    if (!dataUrl) {
+      dataUrl = await captureWithHtml2Canvas();
     }
 
     if (!dataUrl) {
