@@ -6655,6 +6655,35 @@ export function RecordsTab({ league }) {
     all: "All games",
   }[scope];
 
+  const leagueNameForFile = React.useMemo(() => {
+    const candidates = [
+      league?.name,
+      league?.leagueName,
+      league?.meta?.leagueName,
+      league?.meta?.name,
+      league?.settings?.name,
+    ];
+    const raw = candidates.find(
+      (value) => typeof value === "string" && value.trim()
+    );
+    if (!raw) return "league";
+    const slug = raw
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+    return slug || "league";
+  }, [league]);
+
+  const { captureRef, downloadPdf } = useSnapshotDownload({
+    fileNameFor: (ext) => {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const scopeSuffix = scope ? `-${scope}` : "";
+      return `${leagueNameForFile}-records${scopeSuffix}-${stamp}.${ext}`;
+    },
+    missingNodeMessage: "No records available to export.",
+  });
+
   // finished (decided) games only
   const decided = (g) =>
     g &&
@@ -7465,7 +7494,7 @@ export function RecordsTab({ league }) {
 
   // ---------- UI ----------
   return (
-    <div className="relative">
+    <div ref={captureRef} className="relative">
       <div className="pointer-events-none absolute inset-0 -z-10 opacity-80 bg-[radial-gradient(120%_150%_at_0%_0%,rgba(59,130,246,0.22),transparent_58%),radial-gradient(120%_150%_at_100%_100%,rgba(45,212,191,0.18),transparent_60%)]" />
       <div className="grid md:grid-cols-2 gap-5 text-sm">
         {/* Scope picker */}
@@ -7474,21 +7503,39 @@ export function RecordsTab({ league }) {
             title="Records scope"
             className="bg-white/85 dark:bg-slate-950/60 border-white/30 dark:border-white/10"
             right={
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
-                <span>Show</span>
-                <div className="relative">
-                  <select
-                    className="appearance-none rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 pr-8 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
-                    value={scope}
-                    onChange={(e) => setScope(e.target.value)}
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => downloadPdf()}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/45 dark:border-white/10 bg-white/80 dark:bg-white/[0.12] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-600 transition-colors duration-200 ease-out hover:border-amber-300/70 hover:text-amber-500 dark:text-slate-200 dark:hover:text-amber-300 shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                  title="Download records as PDF"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4"
+                    fill="currentColor"
+                    aria-hidden="true"
                   >
-                    <option value="regular">Regular season</option>
-                    <option value="playoffs">Playoffs</option>
-                    <option value="all">All games</option>
-                  </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-400 dark:text-slate-500">
-                    ▾
-                  </span>
+                    <path d="M5 20a2 2 0 01-2-2v-1a1 1 0 112 0v1h14v-1a1 1 0 112 0v1a2 2 0 01-2 2H5zm7-3a1 1 0 01-1-1v-6.586l-2.293 2.293a1 1 0 11-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L13 9.414V16a1 1 0 01-1 1z" />
+                  </svg>
+                  <span className="hidden sm:inline">Download PDF</span>
+                </button>
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-slate-500 dark:text-slate-300">
+                  <span>Show</span>
+                  <div className="relative">
+                    <select
+                      className="appearance-none rounded-full border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/10 px-3 pr-8 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-slate-200 shadow-[0_18px_42px_-32px_rgba(15,23,42,0.9)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                      value={scope}
+                      onChange={(e) => setScope(e.target.value)}
+                    >
+                      <option value="regular">Regular season</option>
+                      <option value="playoffs">Playoffs</option>
+                      <option value="all">All games</option>
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-400 dark:text-slate-500">
+                      ▾
+                    </span>
+                  </div>
                 </div>
               </div>
             }
