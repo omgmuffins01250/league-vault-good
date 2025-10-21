@@ -10,7 +10,6 @@ import "./landing/assets/css/fontawesome-all.min.css";
 
 import Banner from "./landing/components/Banner.jsx";
 import Features from "./landing/components/Features.jsx";
-import AppScreen from "./landing/components/AppScreen.jsx";
 import Pricing from "./landing/components/Pricing.jsx";
 import QASection from "./landing/components/QASection.jsx";
 import Contact from "./landing/components/Contact.jsx"; // ← optional
@@ -122,10 +121,6 @@ export default function ApitonHome() {
 
         <div id="features">
           <Features />
-        </div>
-
-        <div id="screens">
-          <AppScreen />
         </div>
 
         <div id="pricing">

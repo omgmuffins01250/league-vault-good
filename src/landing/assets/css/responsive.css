@@ -143,24 +143,6 @@
     align-items: center !important;
     margin-top: 50px;
   }
-  .app-shot-one .app-shot-one__carousel::before {
-    display: none;
-  }
-  .app-shot-one .app-shot-one__carousel {
-    padding: 0;
-    margin-top: 0;
-    padding-bottom: 15px;
-  }
-  .app-shot-one .app-shot-one__carousel .swiper-pagination,
-  .app-shot-one .app-shot-one__carousel .owl-dots {
-    position: relative;
-    bottom: auto;
-    margin-top: 30px;
-    left: auto;
-  }
-  .app-shot-one .container-fluid {
-    padding-bottom: 120px;
-  }
   .contact-one .contact-one__form {
     padding-right: 0;
     margin-bottom: 60px;

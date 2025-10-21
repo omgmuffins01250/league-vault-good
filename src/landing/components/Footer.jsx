@@ -29,11 +29,6 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#screens" className="hover:text-amber-300/80">
-                  Screenshots
-                </a>
-              </li>
-              <li>
                 <a href="#pricing" className="hover:text-amber-300/80">
                   Pricing
                 </a>
