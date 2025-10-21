@@ -1239,6 +1239,12 @@ export function SetupTab({
     typeof leagueIcon?.value === "string" &&
     leagueIcon.value;
   const previewGlyph = presetSelection || defaultIconGlyph;
+  const fileInputRef = useRef(null);
+  const openFileDialog = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, []);
   const handleIconUpload = (event) => {
     const file = event?.target?.files?.[0];
     if (!file) return;
@@ -1458,53 +1464,75 @@ export function SetupTab({
         />
       )}
       {league && (
-        <Card title="League icon">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/60 bg-white/90 text-3xl shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)] dark:border-white/10 dark:bg-zinc-900/70">
+      <Card title="League icon">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <button
+            type="button"
+            onClick={openFileDialog}
+            aria-label={
+              isUploadActive ? "Change league icon" : "Upload league icon"
+            }
+            className="group inline-flex flex-col items-center gap-2 text-center focus:outline-none"
+          >
+            <div
+              className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-sky-300/70 bg-white/95 text-3xl shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-sky-400 group-hover:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] group-focus:-translate-y-0.5 group-focus:border-sky-400 group-focus:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] dark:border-white/15 dark:bg-zinc-900/80"
+            >
+              <div
+                className="pointer-events-none absolute inset-0 rounded-[inherit] border border-white/60 opacity-70 dark:border-white/10"
+                aria-hidden="true"
+              />
               {isUploadActive ? (
                 <img
                   src={leagueIcon?.value}
                   alt={`${league?.meta?.name || "League"} icon`}
-                  className="h-full w-full rounded-full object-cover"
+                  className="h-full w-full rounded-[inherit] object-cover"
                 />
               ) : (
-                <span>{previewGlyph}</span>
+                <span className="transition-transform duration-200 group-hover:scale-110 group-focus:scale-110">
+                  {previewGlyph}
+                </span>
               )}
             </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  id="league-icon-upload"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  className="hidden"
-                  onChange={handleIconUpload}
-                />
-                <label
-                  htmlFor="league-icon-upload"
-                  className="btn btn-sm btn-primary"
+            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-600 transition-colors duration-200 group-hover:text-sky-700 dark:text-sky-300 dark:group-hover:text-sky-200">
+              {isUploadActive ? "Change Icon" : "Upload Icon"}
+            </span>
+          </button>
+          <div className="space-y-3">
+            <input
+              ref={fileInputRef}
+              id="league-icon-upload"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="hidden"
+              onChange={handleIconUpload}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={openFileDialog}
+              >
+                Upload image
+              </button>
+              {isUploadActive && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={handleRemoveUpload}
                 >
-                  Upload image
-                </label>
-                {isUploadActive && (
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-ghost"
-                    onClick={handleRemoveUpload}
-                  >
-                    Remove upload
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Upload a square image (PNG, JPG, WEBP, or SVG). It will appear
-                in the circle next to your league name.
-              </p>
+                  Remove upload
+                </button>
+              )}
             </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Choose a square image (PNG, JPG, WEBP, or SVG). It will appear
+              next to your league name.
+            </p>
           </div>
-          {isUploadActive ? (
-            <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-              Remove the uploaded image to choose from the built-in icons.
+        </div>
+        {isUploadActive ? (
+          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+            Remove the uploaded image to choose from the built-in icons.
             </p>
           ) : (
             <div className="mt-4 space-y-2">
@@ -21632,7 +21660,7 @@ export function LuckIndexTab({
 
   const tableShellBase =
     "relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/55 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl";
-  const tableShellWide = `${tableShellBase} min-w-[640px]`;
+  const tableShellWide = `${tableShellBase} w-full max-w-full min-w-0`;
   const tableShellLuck = `${tableShellBase} min-w-[420px]`;
   const tableBodyClass =
     "relative z-10 text-[13px] text-slate-700 dark:text-slate-100 [&>tr]:border-b [&>tr]:border-white/40 dark:[&>tr]:border-white/5 [&>tr:last-child]:border-0 [&>tr:nth-child(odd)]:bg-white/55 dark:[&>tr:nth-child(odd)]:bg-white/[0.06] [&>tr:nth-child(even)]:bg-white/35 dark:[&>tr:nth-child(even)]:bg-white/[0.03] [&>tr]:transition-colors [&>tr]:duration-200 [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-white/[0.12]";
@@ -21696,8 +21724,8 @@ export function LuckIndexTab({
                 <tr className={headRowClass}>
                   <th className="px-4 py-3 text-left">Luck Place</th>
                   <th className="px-4 py-3 text-left">Manager</th>
-                  <th className="px-4 py-3 text-center">Component 1</th>
-                  <th className="px-4 py-3 text-center">Component 2</th>
+                  <th className="px-4 py-3 text-center">Opp Scoring Luck</th>
+                  <th className="px-4 py-3 text-center">Injury Luck</th>
                   <th className="px-4 py-3 text-center">Luck Metric</th>
                 </tr>
               </thead>
@@ -21757,8 +21785,8 @@ export function LuckIndexTab({
 
       {/* ===== Component Breakdown ===== */}
       <Card title="Luck Components (Preview)">
-        <Card title="Component 1 — Actual vs Projection (sum to date)">
-          <div className="overflow-x-auto">
+        <Card title="Opp Scoring Luck — Actual vs Projection (sum to date)">
+          <div className="overflow-x-auto max-w-full">
             <div className={tableShellWide}>
               <div className="pointer-events-none absolute inset-0 opacity-85">
                 <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(251,191,36,0.16),transparent_60%),radial-gradient(125%_145%_at_100%_100%,rgba(251,191,36,0.12),transparent_65%)]" />
@@ -21814,7 +21842,7 @@ export function LuckIndexTab({
             </div>
           </div>
         </Card>
-        <Card title="Component 2 — Injury Index (Player-Weeks Lost)">
+        <Card title="Injury Luck — Player-Weeks Lost">
           <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
@@ -21962,11 +21990,11 @@ export function LuckIndexTab({
 
         <div className="text-[12px] leading-relaxed text-slate-500/90 dark:text-slate-400 space-y-2">
           <p>
-            Component 1: Actual vs Projection — how much each manager’s teams
-            outperformed or fell short of their projected totals.
+            Opp Scoring Luck: Actual vs Projection — how much each manager’s
+            teams outperformed or fell short of their projected totals.
           </p>
           <p>
-            Component 2: Injury Index — total starter player-weeks with a zero
+            Injury Luck: Injury Index — total starter player-weeks with a zero
             projection (proxy for weeks lost to injury). Weighted view applies a
             draft-round multiplier to emphasize early picks.
           </p>
@@ -21985,7 +22013,7 @@ export function LuckIndexTab({
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                  Actual vs Projection Breakdown
+                  Opp Scoring Luck Breakdown
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
                   {comp1Detail.owner} — {comp1Detail.season}
@@ -22082,8 +22110,8 @@ export function LuckIndexTab({
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
                   {isWeightedView
-                    ? "Weighted Injury Impact"
-                    : "Injury Weeks Lost"}
+                    ? "Weighted Injury Luck"
+                    : "Injury Luck Detail"}
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
                   {comp2Detail.owner} — {comp2Detail.season}
@@ -22100,9 +22128,9 @@ export function LuckIndexTab({
             <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
               {isWeightedView ? (
                 <div className="space-y-1">
-                  <div>Raw player-weeks flagged: {comp2RawCount}</div>
+                  <div>Raw injury weeks flagged: {comp2RawCount}</div>
                   <div>
-                    Weighted total:{" "}
+                    Weighted injury luck:{" "}
                     <span className="font-semibold text-slate-800 dark:text-slate-100">
                       {fmtInjuryValue(comp2WeightedTotal)}
                     </span>{" "}
@@ -22111,7 +22139,7 @@ export function LuckIndexTab({
                   </div>
                 </div>
               ) : (
-                <>Total player-weeks flagged as injured: {comp2RawCount}</>
+                <>Total injury weeks flagged: {comp2RawCount}</>
               )}
             </div>
 

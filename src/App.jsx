@@ -3440,7 +3440,7 @@ export default function App() {
               <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-white/70">
                 Current Season
               </div>
-              <div className="mt-2 space-y-2 pl-2">
+              <div className="mt-2 space-y-2">
                 <SidebarButton
                   active={section === "weekly"}
                   onClick={() => setSection("weekly")}
@@ -3464,91 +3464,98 @@ export default function App() {
                 </SidebarButton>
               </div>
             </div>
-            <SidebarButton
-              active={section === "career"}
-              onClick={() => setSection("career")}
-              disabled={!league}
-            >
-              Career Stats
-            </SidebarButton>
-            <SidebarButton
-              active={section === "h2h"}
-              onClick={() => setSection("h2h")}
-              disabled={!league}
-            >
-              H2H Matchups
-            </SidebarButton>
-            <SidebarButton
-              active={section === "placements"}
-              onClick={() => setSection("placements")}
-              disabled={!league}
-            >
-              Placements
-            </SidebarButton>
-            <SidebarButton
-              active={section === "recap"}
-              onClick={() => setSection("recap")}
-              disabled={!league}
-            >
-              Yearly Recap
-            </SidebarButton>
-            <SidebarButton
-              active={section === "money"}
-              onClick={() => setSection("money")}
-              disabled={!league}
-            >
-              Money
-            </SidebarButton>
-            <SidebarButton
-              active={section === "records"}
-              onClick={() => setSection("records")}
-              disabled={!league}
-            >
-              Records
-            </SidebarButton>
-            {/* ✅ Roster */}
-            <SidebarButton
-              active={section === "roster"}
-              onClick={() => setSection("roster")}
-              disabled={!league}
-            >
-              Roster
-            </SidebarButton>
-            <SidebarButton
-              active={section === "trades"}
-              onClick={() => setSection("trades")}
-              disabled={!league}
-            >
-              Waivers
-            </SidebarButton>
-            <SidebarButton
-              active={section === "trading"}
-              onClick={() => setSection("trading")}
-              disabled={!league}
-            >
-              Trades
-            </SidebarButton>
-            <SidebarButton
-              active={section === "draft"}
-              onClick={() => setSection("draft")}
-              disabled={!league}
-            >
-              Draft
-            </SidebarButton>
-            <SidebarButton
-              active={section === "luck"}
-              onClick={() => setSection("luck")}
-              disabled={!league}
-            >
-              Luck Index
-            </SidebarButton>
-            <SidebarButton
-              active={section === "scenario"} // 👈 new
-              onClick={() => setSection("scenario")} // 👈 new
-              disabled={!league}
-            >
-              Scenario
-            </SidebarButton>
+            <div className="pt-4">
+              <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-white/70">
+                League History
+              </div>
+              <div className="mt-2 space-y-2">
+                <SidebarButton
+                  active={section === "career"}
+                  onClick={() => setSection("career")}
+                  disabled={!league}
+                >
+                  Career Stats
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "h2h"}
+                  onClick={() => setSection("h2h")}
+                  disabled={!league}
+                >
+                  H2H Matchups
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "placements"}
+                  onClick={() => setSection("placements")}
+                  disabled={!league}
+                >
+                  Placements
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "recap"}
+                  onClick={() => setSection("recap")}
+                  disabled={!league}
+                >
+                  Yearly Recap
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "money"}
+                  onClick={() => setSection("money")}
+                  disabled={!league}
+                >
+                  Money
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "records"}
+                  onClick={() => setSection("records")}
+                  disabled={!league}
+                >
+                  Records
+                </SidebarButton>
+                {/* ✅ Roster */}
+                <SidebarButton
+                  active={section === "roster"}
+                  onClick={() => setSection("roster")}
+                  disabled={!league}
+                >
+                  Roster
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "trades"}
+                  onClick={() => setSection("trades")}
+                  disabled={!league}
+                >
+                  Waivers
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "trading"}
+                  onClick={() => setSection("trading")}
+                  disabled={!league}
+                >
+                  Trades
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "draft"}
+                  onClick={() => setSection("draft")}
+                  disabled={!league}
+                >
+                  Draft
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "luck"}
+                  onClick={() => setSection("luck")}
+                  disabled={!league}
+                >
+                  Luck Index
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "scenario"} // 👈 new
+                  onClick={() => setSection("scenario")} // 👈 new
+                  disabled={!league}
+                >
+                  Scenario
+                </SidebarButton>
+              </div>
+            </div>
           </aside>
           <main className="space-y-6 min-w-0">
             {/* Setup should always render */}
