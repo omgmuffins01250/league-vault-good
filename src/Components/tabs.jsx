@@ -6748,6 +6748,13 @@ export function RecordsTab({ league }) {
     return null;
   };
 
+  const formatPoints = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "—";
+    const fixed = num.toFixed(2);
+    return fixed.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  };
+
   // Build quick map: teamId -> display name / owner
   const teamNameById = React.useMemo(() => {
     const m = {};
@@ -7325,7 +7332,7 @@ export function RecordsTab({ league }) {
           </span>
           <span className="text-slate-500 dark:text-slate-300">
             —{" "}
-            {Math.round(
+            {formatPoints(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -7367,7 +7374,7 @@ export function RecordsTab({ league }) {
           </span>
           <span className="text-slate-500 dark:text-slate-300">
             —{" "}
-            {Math.round(
+            {formatPoints(
               pickNum(
                 g.pf,
                 g.points_for,
@@ -7583,7 +7590,7 @@ export function RecordsTab({ league }) {
             weeklyHigh.owner ? (
               <span>
                 <span className="mr-1">🥇</span>
-                {weeklyHigh.owner} — {Math.round(weeklyHigh.val)} (S
+                {weeklyHigh.owner} — {formatPoints(weeklyHigh.val)} (S
                 {weeklyHigh.season} W{fmtWeek(weeklyHigh.week)})
               </span>
             ) : null
@@ -7592,7 +7599,7 @@ export function RecordsTab({ league }) {
           renderRow={(g) => (
             <span>
               {g.owner} —{" "}
-              {Math.round(
+              {formatPoints(
                 pickNum(
                   g.pf,
                   g.points_for,
@@ -7637,7 +7644,7 @@ export function RecordsTab({ league }) {
             weeklyLow.owner ? (
               <span>
                 <span className="mr-1">🥇</span>
-                {weeklyLow.owner} — {Math.round(weeklyLow.val)} (S
+                {weeklyLow.owner} — {formatPoints(weeklyLow.val)} (S
                 {weeklyLow.season} W{fmtWeek(weeklyLow.week)})
               </span>
             ) : null
@@ -7646,7 +7653,7 @@ export function RecordsTab({ league }) {
           renderRow={(g) => (
             <span>
               {g.owner} —{" "}
-              {Math.round(
+              {formatPoints(
                 pickNum(
                   g.pf,
                   g.points_for,
