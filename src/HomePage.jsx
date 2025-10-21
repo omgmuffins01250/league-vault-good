@@ -282,7 +282,7 @@ export default function HomePage() {
             <div className="mx-auto w-full max-w-4xl">
               <div className="flex flex-col items-center gap-6 text-center">
                 <h1 className="text-center text-[clamp(2.35rem,8vw,5.5rem)] font-black uppercase tracking-[0.28em] text-white sm:tracking-[0.4em] lg:tracking-[0.6em]">
-                  LeagueVault
+                  League<span className="vault-steel">Vault</span>
                 </h1>
                 <div className="flex flex-wrap justify-center gap-3">
                   {ORBIT_LINKS.map((link) => (
