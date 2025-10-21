@@ -127,6 +127,96 @@ function useHorizontalWheelScroll(ref) {
   }, [ref]);
 }
 
+function InlineHelpTooltip({ label, children, className = "" }) {
+  const [open, setOpen] = React.useState(false);
+  const wrapperRef = React.useRef(null);
+  const tooltipId = React.useId?.() ?? undefined;
+  const tooltipText =
+    typeof children === "string" ? children : String(label ?? "");
+
+  const closeIfNoFocus = React.useCallback(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) {
+      setOpen(false);
+      return;
+    }
+
+    const doc = typeof document !== "undefined" ? document : null;
+    if (doc) {
+      const active = doc.activeElement;
+      if (active && wrapper.contains(active)) return;
+    }
+
+    setOpen(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const doc = typeof document !== "undefined" ? document : null;
+    if (!doc) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (wrapperRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setOpen(false);
+      }
+    };
+
+    doc.addEventListener("pointerdown", handlePointerDown);
+    doc.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      doc.removeEventListener("pointerdown", handlePointerDown);
+      doc.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const handleBlur = React.useCallback((event) => {
+    if (wrapperRef.current?.contains(event.relatedTarget)) return;
+    closeIfNoFocus();
+  }, [closeIfNoFocus]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={`relative inline-flex items-center ${className}`}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={closeIfNoFocus}
+    >
+      <button
+        type="button"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/60 bg-gradient-to-br from-white/80 via-sky-100/70 to-indigo-100/70 text-[11px] font-bold text-slate-700 shadow-[0_12px_30px_-14px_rgba(59,130,246,0.75)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/20 dark:bg-zinc-900/55 dark:text-slate-100 dark:focus-visible:ring-offset-zinc-950"
+        onClick={() => setOpen((prev) => !prev)}
+        onFocus={() => setOpen(true)}
+        onBlur={handleBlur}
+        aria-expanded={open}
+        aria-describedby={open ? tooltipId : undefined}
+        aria-label={`${label} info`}
+        title={tooltipText}
+      >
+        <span aria-hidden>?</span>
+      </button>
+      <div
+        id={tooltipId}
+        role="tooltip"
+        className={`absolute left-1/2 top-[calc(100%+0.65rem)] z-40 w-64 -translate-x-1/2 rounded-2xl border border-slate-200/85 bg-white/95 px-3 py-2 text-[12px] font-medium leading-relaxed text-slate-700 shadow-[0_24px_55px_-28px_rgba(15,23,42,0.8)] transition-all duration-150 ease-out dark:border-white/15 dark:bg-zinc-900/95 dark:text-slate-200 ${
+          open
+            ? "pointer-events-auto opacity-100 translate-y-0"
+            : "pointer-events-none opacity-0 -translate-y-1"
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function cloneWithInlineStyles(root, { filter } = {}) {
   const clone = root.cloneNode(true);
 
@@ -694,7 +784,7 @@ function NicknamesControl({
                         updateDraft(owner, event.target.value)
                       }
                       placeholder="Add nickname"
-                      className="input input-sm input-bordered"
+                      className="w-48 rounded-lg border border-zinc-300/70 bg-zinc-100/90 px-3 py-1.5 text-sm font-medium text-slate-700 placeholder:text-zinc-500 shadow-[0_16px_38px_-28px_rgba(15,23,42,0.55)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-zinc-700/70 dark:bg-zinc-800/75 dark:text-slate-100 dark:placeholder:text-zinc-400 dark:focus-visible:ring-offset-zinc-950"
                     />
                     <button
                       type="submit"
@@ -13922,13 +14012,15 @@ export function RosterTab({
         title={
           <div className="flex flex-wrap items-center gap-3">
             <span className="tracking-[0.42em]">Bench Points Summary</span>
-            <span
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/60 dark:border-white/20 bg-gradient-to-br from-white/80 via-sky-100/70 to-indigo-100/70 text-[11px] font-bold text-slate-700 dark:text-slate-100 shadow-[0_12px_30px_-14px_rgba(59,130,246,0.75)] cursor-help"
-              title="Bench Points Summary shows how many points a manager left on the bench. It compares the lineup that was actually played vs. the optimal lineup for that week’s roster. Higher bars/values mean more points left on the bench (worse lineup decisions)."
-              aria-label="Help: Bench Points Summary explanation"
+            <InlineHelpTooltip
+              label="Bench Points Summary"
+              className="flex-shrink-0"
             >
-              ?
-            </span>
+              Bench Points Summary shows how many points a manager left on the
+              bench. It compares the lineup that was actually played vs. the
+              optimal lineup for that week’s roster. Higher bars/values mean
+              more points left on the bench (worse lineup decisions).
+            </InlineHelpTooltip>
           </div>
         }
         subtitle={
@@ -21785,7 +21877,10 @@ export function LuckIndexTab({
 
       {/* ===== Component Breakdown ===== */}
       <Card title="Luck Components (Preview)">
-        <Card title="Opp Scoring Luck — Actual vs Projection (sum to date)">
+        <Card
+          title="Opp Scoring Luck — Actual vs Projection (sum to date)"
+          allowOverflow
+        >
           <div className="overflow-x-auto max-w-full">
             <div className={tableShellWide}>
               <div className="pointer-events-none absolute inset-0 opacity-85">
@@ -21842,7 +21937,7 @@ export function LuckIndexTab({
             </div>
           </div>
         </Card>
-        <Card title="Injury Luck — Player-Weeks Lost">
+        <Card title="Injury Luck — Player-Weeks Lost" allowOverflow>
           <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
