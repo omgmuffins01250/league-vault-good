@@ -19938,6 +19938,7 @@ export function LuckIndexTab({
   playerProjByYear = {},
   currentWeekByYear: currentWeekByYearOverride = {},
   draftByYear = {},
+  managerNicknames = {},
 }) {
   if (!league) return null;
   const [ownerMapsVersion, setOwnerMapsVersion] = React.useState(0);
@@ -19948,13 +19949,147 @@ export function LuckIndexTab({
       ),
     [league?.hiddenManagers]
   );
-  const normalizeOwnerNameLoose = React.useCallback((value) => {
-    if (value == null) return null;
-    const str = String(value).trim();
-    if (!str) return null;
-    const canonical = canonicalizeOwner(str);
-    return canonical || str;
-  }, []);
+  const normalizedNicknamesProp = React.useMemo(
+    () => normalizeNicknameMap(managerNicknames),
+    [managerNicknames]
+  );
+  const normalizedNicknamesLeague = React.useMemo(
+    () => normalizeNicknameMap(league?.managerNicknames || {}),
+    [league?.managerNicknames]
+  );
+  const teamAliasMap = React.useMemo(() => {
+    const map = new Map();
+    const addAlias = (alias, target) => {
+      const aliasStr = String(alias || "").trim();
+      const targetStr = String(target || "").trim();
+      if (!aliasStr || !targetStr) return;
+      const canonicalTarget = canonicalizeOwner(targetStr) || targetStr;
+      const key = aliasStr.toLowerCase();
+      if (!key) return;
+      map.set(key, canonicalTarget);
+    };
+    const addTeamAliases = (teamId, target) => {
+      if (!Number.isFinite(teamId)) return;
+      const variants = [
+        `Team ${teamId}`,
+        `team ${teamId}`,
+        `Team${teamId}`,
+        `team${teamId}`,
+        String(teamId),
+      ];
+      variants.forEach((variant) => addAlias(variant, target));
+    };
+    const addFromNicknames = (source) => {
+      Object.entries(source || {}).forEach(([owner, aliases]) => {
+        const canonicalOwner =
+          canonicalizeOwner(owner) || String(owner || "").trim();
+        if (!canonicalOwner) return;
+        const list = Array.isArray(aliases) ? aliases : [aliases];
+        list
+          .map((alias) => String(alias || "").trim())
+          .filter(Boolean)
+          .forEach((alias) => addAlias(alias, canonicalOwner));
+      });
+    };
+
+    addFromNicknames(normalizedNicknamesProp);
+    addFromNicknames(normalizedNicknamesLeague);
+
+    const manualAliasSource =
+      (typeof window !== "undefined" && window.__FL_ALIASES) || {};
+    Object.entries(manualAliasSource || {}).forEach(([alias, target]) =>
+      addAlias(alias, target)
+    );
+
+    const explicitTeamAliasSource =
+      (typeof window !== "undefined" && window.__FL_TEAM_ALIASES) || {};
+    Object.entries(explicitTeamAliasSource || {}).forEach(([alias, target]) => {
+      const numeric = Number(alias);
+      if (Number.isFinite(numeric)) {
+        addTeamAliases(numeric, target);
+      } else {
+        addAlias(alias, target);
+      }
+    });
+
+    Object.values(league?.ownerByTeamByYear || {}).forEach((byTeam) => {
+      Object.entries(byTeam || {}).forEach(([teamKey, owner]) => {
+        const teamId = Number(teamKey);
+        if (!Number.isFinite(teamId)) return;
+        const normalizedOwner =
+          canonicalizeOwner(owner) || String(owner || "").trim();
+        if (!normalizedOwner) return;
+        if (/^team\s*\d+$/i.test(normalizedOwner)) return;
+        addTeamAliases(teamId, normalizedOwner);
+      });
+    });
+
+    const ownersList = Array.isArray(league?.owners) ? league.owners : [];
+    ownersList.forEach((ownerName, index) => {
+      const normalizedOwner =
+        canonicalizeOwner(ownerName) || String(ownerName || "").trim();
+      if (!normalizedOwner) return;
+      if (/^team\s*\d+$/i.test(normalizedOwner)) return;
+      addTeamAliases(index + 1, normalizedOwner);
+    });
+
+    return map;
+  }, [
+    league?.managerNicknames,
+    league?.ownerByTeamByYear,
+    league?.owners,
+    managerNicknames,
+    normalizedNicknamesLeague,
+    normalizedNicknamesProp,
+    ownerMapsVersion,
+  ]);
+
+  const normalizeOwnerNameLoose = React.useCallback(
+    (value) => {
+      if (value == null) return null;
+      const str = String(value).trim();
+      if (!str) return null;
+      const lookup = (raw) => {
+        if (raw == null) return null;
+        const key = String(raw).trim().toLowerCase();
+        if (!key) return null;
+        return teamAliasMap.get(key) || null;
+      };
+      const aliasDirect = lookup(str);
+      if (aliasDirect) return aliasDirect;
+
+      const canonical = canonicalizeOwner(str);
+      if (canonical) {
+        const aliasCanonical = lookup(canonical);
+        if (aliasCanonical) return aliasCanonical;
+        if (!/^team\s*\d+$/i.test(canonical)) return canonical;
+      }
+
+      const numeric = Number(str.replace(/[^0-9]/g, ""));
+      if (Number.isFinite(numeric)) {
+        const aliasNumeric = lookup(`team ${numeric}`);
+        if (aliasNumeric) return aliasNumeric;
+      }
+
+      return canonical || str;
+    },
+    [teamAliasMap]
+  );
+  const resolveAliasForTeamId = React.useCallback(
+    (teamIdRaw) => {
+      const teamIdNum = Number(teamIdRaw);
+      if (!Number.isFinite(teamIdNum)) return null;
+      const label = `Team ${teamIdNum}`;
+      const normalized = normalizeOwnerNameLoose(label);
+      if (normalized && !/^team\s*\d+$/i.test(normalized)) {
+        return normalized;
+      }
+      const direct = teamAliasMap.get(String(teamIdNum).toLowerCase());
+      if (direct && !/^team\s*\d+$/i.test(direct)) return direct;
+      return null;
+    },
+    [normalizeOwnerNameLoose, teamAliasMap]
+  );
   const isHiddenManager = React.useCallback(
     (name) => {
       if (!name) return false;
@@ -20128,6 +20263,8 @@ export function LuckIndexTab({
           if (nm) return nm;
         }
       } catch {}
+      const aliasByTeamId = resolveAliasForTeamId(teamId);
+      if (aliasByTeamId) return aliasByTeamId;
       const fromMap = managerBySeasonTeam?.[Number(season)]?.[Number(teamId)];
       if (fromMap) return fromMap;
       const g = (obj, ...ks) =>
@@ -20139,8 +20276,8 @@ export function LuckIndexTab({
         g(league, "ownerByTeamByYear", String(season), String(teamId)) ||
         null;
       if (fallback) {
-        const canonical = canonicalizeOwner(fallback);
-        return canonical || fallback;
+        const normalized = normalizeOwnerNameLoose(fallback);
+        return normalized || fallback;
       }
 
       const seasonObj =
@@ -20237,6 +20374,7 @@ export function LuckIndexTab({
       ownerMapsVersion,
       normalizeOwnerNameLoose,
       managerBySeasonTeam,
+      resolveAliasForTeamId,
     ]
   );
 

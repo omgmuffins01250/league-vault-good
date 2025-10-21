@@ -3659,6 +3659,7 @@ export default function App() {
                     rostersByYear={rostersByYear}
                     currentWeekByYear={currentWeekBySeason}
                     draftByYear={draftByYear}
+                    managerNicknames={managerNicknames}
                   />
                 )}
 
