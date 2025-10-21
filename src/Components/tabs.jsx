@@ -21519,6 +21519,136 @@ export function LuckIndexTab({
     normalizeOwnerNameLoose,
     isHiddenManager,
   ]);
+  const ownersKey = React.useMemo(() => owners.join("|"), [owners]);
+  const seasonsKeyForLuck = React.useMemo(
+    () => seasons.join("|"),
+    [seasons]
+  );
+
+  const comp1ScrollRef = useRef(null);
+  const comp2ScrollRef = useRef(null);
+  const [comp1ScrollState, setComp1ScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
+  const [comp2ScrollState, setComp2ScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
+
+  useHorizontalWheelScroll(comp1ScrollRef);
+  useHorizontalWheelScroll(comp2ScrollRef);
+
+  useEffect(() => {
+    const node = comp1ScrollRef.current;
+    if (!node) {
+      setComp1ScrollState((prev) =>
+        prev.canScroll || !prev.atStart || !prev.atEnd
+          ? { canScroll: false, atStart: true, atEnd: true }
+          : prev
+      );
+      return;
+    }
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setComp1ScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [ownersKey, seasonsKeyForLuck]);
+
+  useEffect(() => {
+    const node = comp2ScrollRef.current;
+    if (!node) {
+      setComp2ScrollState((prev) =>
+        prev.canScroll || !prev.atStart || !prev.atEnd
+          ? { canScroll: false, atStart: true, atEnd: true }
+          : prev
+      );
+      return;
+    }
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setComp2ScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [ownersKey, seasonsKeyForLuck]);
+
   const [comp1Detail, setComp1Detail] = React.useState(null);
   React.useEffect(() => {
     if (comp1Detail?.owner && hiddenManagersSet.has(comp1Detail.owner)) {
@@ -21752,7 +21882,7 @@ export function LuckIndexTab({
 
   const tableShellBase =
     "relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/55 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl";
-  const tableShellWide = `${tableShellBase} w-full max-w-full min-w-0`;
+  const tableShellWide = tableShellBase;
   const tableShellLuck = `${tableShellBase} min-w-[420px]`;
   const tableBodyClass =
     "relative z-10 text-[13px] text-slate-700 dark:text-slate-100 [&>tr]:border-b [&>tr]:border-white/40 dark:[&>tr]:border-white/5 [&>tr:last-child]:border-0 [&>tr:nth-child(odd)]:bg-white/55 dark:[&>tr:nth-child(odd)]:bg-white/[0.06] [&>tr:nth-child(even)]:bg-white/35 dark:[&>tr:nth-child(even)]:bg-white/[0.03] [&>tr]:transition-colors [&>tr]:duration-200 [&>tr:hover]:bg-white/80 dark:[&>tr:hover]:bg-white/[0.12]";
@@ -21881,59 +22011,88 @@ export function LuckIndexTab({
           title="Opp Scoring Luck — Actual vs Projection (sum to date)"
           allowOverflow
         >
-          <div className="overflow-x-auto max-w-full">
-            <div className={tableShellWide}>
-              <div className="pointer-events-none absolute inset-0 opacity-85">
-                <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(251,191,36,0.16),transparent_60%),radial-gradient(125%_145%_at_100%_100%,rgba(251,191,36,0.12),transparent_65%)]" />
-                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          <div className="relative">
+            {comp1ScrollState.canScroll && !comp1ScrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {comp1ScrollState.canScroll && !comp1ScrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={comp1ScrollRef}
+              role="region"
+              tabIndex={comp1ScrollState.canScroll ? 0 : -1}
+              aria-label="Opponent scoring luck history table"
+              className="relative w-full overflow-x-auto overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50 custom-scrollbar"
+              style={{
+                scrollbarGutter: "stable both-edges",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="inline-block min-w-full align-top">
+                <div
+                  className={tableShellWide}
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-85">
+                    <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(251,191,36,0.16),transparent_60%),radial-gradient(125%_145%_at_100%_100%,rgba(251,191,36,0.12),transparent_65%)]" />
+                    <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                  </div>
+                  <table className="relative z-10 min-w-full border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className={headRowClass}>
+                        <th className="px-4 py-3 text-left">Manager</th>
+                        {seasons.map((y) => (
+                          <th key={y} className="px-4 py-3 text-center">
+                            {y}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={tableBodyClass}>
+                      {owners.map((o) => (
+                        <tr key={o}>
+                          <td className={managerCellClass}>{o}</td>
+                          {seasons.map((y) => {
+                            const v = comp1ByOwnerYear?.[o]?.[y];
+                            const detailRows =
+                              comp1DetailByOwnerYear?.[o]?.[y] ||
+                              comp1DetailByOwnerYear?.[o]?.[String(y)] ||
+                              [];
+                            const hasDetailRows =
+                              Array.isArray(detailRows) && detailRows.length > 0;
+                            const hasValue = Number.isFinite(v);
+                            const canOpen = hasValue || hasDetailRows;
+                            return (
+                              <td key={y} className={valueCellClass}>
+                                {canOpen ? (
+                                  <button
+                                    type="button"
+                                    className={valueButtonClass}
+                                    onClick={() => openComp1Detail(o, y)}
+                                  >
+                                    {hasValue ? v.toFixed(1) : "View"}
+                                  </button>
+                                ) : hasValue ? (
+                                  v.toFixed(1)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <table className="relative z-10 min-w-full border-collapse">
-                <thead className="sticky top-0">
-                  <tr className={headRowClass}>
-                    <th className="px-4 py-3 text-left">Manager</th>
-                    {seasons.map((y) => (
-                      <th key={y} className="px-4 py-3 text-center">
-                        {y}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className={tableBodyClass}>
-                  {owners.map((o) => (
-                    <tr key={o}>
-                      <td className={managerCellClass}>{o}</td>
-                      {seasons.map((y) => {
-                        const v = comp1ByOwnerYear?.[o]?.[y];
-                        const detailRows =
-                          comp1DetailByOwnerYear?.[o]?.[y] ||
-                          comp1DetailByOwnerYear?.[o]?.[String(y)] ||
-                          [];
-                        const hasDetailRows =
-                          Array.isArray(detailRows) && detailRows.length > 0;
-                        const hasValue = Number.isFinite(v);
-                        const canOpen = hasValue || hasDetailRows;
-                        return (
-                          <td key={y} className={valueCellClass}>
-                            {canOpen ? (
-                              <button
-                                type="button"
-                                className={valueButtonClass}
-                                onClick={() => openComp1Detail(o, y)}
-                              >
-                                {hasValue ? v.toFixed(1) : "View"}
-                              </button>
-                            ) : hasValue ? (
-                              v.toFixed(1)
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         </Card>
@@ -22026,59 +22185,88 @@ export function LuckIndexTab({
               draft data use the waiver round.
             </div>
           )}
-          <div className="overflow-x-auto">
-            <div className={tableShellWide}>
-              <div className="pointer-events-none absolute inset-0 opacity-85">
-                <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(14,165,233,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(236,72,153,0.14),transparent_65%)]" />
-                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+          <div className="relative">
+            {comp2ScrollState.canScroll && !comp2ScrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {comp2ScrollState.canScroll && !comp2ScrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={comp2ScrollRef}
+              role="region"
+              tabIndex={comp2ScrollState.canScroll ? 0 : -1}
+              aria-label="Injury luck history table"
+              className="relative w-full overflow-x-auto overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/45 custom-scrollbar"
+              style={{
+                scrollbarGutter: "stable both-edges",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="inline-block min-w-full align-top">
+                <div
+                  className={tableShellWide}
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-85">
+                    <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(14,165,233,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(236,72,153,0.14),transparent_65%)]" />
+                    <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                  </div>
+                  <table className="relative z-10 min-w-full border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className={headRowClass}>
+                        <th className="px-4 py-3 text-left">Manager</th>
+                        {seasons.map((y) => (
+                          <th key={y} className="px-4 py-3 text-center">
+                            {y}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={tableBodyClass}>
+                      {owners.map((o) => (
+                        <tr key={`${o}-injury`}>
+                          <td className={managerCellClass}>{o}</td>
+                          {seasons.map((y) => {
+                            const v = injuryTotalsSource?.[o]?.[y];
+                            const detailRows = injuryDetailSource?.[o]?.[y] || [];
+                            const hasDetail =
+                              Number.isFinite(v) && detailRows.length > 0;
+                            return (
+                              <td key={`${y}-injury`} className={valueCellClass}>
+                                {hasDetail ? (
+                                  <button
+                                    type="button"
+                                    className={valueButtonClass}
+                                    onClick={() =>
+                                      setComp2Detail({
+                                        owner: o,
+                                        season: y,
+                                      })
+                                    }
+                                  >
+                                    {fmtInjuryValue(v)}
+                                  </button>
+                                ) : Number.isFinite(v) ? (
+                                  fmtInjuryValue(v)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <table className="relative z-10 min-w-full border-collapse">
-                <thead className="sticky top-0">
-                  <tr className={headRowClass}>
-                    <th className="px-4 py-3 text-left">Manager</th>
-                    {seasons.map((y) => (
-                      <th key={y} className="px-4 py-3 text-center">
-                        {y}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className={tableBodyClass}>
-                  {owners.map((o) => (
-                    <tr key={`${o}-injury`}>
-                      <td className={managerCellClass}>{o}</td>
-                      {seasons.map((y) => {
-                        const v = injuryTotalsSource?.[o]?.[y];
-                        const detailRows = injuryDetailSource?.[o]?.[y] || [];
-                        const hasDetail =
-                          Number.isFinite(v) && detailRows.length > 0;
-                        return (
-                          <td key={`${y}-injury`} className={valueCellClass}>
-                            {hasDetail ? (
-                              <button
-                                type="button"
-                                className={valueButtonClass}
-                                onClick={() =>
-                                  setComp2Detail({
-                                    owner: o,
-                                    season: y,
-                                  })
-                                }
-                              >
-                                {fmtInjuryValue(v)}
-                              </button>
-                            ) : Number.isFinite(v) ? (
-                              fmtInjuryValue(v)
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         </Card>
