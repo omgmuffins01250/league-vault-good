@@ -17184,8 +17184,18 @@ export function WeeklyOutlookTab({
     const hasCutWeek = Number.isFinite(cutWeekRaw);
     const cutWeek = hasCutWeek ? cutWeekRaw : null;
 
+    const hiddenSet = new Set();
+    const hiddenList = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    hiddenList.forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) hiddenSet.add(canon);
+    });
+
     ownerSet.forEach((owner) => {
       if (!owner) return;
+      if (hiddenSet.has(owner)) return;
       const entries = scheduleByOwner.get(owner) || [];
       let totalAll = 0;
       let totalPast = 0;
@@ -17255,6 +17265,7 @@ export function WeeklyOutlookTab({
     scheduleByOwner,
     seasonTotalsByOwner,
     league?.owners,
+    league?.hiddenManagers,
     canonicalize,
     currentWeek,
   ]);
