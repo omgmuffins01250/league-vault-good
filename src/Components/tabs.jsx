@@ -16401,6 +16401,8 @@ export function WeeklyOutlookTab({
     ? "text-indigo-600 dark:text-indigo-300"
     : "text-zinc-400 dark:text-zinc-600";
 
+  const [showSosTotals, setShowSosTotals] = React.useState(false);
+
   React.useEffect(() => {
     if (!hasNicknames && useNicknames) setUseNicknames(false);
   }, [hasNicknames, useNicknames]);
@@ -16662,6 +16664,44 @@ export function WeeklyOutlookTab({
     }
     return out;
   }, [currentWeek, currentYear, canonicalize, scheduleThisYear]);
+
+  const scheduleByOwner = React.useMemo(() => {
+    const map = new Map();
+    if (!league) return map;
+
+    const seasonGames = __collectGamesForSeason(
+      league,
+      currentYear,
+      league?.ownerByTeamByYear || {}
+    );
+
+    seasonGames.forEach((game) => {
+      if (!game || game.is_playoff) return;
+      const week = Number(game?.week);
+      const ownerA = canonicalize(game?.owner1 ?? "").trim();
+      const ownerB = canonicalize(game?.owner2 ?? "").trim();
+      if (!Number.isFinite(week) || !ownerA || !ownerB) return;
+
+      const push = (owner, opponent) => {
+        if (!owner || !opponent) return;
+        if (!map.has(owner)) map.set(owner, []);
+        map.get(owner).push({ week, opponent });
+      };
+
+      push(ownerA, ownerB);
+      push(ownerB, ownerA);
+    });
+
+    map.forEach((arr) =>
+      arr.sort(
+        (a, b) =>
+          (a.week ?? 0) - (b.week ?? 0) ||
+          a.opponent.localeCompare(b.opponent)
+      )
+    );
+
+    return map;
+  }, [league, currentYear, canonicalize]);
 
   // A) This week's REGULAR-SEASON matchups from league.games (keep 0–0 & ties)
   const rowsThisWeek = React.useMemo(() => {
@@ -17120,6 +17160,147 @@ export function WeeklyOutlookTab({
     });
     return totals;
   }, [gamesBeforeThisWeek]);
+
+  const strengthOfScheduleRows = React.useMemo(() => {
+    const rows = [];
+    const ownerSet = new Set();
+
+    (league?.owners || []).forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) ownerSet.add(canon);
+    });
+
+    scheduleByOwner.forEach((entries, owner) => {
+      if (owner) ownerSet.add(owner);
+      (entries || []).forEach((entry) => {
+        const opp = canonicalize(entry?.opponent);
+        if (opp) ownerSet.add(opp);
+      });
+    });
+
+    if (!ownerSet.size) return [];
+
+    const cutWeekRaw = Number(currentWeek);
+    const hasCutWeek = Number.isFinite(cutWeekRaw);
+    const cutWeek = hasCutWeek ? cutWeekRaw : null;
+
+    ownerSet.forEach((owner) => {
+      if (!owner) return;
+      const entries = scheduleByOwner.get(owner) || [];
+      let totalAll = 0;
+      let totalPast = 0;
+      let totalFuture = 0;
+
+      entries.forEach(({ week, opponent }) => {
+        const opp = canonicalize(opponent);
+        if (!opp) return;
+        const pf = Number(seasonTotalsByOwner.get(opp)?.pf) || 0;
+        totalAll += pf;
+
+        if (!hasCutWeek) {
+          totalFuture += pf;
+          return;
+        }
+
+        const wk = Number(week);
+        if (!Number.isFinite(wk)) {
+          totalFuture += pf;
+        } else if (wk < cutWeek) {
+          totalPast += pf;
+        } else {
+          totalFuture += pf;
+        }
+      });
+
+      rows.push({
+        owner,
+        totalAll,
+        totalPast,
+        totalFuture,
+      });
+    });
+
+    if (!rows.length) return rows;
+
+    const addRanks = (key, rankKey) => {
+      const sorted = [...rows].sort((a, b) => {
+        if (b[key] !== a[key]) return b[key] - a[key];
+        return a.owner.localeCompare(b.owner);
+      });
+      let prevVal = null;
+      let prevRank = 0;
+      sorted.forEach((row, index) => {
+        const val = row[key];
+        const rank =
+          prevVal != null && val === prevVal ? prevRank : index + 1;
+        row[rankKey] = rank;
+        prevVal = val;
+        prevRank = rank;
+      });
+    };
+
+    addRanks("totalAll", "rankAll");
+    addRanks("totalPast", "rankPast");
+    addRanks("totalFuture", "rankFuture");
+
+    rows.sort((a, b) => {
+      if ((a.rankAll ?? Infinity) !== (b.rankAll ?? Infinity)) {
+        return (a.rankAll ?? Infinity) - (b.rankAll ?? Infinity);
+      }
+      return a.owner.localeCompare(b.owner);
+    });
+
+    return rows;
+  }, [
+    scheduleByOwner,
+    seasonTotalsByOwner,
+    league?.owners,
+    canonicalize,
+    currentWeek,
+  ]);
+
+  const [sosSoFarHeader, sosRemainingHeader] = React.useMemo(() => {
+    const wk = Number(currentWeek);
+    if (!Number.isFinite(wk)) return ["So far", "Remaining"];
+    const prior = wk - 1;
+    const soFar =
+      prior >= 1
+        ? `So far (through Week ${prior})`
+        : `So far (before Week ${wk})`;
+    const remaining = `Remaining (Week ${wk}+)`;
+    return [soFar, remaining];
+  }, [currentWeek]);
+
+  const formatSosCell = React.useCallback(
+    (total, rank) => {
+      if (showSosTotals) {
+        return Number.isFinite(Number(total)) ? __fmtPts(total) : "—";
+      }
+      return Number.isFinite(rank) ? `#${rank}` : "—";
+    },
+    [showSosTotals]
+  );
+
+  const sosSeasonHeader = React.useMemo(
+    () => (showSosTotals ? "Full season (pts)" : "Full season rank"),
+    [showSosTotals]
+  );
+
+  const sosSoFarDisplayHeader = React.useMemo(
+    () =>
+      showSosTotals
+        ? `${sosSoFarHeader} (pts)`
+        : `${sosSoFarHeader} rank`,
+    [showSosTotals, sosSoFarHeader]
+  );
+
+  const sosRemainingDisplayHeader = React.useMemo(
+    () =>
+      showSosTotals
+        ? `${sosRemainingHeader} (pts)`
+        : `${sosRemainingHeader} rank`,
+    [showSosTotals, sosRemainingHeader]
+  );
 
   const standingsNow = React.useMemo(() => {
     const ownersSet = new Set();
@@ -18873,6 +19054,74 @@ export function WeeklyOutlookTab({
             })}
           </div>
         )}
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div
+                className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight bg-gradient-to-br from-sky-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_1px_0_rgba(0,0,0,0.35)]"
+              >
+                Strength of Schedule
+              </div>
+              <div className="mt-1 text-sm md:text-base font-semibold opacity-80">
+                Opponents’ season points for, split into games played and games remaining.
+              </div>
+            </div>
+            <label
+              className="inline-flex items-center gap-2 self-start rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm ring-1 ring-slate-200/70 dark:bg-zinc-900/60 dark:text-slate-200 dark:ring-white/10"
+            >
+              <input
+                type="checkbox"
+                className="checkbox checkbox-xs"
+                checked={showSosTotals}
+                onChange={(event) => setShowSosTotals(event.target.checked)}
+                aria-label="Toggle strength of schedule totals"
+              />
+              <span>Show totals</span>
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-white/50 dark:border-white/5 bg-white/70 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden">
+            {strengthOfScheduleRows.length ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm text-slate-700 dark:text-slate-200">
+                  <thead className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Manager</th>
+                      <th className="px-3 py-2 text-right">{sosSeasonHeader}</th>
+                      <th className="px-3 py-2 text-right">{sosSoFarDisplayHeader}</th>
+                      <th className="px-3 py-2 text-right">{sosRemainingDisplayHeader}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/60 dark:divide-white/10">
+                    {strengthOfScheduleRows.map((row) => (
+                      <tr key={row.owner}>
+                        <td className="px-3 py-2 text-left font-semibold text-slate-800 dark:text-slate-100">
+                          {row.owner}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                          {formatSosCell(row.totalAll, row.rankAll)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                          {formatSosCell(row.totalPast, row.rankPast)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                          {formatSosCell(row.totalFuture, row.rankFuture)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-300">
+                No schedule data available for this season.
+              </div>
+            )}
+          </div>
+        </div>
       </Card>
     </div>
   );
