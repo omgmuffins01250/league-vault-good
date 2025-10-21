@@ -14309,7 +14309,12 @@ export function RosterTab({
   );
 }
 /* DraftTab — per-year draft picks grouped by manager (owner names canonicalized on read) */
-export function DraftTab({ draftByYear, hiddenManagers }) {
+export function DraftTab({
+  league,
+  draftByYear,
+  hiddenManagers,
+  managerNicknames,
+}) {
   const draftWithFinish = React.useMemo(
     () =>
       window.FL_attachFinishPosFromLocal
@@ -14318,147 +14323,327 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     [draftByYear]
   );
 
-  // canonicalize helper (fallback: identity)
-  const canonicalize =
-    (typeof window !== "undefined" &&
-      window.__ownerMaps &&
-      typeof window.__ownerMaps.canon === "function" &&
-      window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
-    ((s) => (s == null ? "" : String(s)));
+  const flatDraftRows = React.useMemo(
+    () =>
+      Object.values(draftByYear || {}).flatMap((rows) =>
+        Array.isArray(rows) ? rows : []
+      ),
+    [draftByYear]
+  );
 
-  // NEW: ensure the popup-provided maps are primed when this tab loads
-  React.useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      const maps = window.__ownerMaps;
-      if (!maps || typeof maps.prime !== "function") return;
+  const {
+    ownerNameOf,
+    normalizeOwnerNameLoose,
+    resolveAliasForTeamId,
+    managerBySeasonTeam,
+  } = useOwnerNameResolver({
+    league,
+    managerNicknames,
+    rawRows: flatDraftRows,
+  });
 
-      const S = window.__sources || {};
-      const league = S.selectedLeague || S.league || {};
-      const selectedLeague = S.league2 || {}; // ok if empty
-      const espnOwnerByTeamByYear =
-        S.ownerByTeamByYear ||
-        S.espnOwnerByTeamByYear ||
-        S.espnOwnerNameByTeamByYear ||
-        {};
-      const espnSeasons = S.seasons || S.espnSeasons || [];
-      const manualAliases = S.manualAliases || {};
-
-      maps.prime({
-        league,
-        selectedLeague,
-        espnOwnerByTeamByYear,
-        manualAliases,
-        espnSeasons,
-      });
-    } catch {}
-  }, [draftByYear]);
-  // build a resolver that prefers the popup payload’s canonical maps
-  const ownerNameResolver = React.useMemo(() => {
-    const S = (typeof window !== "undefined" && (window.__sources || {})) || {};
-    const leagueObj =
-      (S.league && typeof S.league === "object" ? S.league : null) ||
-      (S.selectedLeague && typeof S.selectedLeague === "object"
-        ? S.selectedLeague
-        : null) ||
-      {};
-    // popup sends canonical maps here
-    const ownerByTeamByYear =
-      S.ownerByTeamByYear ||
-      S.espnOwnerNameByTeamByYear ||
-      S.espnOwnerByTeamByYear ||
-      {};
-
-    const teamNamesByOwner = S.teamNamesByOwner || S.espnTeamNamesByOwner || {};
-
-    // invert teamNamesByOwner for quick teamName -> owner lookup by year
-    const teamNameToOwnerByYear = {};
-    const sourceTeamNames =
-      teamNamesByOwner && typeof teamNamesByOwner === "object"
-        ? teamNamesByOwner
-        : leagueObj?.teamNamesByOwner || {};
-    Object.entries(sourceTeamNames || {}).forEach(([owner, byYear]) => {
-      Object.entries(byYear || {}).forEach(([yr, teamName]) => {
-        if (!teamNameToOwnerByYear[yr]) teamNameToOwnerByYear[yr] = {};
-        if (teamName) teamNameToOwnerByYear[yr][String(teamName)] = owner;
-      });
-    });
-
-    const norm = (s) =>
-      String(s || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-    // return a function we can call per row
-    return function resolveFromRow(row, yr) {
-      const season = Number(yr);
-
-      // 1) teamId → owner name (run through canonicalize)
-      const maybeTeamId = Number(
-        row?.teamId ??
-          row?.team_id ??
-          row?.onTeamId ??
-          (Number.isFinite(Number(row?.team)) ? row?.team : NaN)
-      );
-      if (Number.isFinite(maybeTeamId)) {
-        const map = ownerByTeamByYear?.[season] || {};
-        const name = map?.[maybeTeamId] ?? map?.[String(maybeTeamId)];
-        if (name) return canonicalize(String(name).trim()) || "—";
+  const canonicalize = React.useCallback(
+    (value) => {
+      if (typeof normalizeOwnerNameLoose === "function") {
+        const normalized = normalizeOwnerNameLoose(value);
+        if (normalized) return normalized;
       }
+      if (value == null) return "";
+      const str = String(value).trim();
+      if (!str) return "";
+      const canonical = canonicalizeOwner(str);
+      return canonical || str;
+    },
+    [normalizeOwnerNameLoose]
+  );
 
-      // 2) team display name → owner name (via inverted map for that year; run through canonicalize)
-      const teamStr =
-        row?.teamName || row?.team_name || row?.team || row?.franchise || "";
-      if (teamStr) {
-        const inv = teamNameToOwnerByYear?.[season] || {};
-        const exact = inv[String(teamStr)];
-        if (exact) return canonicalize(String(exact).trim()) || "—";
-
-        // tolerance: try normalized match
-        const nTarget = norm(teamStr);
-        const hit = Object.entries(inv).find(([k]) => norm(k) === nTarget);
-        if (hit) return canonicalize(String(hit[1]).trim()) || "—";
-      }
-
-      // 3) fallback: raw owner → canonical
-      const rawOwner =
-        row?.owner ??
-        row?.manager ??
-        row?.manager_name ??
-        row?.ownerName ??
-        row?.owner_full ??
-        "";
-      const c = canonicalize(rawOwner).trim();
-      return c || "—";
-    };
-  }, []);
-
-  // canonical hidden managers sets
-  const hiddenSet = React.useMemo(() => {
-    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(list.map((n) => canonicalize(n)));
-  }, [hiddenManagers, canonicalize]);
-
-  const normName = React.useCallback(
-    (s) =>
-      String(s || "")
+  const normalizeTeamLabel = React.useCallback(
+    (value) =>
+      String(value || "")
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, "")
         .replace(/\s+/g, " ")
         .trim(),
     []
   );
+
+  const ownerMapsBySeason = React.useMemo(() => {
+    const map = new Map();
+    const ensureSeason = (seasonNum) => {
+      if (!map.has(seasonNum)) {
+        map.set(seasonNum, { byTeam: new Map(), byOwner: new Map() });
+      }
+      return map.get(seasonNum);
+    };
+    const insert = (seasonNum, teamId, ownerName) => {
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
+      const normalized = canonicalize(ownerName);
+      if (!normalized) return;
+      const bucket = ensureSeason(seasonNum);
+      if (!bucket.byTeam.has(teamId)) bucket.byTeam.set(teamId, normalized);
+      if (!bucket.byOwner.has(normalized)) bucket.byOwner.set(normalized, teamId);
+    };
+    const mergeSource = (source) => {
+      Object.entries(source || {}).forEach(([seasonKey, ownerMap]) => {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) return;
+        Object.entries(ownerMap || {}).forEach(([teamKey, ownerValue]) => {
+          const teamId = Number(teamKey);
+          insert(seasonNum, teamId, ownerValue);
+        });
+      });
+    };
+
+    mergeSource(league?.ownerByTeamByYear);
+
+    if (typeof window !== "undefined") {
+      const S = window.__sources || {};
+      mergeSource(S.ownerByTeamByYear);
+      mergeSource(S.espnOwnerNameByTeamByYear);
+      mergeSource(S.espnOwnerByTeamByYear);
+    }
+
+    Object.entries(managerBySeasonTeam || {}).forEach(([seasonKey, byTeam]) => {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) return;
+      Object.entries(byTeam || {}).forEach(([teamKey, ownerName]) => {
+        const teamId = Number(teamKey);
+        insert(seasonNum, teamId, ownerName);
+      });
+    });
+
+    return map;
+  }, [league?.ownerByTeamByYear, managerBySeasonTeam, canonicalize]);
+
+  const teamNameToOwnerByYear = React.useMemo(() => {
+    const map = new Map();
+    const ensureSeason = (seasonNum) => {
+      if (!map.has(seasonNum)) {
+        map.set(seasonNum, { exact: new Map(), normalized: new Map() });
+      }
+      return map.get(seasonNum);
+    };
+    const addEntry = (seasonNum, teamName, ownerName) => {
+      if (!Number.isFinite(seasonNum)) return;
+      const label = String(teamName || "").trim();
+      if (!label) return;
+      const normalizedOwner = canonicalize(ownerName);
+      if (!normalizedOwner) return;
+      const bucket = ensureSeason(seasonNum);
+      if (!bucket.exact.has(label)) bucket.exact.set(label, normalizedOwner);
+      const normalizedLabel = normalizeTeamLabel(label);
+      if (normalizedLabel && !bucket.normalized.has(normalizedLabel)) {
+        bucket.normalized.set(normalizedLabel, normalizedOwner);
+      }
+    };
+    const addFromSource = (source) => {
+      Object.entries(source || {}).forEach(([ownerName, byYear]) => {
+        Object.entries(byYear || {}).forEach(([seasonKey, teamName]) => {
+          const seasonNum = Number(seasonKey);
+          addEntry(seasonNum, teamName, ownerName);
+        });
+      });
+    };
+
+    addFromSource(league?.teamNamesByOwner);
+
+    if (typeof window !== "undefined") {
+      const S = window.__sources || {};
+      addFromSource(S.teamNamesByOwner);
+      addFromSource(S.espnTeamNamesByOwner);
+    }
+
+    ownerMapsBySeason.forEach((bucket, seasonNum) => {
+      bucket.byTeam.forEach((ownerName, teamId) => {
+        addEntry(seasonNum, `Team ${teamId}`, ownerName);
+      });
+    });
+
+    return map;
+  }, [
+    league?.teamNamesByOwner,
+    ownerMapsBySeason,
+    canonicalize,
+    normalizeTeamLabel,
+  ]);
+
+  const ownerNameResolver = React.useCallback(
+    (row, yr) => {
+      if (!row) return "—";
+
+      const seasonCandidates = [
+        yr,
+        row?.season,
+        row?.year,
+        row?.season_id,
+        row?.seasonId,
+        row?.seasonYear,
+      ];
+      let season = null;
+      for (const cand of seasonCandidates) {
+        const n = Number(cand);
+        if (Number.isFinite(n) && n > 0) {
+          season = n;
+          break;
+        }
+      }
+
+      const tryResolveByTeamId = (teamIdRaw) => {
+        const teamId = Number(teamIdRaw);
+        if (!Number.isFinite(teamId)) return null;
+        if (season != null && typeof ownerNameOf === "function") {
+          const resolved = ownerNameOf(season, teamId);
+          if (resolved) return canonicalize(resolved);
+        }
+        if (season != null) {
+          const bucket = ownerMapsBySeason.get(season);
+          if (bucket?.byTeam?.has(teamId)) {
+            return bucket.byTeam.get(teamId);
+          }
+        }
+        if (typeof resolveAliasForTeamId === "function") {
+          const alias = resolveAliasForTeamId(teamId);
+          if (alias) return canonicalize(alias);
+        }
+        const aliasLabel = canonicalize(`Team ${teamId}`);
+        if (aliasLabel && aliasLabel !== `Team ${teamId}`) {
+          return aliasLabel;
+        }
+        if (season == null) {
+          for (const bucket of ownerMapsBySeason.values()) {
+            if (bucket.byTeam.has(teamId)) {
+              return bucket.byTeam.get(teamId);
+            }
+          }
+        }
+        return null;
+      };
+
+      const teamIdCandidates = [
+        row?.teamId,
+        row?.team_id,
+        row?.teamID,
+        row?.team,
+        row?.onTeamId,
+        row?.tid,
+        row?.franchiseId,
+      ];
+
+      for (const cand of teamIdCandidates) {
+        const resolved = tryResolveByTeamId(cand);
+        if (resolved) return resolved;
+      }
+
+      const teamNameCandidates = [
+        row?.teamName,
+        row?.team_name,
+        row?.team,
+        row?.franchise,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+
+      if (teamNameCandidates.length) {
+        const seasonsToSearch = [];
+        if (season != null) seasonsToSearch.push(season);
+        ownerMapsBySeason.forEach((_, seasonKey) => {
+          if (!seasonsToSearch.includes(seasonKey)) {
+            seasonsToSearch.push(seasonKey);
+          }
+        });
+
+        for (const seasonKey of seasonsToSearch) {
+          const bucket = teamNameToOwnerByYear.get(seasonKey);
+          if (!bucket) continue;
+          for (const candidate of teamNameCandidates) {
+            const exact = bucket.exact.get(candidate);
+            if (exact) return exact;
+            const normalizedLabel = normalizeTeamLabel(candidate);
+            if (normalizedLabel) {
+              const match = bucket.normalized.get(normalizedLabel);
+              if (match) return match;
+            }
+          }
+        }
+      }
+
+      const ownerCandidates = [
+        row?.owner,
+        row?.manager,
+        row?.manager_name,
+        row?.ownerName,
+        row?.owner_full,
+        row?.managerName,
+        row?.team_owner,
+        row?.teamManager,
+        row?.team_manager,
+        row?.teamOwner,
+        row?.primaryOwner,
+        row?.primaryOwnerName,
+      ];
+
+      for (const cand of ownerCandidates) {
+        const canonical = canonicalize(cand);
+        if (canonical) return canonical;
+      }
+
+      return "—";
+    },
+    [
+      canonicalize,
+      normalizeTeamLabel,
+      ownerMapsBySeason,
+      ownerNameOf,
+      resolveAliasForTeamId,
+      teamNameToOwnerByYear,
+    ]
+  );
+
+  const hiddenSources = React.useMemo(() => {
+    const list = [];
+    if (Array.isArray(league?.hiddenManagers)) list.push(...league.hiddenManagers);
+    if (Array.isArray(hiddenManagers)) list.push(...hiddenManagers);
+    return list;
+  }, [league?.hiddenManagers, hiddenManagers]);
+
+  const hiddenSet = React.useMemo(() => {
+    const set = new Set();
+    hiddenSources.forEach((name) => {
+      const canonical = canonicalize(name);
+      if (canonical) set.add(canonical);
+    });
+    return set;
+  }, [hiddenSources, canonicalize]);
+
+  const normName = React.useCallback(
+    (value) => {
+      const canonical = canonicalize(value);
+      return canonical
+        ? canonical
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, "")
+            .replace(/\s+/g, " ")
+            .trim()
+        : "";
+    },
+    [canonicalize]
+  );
+
   const hiddenNormSet = React.useMemo(() => {
-    const list = Array.isArray(hiddenManagers) ? hiddenManagers : [];
-    return new Set(list.map((n) => normName(canonicalize(n))));
-  }, [hiddenManagers, canonicalize, normName]);
+    const set = new Set();
+    hiddenSources.forEach((name) => {
+      const normalized = normName(name);
+      if (normalized) set.add(normalized);
+    });
+    return set;
+  }, [hiddenSources, normName]);
 
   function groupByOwner(rows = []) {
     const m = new Map();
     rows.forEach((r) => {
-      const owner = ownerNameResolver(r, r?.year ?? r?.season ?? year) || "—";
+      const resolved =
+        ownerNameResolver(r, r?.year ?? r?.season ?? year) || "—";
+      const owner = canonicalize(resolved) || "—";
       const ownerNorm = normName(owner);
       if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return; // skip hidden
       if (!m.has(owner)) m.set(owner, []);
@@ -14603,7 +14788,10 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     return Number.isFinite(cap) ? weeks.filter((w) => w <= cap) : weeks;
   }, [dpYear, dpIsAllYears, currentWeekByYear]);
 
-  const ownerDisplay = React.useCallback((s) => canonicalize(s) || "—", []);
+  const ownerDisplay = React.useCallback(
+    (value) => canonicalize(value) || "—",
+    [canonicalize]
+  );
 
   const rows = React.useMemo(() => {
     const arr = draftWithFinish?.[year] || [];
@@ -14737,12 +14925,14 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
           r?.ownerName ??
           r?.owner_full ??
           "";
-        const o = ownerDisplay(raw);
+        const display = ownerDisplay(raw);
+        const ownerCanonical = canonicalize(display) || display || "—";
+        const ownerNorm = normName(ownerCanonical);
         const isHidden =
-          hiddenSet.has(canonicalize(o)) || hiddenNormSet.has(normName(o));
+          hiddenSet.has(ownerCanonical) || hiddenNormSet.has(ownerNorm);
         if (isHidden) continue; // skip hidden
-        if (!map.has(o)) map.set(o, new Set());
-        map.get(o).add(Number(yrStr));
+        if (!map.has(ownerCanonical)) map.set(ownerCanonical, new Set());
+        map.get(ownerCanonical).add(Number(yrStr));
       }
     }
     return map; // Map(owner -> Set(years))
@@ -14804,11 +14994,6 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
   const draftedPoints = React.useMemo(() => {
     const S = (typeof window !== "undefined" && (window.__sources || {})) || {};
     const rostersByYear = S.rostersByYear || {};
-    const ownerByTeamByYear =
-      S.ownerByTeamByYear ||
-      S.espnOwnerNameByTeamByYear ||
-      S.espnOwnerByTeamByYear ||
-      {};
 
     // Build: owner/year -> Set(playerId) drafted
     const draftedPidByOwnerYear = new Map();
@@ -14817,7 +15002,8 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       (picks || []).forEach((r) => {
         if (!includeKeepers && r?.keeper) return;
 
-        const owner = ownerNameResolver(r, yr) || "—";
+        const resolvedOwner = ownerNameResolver(r, yr) || "—";
+        const owner = canonicalize(resolvedOwner) || "—";
         const ownerNorm = normName(owner);
         if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return;
 
@@ -14832,10 +15018,18 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     }
 
     const teamIdForOwner = (yr, owner) => {
-      const map = ownerByTeamByYear?.[yr] || {};
-      const target = canonicalize(String(owner).trim());
-      for (const [tid, nm] of Object.entries(map)) {
-        if (canonicalize(String(nm).trim()) === target) return Number(tid);
+      const seasonNum = Number(yr);
+      if (!Number.isFinite(seasonNum)) return null;
+      const canonicalOwner = canonicalize(owner);
+      if (!canonicalOwner) return null;
+      const bucket = ownerMapsBySeason.get(seasonNum);
+      if (bucket?.byOwner?.has(canonicalOwner)) {
+        return bucket.byOwner.get(canonicalOwner);
+      }
+      const aliasMatch = canonicalOwner.match(/^team\s*(\d+)$/i);
+      if (aliasMatch) {
+        const parsed = Number(aliasMatch[1]);
+        return Number.isFinite(parsed) ? parsed : null;
       }
       return null;
     };
@@ -14858,10 +15052,11 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
       // owners with picks this year (filtered by hidden)
       const ownersThisYear = new Set();
       (draftByYear?.[yr] || []).forEach((r) => {
-        const o = ownerNameResolver(r, yr) || "—";
-        const oNorm = normName(o);
-        if (hiddenSet.has(o) || hiddenNormSet.has(oNorm)) return;
-        ownersThisYear.add(o);
+        const resolved = ownerNameResolver(r, yr) || "—";
+        const owner = canonicalize(resolved) || "—";
+        const ownerNorm = normName(owner);
+        if (hiddenSet.has(owner) || hiddenNormSet.has(ownerNorm)) return;
+        ownersThisYear.add(owner);
       });
 
       ownersThisYear.forEach((owner) => {
@@ -14950,6 +15145,8 @@ export function DraftTab({ draftByYear, hiddenManagers }) {
     currentWeekByYear,
     ownerNameResolver,
     normName,
+    canonicalize,
+    ownerMapsBySeason,
   ]);
 
   const draftSlotSummary = React.useMemo(() => {
