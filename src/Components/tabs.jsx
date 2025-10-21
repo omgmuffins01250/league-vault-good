@@ -20828,6 +20828,9 @@ export function LuckIndexTab({
       setSelectedLuckSeason(fallback);
     }
   }, [seasons, selectedLuckSeason]);
+  const selectedLuckSeasonNumber = Number.isFinite(selectedLuckSeason)
+    ? Number(selectedLuckSeason)
+    : null;
   const seasonsDescForLuck = React.useMemo(
     () => [...seasons].sort((a, b) => b - a),
     [seasons]
@@ -21617,9 +21620,6 @@ export function LuckIndexTab({
       .map((row, index) => ({ ...row, rank: index + 1 }));
   }, [owners, luckByOwnerYear, selectedLuckSeason]);
   const totalLuckRows = luckRows.length;
-  const selectedLuckSeasonNumber = Number.isFinite(selectedLuckSeason)
-    ? Number(selectedLuckSeason)
-    : null;
   const renderLuckPlace = React.useCallback(
     (rank) => {
       if (!Number.isFinite(rank) || rank <= 0 || !totalLuckRows) return null;
