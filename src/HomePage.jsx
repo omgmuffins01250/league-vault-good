@@ -176,7 +176,7 @@ export default function HomePage() {
         <div className="absolute inset-0 opacity-60 mix-blend-screen bg-[radial-gradient(60%_40%_at_50%_0%,rgba(255,255,255,0.15),transparent_70%)]" />
 
         <div className="relative z-10 flex min-h-screen flex-col px-6 py-8 sm:px-10">
-          <header className="flex items-start justify-between">
+          <header className="flex items-center justify-between">
             <div className="hidden text-xs font-semibold uppercase tracking-[0.35em] text-slate-400 md:block">
               League history, preserved.
             </div>
@@ -203,16 +203,19 @@ export default function HomePage() {
                       <div className="rounded-xl bg-white/5 px-3 py-2 text-[13px] font-medium text-slate-200">
                         {isSignedIn ? `Hi, ${user || "Manager"}` : "You're browsing"}
                       </div>
-                      <Link
-                        to="/app"
-                        className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.22em] text-slate-100 transition hover:border-white/40 hover:bg-white/5"
-                        onClick={() => setUserMenuOpen(false)}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleEnterVault();
+                          setUserMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.22em] text-slate-100 transition hover:border-white/40 hover:bg-white/5"
                       >
                         Enter the Vault
                         <span aria-hidden className="text-xs text-amber-300">
                           ↗
                         </span>
-                      </Link>
+                      </button>
                       {isSignedIn ? (
                         <>
                           <Link
@@ -278,33 +281,36 @@ export default function HomePage() {
           </header>
 
           <main className="flex flex-1 flex-col items-center justify-center">
-            <div className="mx-auto grid max-w-4xl grid-cols-3 grid-rows-3 gap-6 text-center">
-              {ORBIT_LINKS.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  className={`${link.grid} inline-flex items-center justify-center rounded-full border border-white/10 px-4 py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.35em] text-slate-300/80 transition hover:border-white/40 hover:text-white`}
-                >
-                  {link.label}
-                </a>
-              ))}
+            <div className="mx-auto w-full max-w-4xl">
+              <div className="grid grid-cols-3 grid-rows-3 gap-6 text-center">
+                {ORBIT_LINKS.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className={`${link.grid} inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-200/80 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.85)] transition hover:border-white/40 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 sm:text-xs`}
+                  >
+                    {link.label}
+                  </a>
+                ))}
 
-              <div className="col-start-2 row-start-2 flex flex-col items-center gap-6">
-                <h1 className="text-center text-5xl sm:text-6xl md:text-7xl font-black uppercase tracking-[0.35em]">
-                  <span className="bg-gradient-to-r from-[#f6f8fc] via-[#d5deeb] to-[#a9b6c9] bg-clip-text text-transparent drop-shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
-                    LeagueVault
-                  </span>
-                </h1>
-                <p className="max-w-xl text-sm uppercase tracking-[0.32em] text-slate-400">
-                  Every matchup. Every memory. Instantly searchable.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleEnterVault}
-                  className="rounded-full border border-amber-300/40 bg-amber-200/10 px-10 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-amber-100 transition hover:-translate-y-[1px] hover:border-amber-200/80 hover:bg-amber-200/20"
-                >
-                  Enter the Vault
-                </button>
+                <div className="col-start-2 row-start-2 flex flex-col items-center gap-5">
+                  <h1 className="text-center font-black uppercase tracking-[0.28em] sm:tracking-[0.4em] lg:tracking-[0.6em]">
+                    <span className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-4 text-[clamp(2.35rem,8vw,5.5rem)] text-white shadow-[0_25px_70px_-30px_rgba(15,23,42,0.95)] sm:px-8">
+                      LeagueVault
+                    </span>
+                  </h1>
+                  <p className="max-w-xl text-center text-[11px] uppercase tracking-[0.28em] text-slate-400 sm:tracking-[0.34em]">
+                    Every matchup. Every memory. Instantly searchable.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleEnterVault}
+                    className="inline-flex items-center gap-3 rounded-full border border-amber-400/50 bg-amber-300/15 px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.4em] text-amber-100 transition hover:-translate-y-[1px] hover:border-amber-300 hover:bg-amber-300/25"
+                  >
+                    Enter the Vault
+                    <span aria-hidden className="text-xs">↗</span>
+                  </button>
+                </div>
               </div>
             </div>
           </main>

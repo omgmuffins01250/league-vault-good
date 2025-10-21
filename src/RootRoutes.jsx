@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import ApitonHome from "./ApitonHome.jsx";
+import HomePage from "./HomePage.jsx";
 import App from "./App.jsx";
 import Privacy from "./Privacy.jsx";
 import Terms from "./Terms.jsx";
@@ -11,7 +11,7 @@ import SignUpPage from "./SignUpPage.jsx";
 export default function RootRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<ApitonHome />} />
+      <Route path="/" element={<HomePage />} />
       <Route
         path="/app/*"
         element={
