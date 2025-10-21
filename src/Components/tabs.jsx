@@ -21537,18 +21537,39 @@ export function LuckIndexTab({
     },
     [comp1DetailByOwnerYear]
   );
+  const resolveSeasonForOwner = React.useCallback(
+    (owner, seasonOverride) => {
+      if (!owner) return null;
+      const explicit = Number(seasonOverride);
+      if (Number.isFinite(explicit)) return explicit;
+      if (Number.isFinite(selectedLuckSeasonNumber)) {
+        return selectedLuckSeasonNumber;
+      }
+      const byOwner = comp1DetailByOwnerYear?.[owner];
+      if (!byOwner || typeof byOwner !== "object") return null;
+      const seasons = Object.keys(byOwner)
+        .map((key) => {
+          const num = Number(key);
+          return Number.isFinite(num) ? num : null;
+        })
+        .filter((num) => num != null)
+        .sort((a, b) => b - a);
+      return seasons[0] ?? null;
+    },
+    [comp1DetailByOwnerYear, selectedLuckSeasonNumber]
+  );
   const openComp1Detail = React.useCallback(
-    (owner, season) => {
+    (owner, seasonOverride) => {
       if (!owner) return;
-      const seasonNum = Number(season);
-      if (!Number.isFinite(seasonNum)) return;
+      const seasonNum = resolveSeasonForOwner(owner, seasonOverride);
+      const hasSeason = Number.isFinite(seasonNum);
       setComp1Detail({
         owner,
-        season: seasonNum,
-        rows: getComp1DetailRows(owner, seasonNum),
+        season: hasSeason ? seasonNum : "—",
+        rows: hasSeason ? getComp1DetailRows(owner, seasonNum) : [],
       });
     },
-    [getComp1DetailRows, setComp1Detail]
+    [getComp1DetailRows, resolveSeasonForOwner]
   );
   const [comp2Detail, setComp2Detail] = React.useState(null);
   React.useEffect(() => {
@@ -21670,27 +21691,16 @@ export function LuckIndexTab({
     [ordinal, totalLuckRows]
   );
   const renderLuckMetricCell = (owner, value) => {
-    const seasonKey = selectedLuckSeasonNumber;
     const hasValue = Number.isFinite(value);
-    if (seasonKey == null) {
-      return hasValue ? fmt(value) : "—";
-    }
-    const byOwner = comp1DetailByOwnerYear?.[owner];
-    const rowsForSeason =
-      byOwner?.[seasonKey] ?? byOwner?.[String(seasonKey)] ?? [];
-    const hasRows = Array.isArray(rowsForSeason) && rowsForSeason.length > 0;
-    if (hasValue || hasRows) {
-      return (
-        <button
-          type="button"
-          className={detailPillClass}
-          onClick={() => openComp1Detail(owner, seasonKey)}
-        >
-          {hasValue ? fmt(value) : "View"}
-        </button>
-      );
-    }
-    return "—";
+    return (
+      <button
+        type="button"
+        className={detailPillClass}
+        onClick={() => openComp1Detail(owner)}
+      >
+        {hasValue ? fmt(value) : "View"}
+      </button>
+    );
   };
   const fmtInjuryValue = React.useCallback(
     (v) => {

@@ -478,6 +478,7 @@ function upsertLeague({
   playoffTeamsOverrides,
   espnCurrentWeekBySeason,
   espnScheduleByYear: scheduleByYear,
+  espnSeasonsByYear,
   hiddenManagers,
   managerNicknames,
   leagueFontFamily,
@@ -530,6 +531,10 @@ function upsertLeague({
     espnTradesDetailedBySeason:
       espnTradesDetailedBySeason || prev.espnTradesDetailedBySeason || {},
     espnProTeamsByYear: espnProTeamsByYear || prev.espnProTeamsByYear || {},
+    espnSeasonsByYear: keepIfNonEmpty(
+      espnSeasonsByYear,
+      prev.espnSeasonsByYear || {}
+    ),
 
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
@@ -1948,6 +1953,7 @@ export default function App() {
       setTeamNamesByOwner(rec?.espnTeamNamesByOwner || {});
       setLineupSlotsByYear(rec?.espnLineupSlotsByYear || {});
       setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
+      setSeasonsByYear(rec?.espnSeasonsByYear || {});
       setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
       setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
       setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
@@ -2016,6 +2022,7 @@ export default function App() {
     setTeamNamesByOwner(rec?.espnTeamNamesByOwner || {});
     setLineupSlotsByYear(rec?.espnLineupSlotsByYear || {});
     setRosterAcqByYear(rec?.espnRosterAcqByYear || {});
+    setSeasonsByYear(rec?.espnSeasonsByYear || {});
     setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
     setPlayoffTeamsBySeason(rec?.espnPlayoffTeamsBySeason || {});
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
@@ -2098,6 +2105,7 @@ export default function App() {
         playoffTeamsOverrides: playoffTeamsOverrides,
         espnCurrentWeekBySeason: currentWeekBySeason,
         espnScheduleByYear: scheduleByYear,
+        espnSeasonsByYear: seasonsByYear,
         hiddenManagers: Array.from(hiddenManagers),
         managerNicknames,
         leagueIcon,
@@ -2133,6 +2141,7 @@ export default function App() {
       playoffTeamsOverrides: playoffTeamsOverrides,
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
+      espnSeasonsByYear: seasonsByYear,
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames: normalized,
       leagueIcon,
@@ -2787,6 +2796,7 @@ export default function App() {
           espnPlayoffTeamsBySeason: playoffTeamsFromSeasons,
           espnCurrentWeekBySeason: currentWeekBySeasonMap,
           espnScheduleByYear: scheduleForSave,
+          espnSeasonsByYear: seasonsMap,
           managerNicknames,
           leagueIcon,
           leagueFontFamily,
@@ -3177,6 +3187,7 @@ export default function App() {
       playoffTeamsOverrides: safe,
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
+      espnSeasonsByYear: seasonsByYear,
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon,
@@ -3210,6 +3221,7 @@ export default function App() {
       playoffTeamsOverrides: playoffTeamsOverrides,
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
+      espnSeasonsByYear: seasonsByYear,
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon,
@@ -3245,6 +3257,7 @@ export default function App() {
       playoffTeamsOverrides: playoffTeamsOverrides,
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
+      espnSeasonsByYear: seasonsByYear,
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon,
@@ -3276,6 +3289,7 @@ export default function App() {
       playoffTeamsOverrides: playoffTeamsOverrides,
       espnCurrentWeekBySeason: currentWeekBySeason,
       espnScheduleByYear: scheduleByYear,
+      espnSeasonsByYear: seasonsByYear,
       hiddenManagers: Array.from(hiddenManagers),
       managerNicknames,
       leagueIcon: normalized,
@@ -3562,6 +3576,7 @@ export default function App() {
                       playoffTeamsOverrides: playoffTeamsOverrides,
                       espnCurrentWeekBySeason: currentWeekBySeason,
                       espnScheduleByYear: scheduleByYear,
+                      espnSeasonsByYear: seasonsByYear,
                       hiddenManagers: nextArr,
                       managerNicknames,
                       leagueIcon,
