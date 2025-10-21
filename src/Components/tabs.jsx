@@ -137,22 +137,36 @@ function cloneWithInlineStyles(root, { filter } = {}) {
     if (src.nodeType !== 1 || dst.nodeType !== 1) return;
     const cs = getComputedStyle(src);
 
+    const colorCtx = getColorContext();
+
     const style = dst.style;
     Array.from(cs).forEach((prop) => {
       let value = cs.getPropertyValue(prop);
       if (!value) return;
 
-      if (
+      const shouldNormalize =
+        hasOKColor(value) ||
         COLORISH_PROPS.has(prop) ||
         /color/i.test(prop) ||
         prop.includes("shadow") ||
         prop === "background" ||
-        prop.startsWith("border")
-      ) {
-        value = normalizeColorValue(getColorContext(), value);
+        prop.startsWith("border");
+
+      if (shouldNormalize) {
+        value = normalizeColorValue(colorCtx, value);
       }
 
       style.setProperty(prop, value, cs.getPropertyPriority(prop));
+    });
+
+    Array.from(dst.attributes || []).forEach((attr) => {
+      if (!attr || attr.name === "style") return;
+      const raw = attr.value;
+      if (!raw || !hasOKColor(raw)) return;
+      const normalized = normalizeColorValue(colorCtx, raw);
+      if (normalized !== raw) {
+        dst.setAttribute(attr.name, normalized);
+      }
     });
 
     if (dst.tagName === "IMG") {
