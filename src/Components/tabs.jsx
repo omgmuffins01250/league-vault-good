@@ -12189,50 +12189,58 @@ export function TradesTab({
     </div>
   );
 
-  const PickupRow = ({ a, showOwner = true, rank }) => (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 px-4 py-3 shadow-[0_28px_60px_-40px_rgba(59,130,246,0.65)] transition-all hover:-translate-y-[1px] hover:shadow-[0_26px_55px_-32px_rgba(129,140,248,0.75)]">
-      <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(236,72,153,0.14),transparent_60%)]" />
-      <div className="relative flex items-center gap-4">
-        {rank ? (
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 dark:border-white/15 bg-gradient-to-br from-indigo-500/20 via-sky-400/20 to-emerald-400/30 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
-            #{rank}
-          </span>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">
-            {showOwner ? (
-              <>
-                <span>{a.owner || "—"}</span>
-                <span className="mx-1 text-slate-400">•</span>
-              </>
-            ) : null}
-            <span>{a.player}</span>
-            {a.pos ? (
-              <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                ({a.pos})
+  const PickupRow = ({ a, showOwner = true, rank }) => {
+    const ppgPrimary = rankMetric === "ppg";
+    const primaryValue = ppgPrimary ? fmt1(a.ppg) : fmt1(a.totalPts);
+    const primarySuffix = ppgPrimary ? "PPG" : "pts";
+    const secondaryValue = ppgPrimary ? fmt2(a.totalPts) : fmt2(a.ppg);
+    const secondarySuffix = ppgPrimary ? "pts" : "PPG";
+
+    return (
+      <div className="group relative overflow-hidden rounded-2xl border border-white/55 dark:border-white/10 bg-white/85 dark:bg-zinc-950/60 px-4 py-3 shadow-[0_28px_60px_-40px_rgba(59,130,246,0.65)] transition-all hover:-translate-y-[1px] hover:shadow-[0_26px_55px_-32px_rgba(129,140,248,0.75)]">
+        <div className="pointer-events-none absolute inset-0 opacity-70 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(59,130,246,0.16),transparent_55%),radial-gradient(120%_140%_at_100%_100%,rgba(236,72,153,0.14),transparent_60%)]" />
+        <div className="relative flex items-center gap-4">
+          {rank ? (
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 dark:border-white/15 bg-gradient-to-br from-indigo-500/20 via-sky-400/20 to-emerald-400/30 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700 dark:text-slate-100">
+              #{rank}
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+              {showOwner ? (
+                <>
+                  <span>{a.owner || "—"}</span>
+                  <span className="mx-1 text-slate-400">•</span>
+                </>
+              ) : null}
+              <span>{a.player}</span>
+              {a.pos ? (
+                <span className="ml-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  ({a.pos})
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
+              <span>
+                Wk {a.weekAcquired}, {a.season}
               </span>
-            ) : null}
+              <span>
+                {a.weeks} wk{a.weeks === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-500">
-            <span>
-              Wk {a.weekAcquired}, {a.season}
-            </span>
-            <span>
-              {a.weeks} wk{a.weeks === 1 ? "" : "s"}
-            </span>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
-            {fmt1(a.totalPts)} pts
-          </div>
-          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 tabular-nums">
-            {fmt2(a.ppg)} PPG
+          <div className="text-right">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
+              {primaryValue} {primarySuffix}
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 tabular-nums">
+              {secondaryValue} {secondarySuffix}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const Top5Panel = () => (
     <div className="relative">
