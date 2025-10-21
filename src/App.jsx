@@ -1578,14 +1578,21 @@ const LIGHT_THEME = "light";
 
 function useTheme() {
   const [theme, setTheme] = React.useState(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === DARK_THEME || saved === "dark") return DARK_THEME;
-    if (saved === LIGHT_THEME || saved === "light") return LIGHT_THEME;
+    if (typeof window === "undefined") return DARK_THEME;
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === DARK_THEME || saved === "dark") return DARK_THEME;
+      if (saved === LIGHT_THEME || saved === "light") return LIGHT_THEME;
+    } catch (e) {
+      console.warn("[FL][theme] unable to read saved theme", e);
+    }
     return DARK_THEME;
   });
 
   React.useEffect(() => {
+    if (typeof document === "undefined") return;
     const root = document.documentElement;
+    if (!root) return;
     const isDark = theme === DARK_THEME;
 
     if (isDark) {
@@ -1595,7 +1602,11 @@ function useTheme() {
     }
 
     root.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (e) {
+      console.warn("[FL][theme] unable to persist theme", e);
+    }
   }, [theme]);
 
   const toggle = React.useCallback(() => {

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="luxury">   <!-- 👈 ADDED THIS LINE -->
+<html lang="en" class="dark" data-theme="luxury">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -8,6 +8,32 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Ensure the preferred theme is applied before React hydrates -->
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          if (!root) return;
+          var saved = "";
+          try {
+            saved = localStorage.getItem("theme") || "";
+          } catch (storageError) {
+            saved = "";
+          }
+
+          var nextTheme = saved === "light" ? "light" : "luxury";
+          if (nextTheme === "light") {
+            root.classList.remove("dark");
+          } else {
+            root.classList.add("dark");
+          }
+          root.setAttribute("data-theme", nextTheme);
+        } catch (e) {
+          console.warn("[FL][theme] failed to initialize theme early", e);
+        }
+      })();
+    </script>
 
     <!-- FL boot shim: reads window.name and stashes JSON -->
     <script>
