@@ -21522,6 +21522,34 @@ export function LuckIndexTab({
       setComp1Detail(null);
     }
   }, [comp1Detail, hiddenManagersSet]);
+  const getComp1DetailRows = React.useCallback(
+    (owner, season) => {
+      if (!owner) return [];
+      const seasonNum = Number(season);
+      if (!Number.isFinite(seasonNum)) return [];
+      const byOwner = comp1DetailByOwnerYear?.[owner];
+      if (!byOwner) return [];
+      const rows =
+        byOwner?.[seasonNum] ??
+        byOwner?.[String(seasonNum)] ??
+        [];
+      return Array.isArray(rows) ? rows.slice() : [];
+    },
+    [comp1DetailByOwnerYear]
+  );
+  const openComp1Detail = React.useCallback(
+    (owner, season) => {
+      if (!owner) return;
+      const seasonNum = Number(season);
+      if (!Number.isFinite(seasonNum)) return;
+      setComp1Detail({
+        owner,
+        season: seasonNum,
+        rows: getComp1DetailRows(owner, seasonNum),
+      });
+    },
+    [getComp1DetailRows, setComp1Detail]
+  );
   const [comp2Detail, setComp2Detail] = React.useState(null);
   React.useEffect(() => {
     if (comp2Detail?.owner && hiddenManagersSet.has(comp2Detail.owner)) {
@@ -21568,6 +21596,9 @@ export function LuckIndexTab({
       .map((row, index) => ({ ...row, rank: index + 1 }));
   }, [owners, luckByOwnerYear, selectedLuckSeason]);
   const totalLuckRows = luckRows.length;
+  const selectedLuckSeasonNumber = Number.isFinite(selectedLuckSeason)
+    ? Number(selectedLuckSeason)
+    : null;
   const renderLuckPlace = React.useCallback(
     (rank) => {
       if (!Number.isFinite(rank) || rank <= 0 || !totalLuckRows) return null;
@@ -21638,6 +21669,29 @@ export function LuckIndexTab({
     },
     [ordinal, totalLuckRows]
   );
+  const renderLuckMetricCell = (owner, value) => {
+    const seasonKey = selectedLuckSeasonNumber;
+    const hasValue = Number.isFinite(value);
+    if (seasonKey == null) {
+      return hasValue ? fmt(value) : "—";
+    }
+    const byOwner = comp1DetailByOwnerYear?.[owner];
+    const rowsForSeason =
+      byOwner?.[seasonKey] ?? byOwner?.[String(seasonKey)] ?? [];
+    const hasRows = Array.isArray(rowsForSeason) && rowsForSeason.length > 0;
+    if (hasValue || hasRows) {
+      return (
+        <button
+          type="button"
+          className={detailPillClass}
+          onClick={() => openComp1Detail(owner, seasonKey)}
+        >
+          {hasValue ? fmt(value) : "View"}
+        </button>
+      );
+    }
+    return "—";
+  };
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -21756,7 +21810,9 @@ export function LuckIndexTab({
                         {renderLuckPlace(rank)}
                       </td>
                       <td className={managerCellClass}>{owner}</td>
-                      <td className={valueCellClass}>{fmt(value)}</td>
+                      <td className={valueCellClass}>
+                        {renderLuckMetricCell(owner, value)}
+                      </td>
                     </tr>
                   ))
                 ) : (
@@ -21820,27 +21876,25 @@ export function LuckIndexTab({
                       <td className={managerCellClass}>{o}</td>
                       {seasons.map((y) => {
                         const v = comp1ByOwnerYear?.[o]?.[y];
-                        const rows = (comp1DetailByOwnerYear?.[o]?.[y] || [])
-                          .length;
+                        const detailRows =
+                          comp1DetailByOwnerYear?.[o]?.[y] ||
+                          comp1DetailByOwnerYear?.[o]?.[String(y)] ||
+                          [];
+                        const hasDetailRows =
+                          Array.isArray(detailRows) && detailRows.length > 0;
+                        const hasValue = Number.isFinite(v);
+                        const canOpen = hasValue || hasDetailRows;
                         return (
                           <td key={y} className={valueCellClass}>
-                            {Number.isFinite(v) && rows ? (
+                            {canOpen ? (
                               <button
                                 type="button"
                                 className={detailPillClass}
-                                onClick={() =>
-                                  setComp1Detail({
-                                    owner: o,
-                                    season: y,
-                                    rows: (
-                                      comp1DetailByOwnerYear?.[o]?.[y] || []
-                                    ).slice(),
-                                  })
-                                }
+                                onClick={() => openComp1Detail(o, y)}
                               >
-                                {v.toFixed(1)}
+                                {hasValue ? v.toFixed(1) : "View"}
                               </button>
-                            ) : Number.isFinite(v) ? (
+                            ) : hasValue ? (
                               v.toFixed(1)
                             ) : (
                               "—"
