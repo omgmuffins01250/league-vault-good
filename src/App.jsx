@@ -3785,9 +3785,10 @@ export default function App() {
 
                 {league && section === "draft" && (
                   <DraftTab
+                    league={leagueWithHidden}
                     draftByYear={draftByYear}
                     hiddenManagers={leagueWithHidden?.hiddenManagers}
-                    ownerByTeamByYear={ownerByTeamByYear}
+                    managerNicknames={leagueWithHidden?.managerNicknames}
                   />
                 )}
               </>
