@@ -488,20 +488,10 @@ function upsertLeague({
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
-  const hasContent = (val) => {
-    if (val === null || val === undefined) return false;
-    if (Array.isArray(val)) return val.length > 0;
-    if (val instanceof Map || val instanceof Set) return val.size > 0;
-    if (typeof val === "object") return Object.keys(val).length > 0;
-    return true;
-  };
-  const keepIfNonEmpty = (next, prevVal = {}) => {
-    if (next === null) return null;
-    if (hasContent(next)) return next;
-    if (hasContent(prevVal)) return prevVal;
-    if (Array.isArray(next)) return [];
-    return next ?? prevVal;
-  };
+  const keepIfNonEmpty = (next, prevVal = {}) =>
+    next && typeof next === "object" && Object.keys(next).length > 0
+      ? next
+      : prevVal;
   const prevNicknames = normalizeNicknameMap(prev.managerNicknames || {});
   const nicknamesToPersist =
     managerNicknames === undefined
@@ -541,14 +531,8 @@ function upsertLeague({
     espnTradesDetailedBySeason:
       espnTradesDetailedBySeason || prev.espnTradesDetailedBySeason || {},
     espnProTeamsByYear: espnProTeamsByYear || prev.espnProTeamsByYear || {},
-    espnScheduleByYear: keepIfNonEmpty(
-      scheduleByYear,
-      prev.espnScheduleByYear || {}
-    ),
-    espnSeasonsByYear: keepIfNonEmpty(
-      espnSeasonsByYear,
-      prev.espnSeasonsByYear || {}
-    ),
+
+
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
       : Array.from(prev.hiddenManagers || []),
