@@ -21624,10 +21624,21 @@ export function LuckIndexTab({
   }, []);
   const luckRows = React.useMemo(() => {
     if (!Number.isFinite(selectedLuckSeason)) return [];
+    const seasonKey = selectedLuckSeason;
+    const getSeasonValue = (source, owner) => {
+      if (!source || !owner) return null;
+      const byOwner = source[owner];
+      if (!byOwner || typeof byOwner !== "object") return null;
+      const direct = byOwner?.[seasonKey];
+      if (Number.isFinite(direct)) return Number(direct);
+      const fallback = byOwner?.[String(seasonKey)];
+      return Number.isFinite(fallback) ? Number(fallback) : null;
+    };
     const rows = owners.map((owner) => {
-      const raw = luckByOwnerYear?.[owner]?.[selectedLuckSeason];
-      const value = Number.isFinite(raw) ? Number(raw) : null;
-      return { owner, value };
+      const value = getSeasonValue(luckByOwnerYear, owner);
+      const comp1 = getSeasonValue(comp1ScaledByOwnerYear, owner);
+      const comp2 = getSeasonValue(injuryScaledByOwnerYear, owner);
+      return { owner, value, comp1, comp2 };
     });
     return rows
       .sort((a, b) => {
@@ -21644,7 +21655,13 @@ export function LuckIndexTab({
         return a.owner.localeCompare(b.owner);
       })
       .map((row, index) => ({ ...row, rank: index + 1 }));
-  }, [owners, luckByOwnerYear, selectedLuckSeason]);
+  }, [
+    owners,
+    luckByOwnerYear,
+    selectedLuckSeason,
+    comp1ScaledByOwnerYear,
+    injuryScaledByOwnerYear,
+  ]);
   const totalLuckRows = luckRows.length;
   const renderLuckPlace = React.useCallback(
     (rank) => {
@@ -21716,18 +21733,8 @@ export function LuckIndexTab({
     },
     [ordinal, totalLuckRows]
   );
-  const renderLuckMetricCell = (owner, value) => {
-    const hasValue = Number.isFinite(value);
-    return (
-      <button
-        type="button"
-        className={detailPillClass}
-        onClick={() => openComp1Detail(owner)}
-      >
-        {hasValue ? fmt(value) : "View"}
-      </button>
-    );
-  };
+  const renderLuckMetricCell = (value) =>
+    Number.isFinite(value) ? fmt(Number(value)) : "—";
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -21783,8 +21790,8 @@ export function LuckIndexTab({
     "px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100";
   const valueCellClass =
     "px-4 py-3 text-center tabular-nums text-slate-800 dark:text-slate-100";
-  const detailPillClass =
-    "inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-900 dark:text-amber-200 bg-gradient-to-r from-amber-300/90 via-amber-200/75 to-yellow-200/75 border border-amber-400/60 shadow-[0_24px_55px_-30px_rgba(245,158,11,0.6)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_65px_-32px_rgba(245,158,11,0.7)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:focus-visible:ring-amber-400/70";
+  const valueButtonClass =
+    "inline-flex w-full justify-center rounded-md px-2 py-1 text-[13px] tabular-nums font-normal text-slate-800 transition-colors duration-150 hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 dark:text-slate-100 dark:hover:bg-white/[0.12] bg-transparent appearance-none";
   const toggleButtonBase =
     "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 border";
   const toggleButtonActive =
@@ -21835,26 +21842,34 @@ export function LuckIndexTab({
                 <tr className={headRowClass}>
                   <th className="px-4 py-3 text-left">Luck Place</th>
                   <th className="px-4 py-3 text-left">Manager</th>
+                  <th className="px-4 py-3 text-center">Component 1</th>
+                  <th className="px-4 py-3 text-center">Component 2</th>
                   <th className="px-4 py-3 text-center">Luck Metric</th>
                 </tr>
               </thead>
               <tbody className={tableBodyClass}>
                 {luckRows.length ? (
-                  luckRows.map(({ owner, value, rank }) => (
+                  luckRows.map(({ owner, value, rank, comp1, comp2 }) => (
                     <tr key={owner}>
                       <td className={placeCellClass}>
                         {renderLuckPlace(rank)}
                       </td>
                       <td className={managerCellClass}>{owner}</td>
                       <td className={valueCellClass}>
-                        {renderLuckMetricCell(owner, value)}
+                        {renderLuckMetricCell(comp1)}
+                      </td>
+                      <td className={valueCellClass}>
+                        {renderLuckMetricCell(comp2)}
+                      </td>
+                      <td className={valueCellClass}>
+                        {renderLuckMetricCell(value)}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan={3}
+                      colSpan={5}
                       className="px-6 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400"
                     >
                       No luck data available for the selected year yet.
@@ -21925,7 +21940,7 @@ export function LuckIndexTab({
                             {canOpen ? (
                               <button
                                 type="button"
-                                className={detailPillClass}
+                                className={valueButtonClass}
                                 onClick={() => openComp1Detail(o, y)}
                               >
                                 {hasValue ? v.toFixed(1) : "View"}
@@ -22065,7 +22080,7 @@ export function LuckIndexTab({
                             {hasDetail ? (
                               <button
                                 type="button"
-                                className={detailPillClass}
+                                className={valueButtonClass}
                                 onClick={() =>
                                   setComp2Detail({
                                     owner: o,
