@@ -205,7 +205,7 @@ function InlineHelpTooltip({ label, children, className = "" }) {
       <div
         id={tooltipId}
         role="tooltip"
-        className={`absolute left-1/2 top-[calc(100%+0.65rem)] z-40 w-64 -translate-x-1/2 rounded-2xl border border-slate-200/85 bg-white/95 px-3 py-2 text-[12px] font-medium leading-relaxed text-slate-700 shadow-[0_24px_55px_-28px_rgba(15,23,42,0.8)] transition-all duration-150 ease-out dark:border-white/15 dark:bg-zinc-900/95 dark:text-slate-200 ${
+        className={`absolute left-1/2 top-[calc(100%+0.65rem)] z-[9999] w-64 -translate-x-1/2 rounded-2xl border border-slate-200/85 bg-white/95 px-3 py-2 text-[12px] font-medium leading-relaxed text-slate-700 shadow-[0_24px_55px_-28px_rgba(15,23,42,0.8)] transition-all duration-150 ease-out dark:border-white/15 dark:bg-zinc-900/95 dark:text-slate-200 ${
           open
             ? "pointer-events-auto opacity-100 translate-y-0"
             : "pointer-events-none opacity-0 -translate-y-1"
