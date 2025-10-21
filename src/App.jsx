@@ -48,6 +48,26 @@ function makeDefaultLeagueIcon() {
 (function handoffProbe() {
   if (typeof window === "undefined") return;
   try {
+    const initialTitle =
+      typeof document !== "undefined" ? document.title || "" : "";
+    const cleanedInitialTitle = initialTitle
+      .replace(/^(?:FL[^\s]*\s+)+/g, "")
+      .trim();
+    const defaultTitle = cleanedInitialTitle || initialTitle;
+    const stripStatusFromTitle = () => {
+      if (typeof document === "undefined") return;
+      const cleaned = (document.title || "")
+        .replace(/^(?:FL[^\s]*\s+)+/g, "")
+        .trim();
+      if (cleaned) {
+        document.title = cleaned;
+      } else if (defaultTitle) {
+        document.title = defaultTitle;
+      }
+    };
+
+    stripStatusFromTitle();
+
     const raw = window.name;
     console.log(
       "[FL][probe] window.name typeof=",
@@ -83,7 +103,6 @@ function makeDefaultLeagueIcon() {
         "[FL][probe] parsed window.name ok; keys=",
         Object.keys(window.__FL_HANDOFF || {}).slice(0, 10)
       );
-      document.title = "FL✅ " + document.title;
     } else {
       const fromSS = sessionStorage.getItem("FL_HANDOFF_RAW");
       if (fromSS) {
@@ -96,12 +115,12 @@ function makeDefaultLeagueIcon() {
           "[FL][probe] restored payload from sessionStorage; len=",
           fromSS.length
         );
-        document.title = "FL♻️ " + document.title;
       } else {
         console.log("[FL][probe] no payload in window.name or sessionStorage");
-        document.title = "FL❌ " + document.title;
       }
     }
+
+    stripStatusFromTitle();
 
     // postMessage ping/pong so the popup can confirm the app is alive
     window.addEventListener("message", (e) => {
