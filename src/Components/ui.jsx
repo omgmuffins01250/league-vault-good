@@ -98,7 +98,7 @@ export function Card({
         <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
       </div>
       {(renderTitle || renderRight || subtitle) && (
-        <div className="relative z-10 px-5 py-4 flex flex-col gap-1 border-b border-white/60 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-xl">
+        <div className="relative z-20 px-5 py-4 flex flex-col gap-1 border-b border-white/60 dark:border-white/10 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
             {renderTitle ? <div className="min-w-0 flex-1">{renderTitle}</div> : null}
             {renderRight ? (
