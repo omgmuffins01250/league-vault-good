@@ -1572,24 +1572,37 @@ function buildRostersByYear(seasons = []) {
   return out;
 }
 // --- User menu (profile dropdown) + dark-mode persistence
+const THEME_STORAGE_KEY = "theme";
+const DARK_THEME = "luxury";
+const LIGHT_THEME = "light";
+
 function useTheme() {
-  const [isDark, setIsDark] = React.useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "dark") return true;
-    if (saved === "light") return false;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  const [theme, setTheme] = React.useState(() => {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === DARK_THEME || saved === "dark") return DARK_THEME;
+    if (saved === LIGHT_THEME || saved === "light") return LIGHT_THEME;
+    return DARK_THEME;
   });
+
   React.useEffect(() => {
     const root = document.documentElement;
+    const isDark = theme === DARK_THEME;
+
     if (isDark) {
       root.classList.add("dark");
-      localStorage.setItem("theme", "dark");
     } else {
       root.classList.remove("dark");
-      localStorage.setItem("theme", "light");
     }
-  }, [isDark]);
-  return { isDark, toggle: () => setIsDark((d) => !d) };
+
+    root.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggle = React.useCallback(() => {
+    setTheme((prev) => (prev === DARK_THEME ? LIGHT_THEME : DARK_THEME));
+  }, []);
+
+  return { isDark: theme === DARK_THEME, toggle };
 }
 
 function UserMenu({
