@@ -11,12 +11,12 @@ import { useAppContext } from "./contexts/AppContext.jsx";
 import "./landing/assets/css/style.css";
 
 const ORBIT_LINKS = [
-  { label: "App Tour", href: "#screens", grid: "col-start-1 row-start-1 justify-self-start" },
-  { label: "Features", href: "#features", grid: "col-start-2 row-start-1 justify-self-center" },
-  { label: "About", href: "#about", grid: "col-start-3 row-start-1 justify-self-end" },
-  { label: "Pricing", href: "#pricing", grid: "col-start-1 row-start-2 justify-self-start" },
-  { label: "FAQ", href: "#faq", grid: "col-start-3 row-start-2 justify-self-end" },
-  { label: "Contact", href: "#contact", grid: "col-start-2 row-start-3 justify-self-center" },
+  { label: "App Tour", href: "#screens" },
+  { label: "Features", href: "#features" },
+  { label: "About", href: "#about" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
+  { label: "Contact", href: "#contact" },
 ];
 
 function PersonIcon({ className = "" }) {
@@ -282,35 +282,32 @@ export default function HomePage() {
 
           <main className="flex flex-1 flex-col items-center justify-center">
             <div className="mx-auto w-full max-w-4xl">
-              <div className="grid grid-cols-3 grid-rows-3 gap-6 text-center">
-                {ORBIT_LINKS.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    className={`${link.grid} inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-200/80 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.85)] transition hover:border-white/40 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 sm:text-xs`}
-                  >
-                    {link.label}
-                  </a>
-                ))}
-
-                <div className="col-start-2 row-start-2 flex flex-col items-center gap-5">
-                  <h1 className="text-center font-black uppercase tracking-[0.28em] sm:tracking-[0.4em] lg:tracking-[0.6em]">
-                    <span className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-4 text-[clamp(2.35rem,8vw,5.5rem)] text-white shadow-[0_25px_70px_-30px_rgba(15,23,42,0.95)] sm:px-8">
-                      LeagueVault
-                    </span>
-                  </h1>
-                  <p className="max-w-xl text-center text-[11px] uppercase tracking-[0.28em] text-slate-400 sm:tracking-[0.34em]">
-                    Every matchup. Every memory. Instantly searchable.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleEnterVault}
-                    className="inline-flex items-center gap-3 rounded-full border border-amber-400/50 bg-amber-300/15 px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.4em] text-amber-100 transition hover:-translate-y-[1px] hover:border-amber-300 hover:bg-amber-300/25"
-                  >
-                    Enter the Vault
-                    <span aria-hidden className="text-xs">↗</span>
-                  </button>
+              <div className="flex flex-col items-center gap-6 text-center">
+                <h1 className="text-center text-[clamp(2.35rem,8vw,5.5rem)] font-black uppercase tracking-[0.28em] text-white sm:tracking-[0.4em] lg:tracking-[0.6em]">
+                  LeagueVault
+                </h1>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {ORBIT_LINKS.map((link) => (
+                    <a
+                      key={link.label}
+                      href={link.href}
+                      className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-200/80 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.85)] transition hover:border-white/40 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 sm:text-xs"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
                 </div>
+                <p className="max-w-xl text-center text-[11px] uppercase tracking-[0.28em] text-slate-400 sm:tracking-[0.34em]">
+                  Every matchup. Every memory. Instantly searchable.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleEnterVault}
+                  className="inline-flex items-center gap-3 rounded-full border border-amber-400/50 bg-amber-300/15 px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.4em] text-amber-100 transition hover:-translate-y-[1px] hover:border-amber-300 hover:bg-amber-300/25"
+                >
+                  Enter the Vault
+                  <span aria-hidden className="text-xs">↗</span>
+                </button>
               </div>
             </div>
           </main>
