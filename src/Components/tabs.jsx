@@ -1508,7 +1508,14 @@ export function SetupTab({
     }
   }, [league]);
 
-  const keys = derivedAll.leagues;
+  const keys = Array.isArray(derivedAll?.leagues) ? derivedAll.leagues : [];
+  const hasLeagues = keys.length > 0;
+  const [isAddLeagueGuideOpen, setIsAddLeagueGuideOpen] = useState(false);
+  useEffect(() => {
+    if (hasLeagues) {
+      setIsAddLeagueGuideOpen(false);
+    }
+  }, [hasLeagues]);
   const [wantLegacy, setWantLegacy] = useState(false);
   const inferredId = (league?.meta?.id && String(league.meta.id)) || "";
   const [legacyLeagueId, setLegacyLeagueId] = useState(inferredId);
@@ -1528,6 +1535,116 @@ export function SetupTab({
   }, [inferredStart]);
   return (
     <div className="space-y-4">
+      {!hasLeagues && (
+        <Card
+          title="Add your first league"
+          subtitle="Install the importer extension, visit your league, and run the import to see everything here."
+        >
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setIsAddLeagueGuideOpen((open) => !open)}
+              className="group flex w-full items-center gap-4 rounded-2xl border border-emerald-300/70 bg-emerald-50/80 px-5 py-4 text-left transition hover:bg-emerald-100/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-400/40 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40"
+              aria-expanded={isAddLeagueGuideOpen}
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-3xl font-bold text-white shadow-[0_18px_40px_-25px_rgba(16,185,129,0.9)]">
+                +
+              </span>
+              <span className="text-lg font-semibold text-emerald-700 dark:text-emerald-200">
+                Add league
+              </span>
+              <span className="ml-auto text-xl text-emerald-600 transition-transform group-hover:translate-x-0.5 dark:text-emerald-300">
+                {isAddLeagueGuideOpen ? "▴" : "▾"}
+              </span>
+            </button>
+            {isAddLeagueGuideOpen && (
+              <div className="space-y-5 rounded-2xl border border-emerald-200/70 bg-white/80 p-5 text-sm leading-relaxed text-slate-700 shadow-inner dark:border-emerald-400/30 dark:bg-emerald-950/50 dark:text-slate-200">
+                <ol className="space-y-5 list-decimal pl-5">
+                  <li className="space-y-2">
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">
+                      Install the Fantasy Importer extension
+                    </p>
+                    <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
+                      <li>
+                        Open the
+                        {" "}
+                        <a
+                          href="https://chromewebstore.google.com/detail/fantasy-importer/kfgpliagbjedmkffjllgagpomhadppha"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                        >
+                          Fantasy Importer listing on the Chrome Web Store
+                        </a>
+                        .
+                      </li>
+                      <li>
+                        Choose <strong>Add to Chrome</strong> (Edge, Brave, and other Chromium browsers use the same button).
+                      </li>
+                      <li>
+                        When prompted, select <strong>Add extension</strong> to finish the install.
+                      </li>
+                    </ul>
+                  </li>
+                  <li className="space-y-2">
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">
+                      Visit the league you want to import
+                    </p>
+                    <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
+                      <li>Log into ESPN or Sleeper and open the league you want to bring into LeagueVault.</li>
+                      <li>
+                        Any page works as long as the address bar contains your league ID (for example:
+                        {" "}
+                        <code className="rounded-md bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">leagueId=12345</code>
+                        ).
+                      </li>
+                    </ul>
+                  </li>
+                  <li className="space-y-2">
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">
+                      Run the Fantasy Importer extension
+                    </p>
+                    <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
+                      <li>
+                        Click the extensions menu
+                        {" "}
+                        <span role="img" aria-label="Extensions menu" className="text-base">
+                          🧩
+                        </span>
+                        {" "}
+                        to the right of the address bar, then choose <strong>Fantasy Importer</strong>. Pin it to keep the shortcut handy.
+                      </li>
+                      <li>Enter the earliest season you want to capture.</li>
+                      <li>If you have ESPN history from before 2019, check the option to include classic seasons.</li>
+                      <li>Press <strong>Import</strong> and let the extension work—your browser may refresh a few times.</li>
+                    </ul>
+                    <p className="rounded-2xl bg-emerald-100/80 p-3 text-xs font-medium text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                      Important: once you click Import, avoid clicking or navigating away until it finishes (usually about one minute).
+                    </p>
+                  </li>
+                </ol>
+                <div className="space-y-2 rounded-2xl border border-emerald-200/60 bg-emerald-50/70 p-4 text-xs text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-900/40 dark:text-emerald-200">
+                  <p className="font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-200">
+                    Browser tips
+                  </p>
+                  <ul className="space-y-1 list-disc pl-5">
+                    <li>
+                      On Microsoft Edge (Windows), the Chrome Web Store will prompt you to allow extensions from other stores—click
+                      {" "}
+                      <strong>Allow</strong>
+                      {" "}
+                      and follow the same steps above.
+                    </li>
+                    <li>
+                      Firefox does not support the Fantasy Importer; use Chrome, Edge, or another Chromium browser to run the import, then return here to see your league.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
       <Card title="League selection">
         <select
           className="px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700"
@@ -1554,75 +1671,75 @@ export function SetupTab({
         />
       )}
       {league && (
-      <Card title="League icon">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <button
-            type="button"
-            onClick={openFileDialog}
-            aria-label={
-              isUploadActive ? "Change league icon" : "Upload league icon"
-            }
-            className="group inline-flex flex-col items-center gap-2 text-center focus:outline-none"
-          >
-            <div
-              className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-sky-300/70 bg-white/95 text-3xl shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-sky-400 group-hover:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] group-focus:-translate-y-0.5 group-focus:border-sky-400 group-focus:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] dark:border-white/15 dark:bg-zinc-900/80"
+        <Card title="League icon">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <button
+              type="button"
+              onClick={openFileDialog}
+              aria-label={
+                isUploadActive ? "Change league icon" : "Upload league icon"
+              }
+              className="group inline-flex flex-col items-center gap-2 text-center focus:outline-none"
             >
               <div
-                className="pointer-events-none absolute inset-0 rounded-[inherit] border border-white/60 opacity-70 dark:border-white/10"
-                aria-hidden="true"
-              />
-              {isUploadActive ? (
-                <img
-                  src={leagueIcon?.value}
-                  alt={`${league?.meta?.name || "League"} icon`}
-                  className="h-full w-full rounded-[inherit] object-cover"
-                />
-              ) : (
-                <span className="transition-transform duration-200 group-hover:scale-110 group-focus:scale-110">
-                  {previewGlyph}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-600 transition-colors duration-200 group-hover:text-sky-700 dark:text-sky-300 dark:group-hover:text-sky-200">
-              {isUploadActive ? "Change Icon" : "Upload Icon"}
-            </span>
-          </button>
-          <div className="space-y-3">
-            <input
-              ref={fileInputRef}
-              id="league-icon-upload"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
-              className="hidden"
-              onChange={handleIconUpload}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                onClick={openFileDialog}
+                className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-sky-300/70 bg-white/95 text-3xl shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-sky-400 group-hover:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] group-focus:-translate-y-0.5 group-focus:border-sky-400 group-focus:shadow-[0_28px_60px_-34px_rgba(59,130,246,0.55)] dark:border-white/15 dark:bg-zinc-900/80"
               >
-                Upload image
-              </button>
-              {isUploadActive && (
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-[inherit] border border-white/60 opacity-70 dark:border-white/10"
+                  aria-hidden="true"
+                />
+                {isUploadActive ? (
+                  <img
+                    src={leagueIcon?.value}
+                    alt={`${league?.meta?.name || "League"} icon`}
+                    className="h-full w-full rounded-[inherit] object-cover"
+                  />
+                ) : (
+                  <span className="transition-transform duration-200 group-hover:scale-110 group-focus:scale-110">
+                    {previewGlyph}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-600 transition-colors duration-200 group-hover:text-sky-700 dark:text-sky-300 dark:group-hover:text-sky-200">
+                {isUploadActive ? "Change Icon" : "Upload Icon"}
+              </span>
+            </button>
+            <div className="space-y-3">
+              <input
+                ref={fileInputRef}
+                id="league-icon-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                className="hidden"
+                onChange={handleIconUpload}
+              />
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  className="btn btn-xs btn-ghost"
-                  onClick={handleRemoveUpload}
+                  className="btn btn-sm btn-primary"
+                  onClick={openFileDialog}
                 >
-                  Remove upload
+                  Upload image
                 </button>
-              )}
+                {isUploadActive && (
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-ghost"
+                    onClick={handleRemoveUpload}
+                  >
+                    Remove upload
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Choose a square image (PNG, JPG, WEBP, or SVG). It will appear
+                next to your league name.
+              </p>
             </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Choose a square image (PNG, JPG, WEBP, or SVG). It will appear
-              next to your league name.
-            </p>
           </div>
-        </div>
-        {isUploadActive ? (
-          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-            Remove the uploaded image to choose from the built-in icons.
+          {isUploadActive ? (
+            <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+              Remove the uploaded image to choose from the built-in icons.
             </p>
           ) : (
             <div className="mt-4 space-y-2">
