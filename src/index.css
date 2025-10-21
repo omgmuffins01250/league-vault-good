@@ -156,3 +156,28 @@ a:hover {
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(226, 232, 240, 0.75);
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Wordmark accent                                                           */
+/* -------------------------------------------------------------------------- */
+
+.vault-steel {
+  display: inline-block;
+  color: #d1d8e2;
+  text-shadow: 0 8px 20px rgba(15, 23, 42, 0.45);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .vault-steel {
+    background-image: linear-gradient(
+      155deg,
+      #f8fafc 0%,
+      #d9e2ec 35%,
+      #a0adba 65%,
+      #6c7886 100%
+    );
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}

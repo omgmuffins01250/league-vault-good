@@ -43,7 +43,7 @@ export default function ApitonHome() {
         <header className="sticky top-0 z-20 flex justify-center px-3 pt-6">
           <div className="flex w-[min(1100px,92vw)] items-center justify-between gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm shadow-[0_24px_70px_-45px_rgba(15,23,42,0.85)] backdrop-blur-xl">
             <span className="text-lg font-semibold tracking-wide text-white">
-              LeagueVault
+              League<span className="vault-steel">Vault</span>
             </span>
             <nav className="flex items-center gap-2 text-[13px] font-medium text-slate-200/90">
               <a className="rounded-full px-3 py-1.5 transition hover:bg-white/10" href="#features">
