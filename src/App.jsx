@@ -23,6 +23,7 @@ import {
   DraftTab,
   RosterTab,
   PlayoffProbTab,
+  StrengthOfScheduleTab,
   WeeklyOutlookTab,
   ScenarioTab,
   LuckIndexTab,
@@ -3435,13 +3436,34 @@ export default function App() {
             >
               League Members
             </SidebarButton>
-            <SidebarButton
-              active={section === "weekly"}
-              onClick={() => setSection("weekly")}
-              disabled={!league}
-            >
-              Weekly Outlook
-            </SidebarButton>
+            <div className="pt-2">
+              <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-white/70">
+                Current Season
+              </div>
+              <div className="mt-2 space-y-2 pl-2">
+                <SidebarButton
+                  active={section === "weekly"}
+                  onClick={() => setSection("weekly")}
+                  disabled={!league}
+                >
+                  Weekly Outlook
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "sos"}
+                  onClick={() => setSection("sos")}
+                  disabled={!league}
+                >
+                  Strength of Schedule
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "playoffprob"}
+                  onClick={() => setSection("playoffprob")}
+                  disabled={!league}
+                >
+                  Playoff Probability
+                </SidebarButton>
+              </div>
+            </div>
             <SidebarButton
               active={section === "career"}
               onClick={() => setSection("career")}
@@ -3512,13 +3534,6 @@ export default function App() {
               disabled={!league}
             >
               Draft
-            </SidebarButton>
-            <SidebarButton
-              active={section === "playoffprob"}
-              onClick={() => setSection("playoffprob")}
-              disabled={!league}
-            >
-              Playoff Probability
             </SidebarButton>
             <SidebarButton
               active={section === "luck"}
@@ -3605,6 +3620,13 @@ export default function App() {
                     seasonThisYear={seasonThisYear}
                     scheduleThisYear={scheduleThisYearNormalized}
                     managerNicknames={managerNicknames}
+                  />
+                )}
+
+                {league && section === "sos" && (
+                  <StrengthOfScheduleTab
+                    league={leagueForWeekly}
+                    seasonThisYear={seasonThisYear}
                   />
                 )}
 

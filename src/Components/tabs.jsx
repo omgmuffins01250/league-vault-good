@@ -1,5 +1,5 @@
 // All tab components bundled in one module.
-// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab
+// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab, StrengthOfScheduleTab
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import html2canvas from "html2canvas";
 import { PDFDocument } from "pdf-lib";
@@ -16532,8 +16532,6 @@ export function WeeklyOutlookTab({
     ? "text-indigo-600 dark:text-indigo-300"
     : "text-zinc-400 dark:text-zinc-600";
 
-  const [showSosTotals, setShowSosTotals] = React.useState(false);
-
   React.useEffect(() => {
     if (!hasNicknames && useNicknames) setUseNicknames(false);
   }, [hasNicknames, useNicknames]);
@@ -16795,44 +16793,6 @@ export function WeeklyOutlookTab({
     }
     return out;
   }, [currentWeek, currentYear, canonicalize, scheduleThisYear]);
-
-  const scheduleByOwner = React.useMemo(() => {
-    const map = new Map();
-    if (!league) return map;
-
-    const seasonGames = __collectGamesForSeason(
-      league,
-      currentYear,
-      league?.ownerByTeamByYear || {}
-    );
-
-    seasonGames.forEach((game) => {
-      if (!game || game.is_playoff) return;
-      const week = Number(game?.week);
-      const ownerA = canonicalize(game?.owner1 ?? "").trim();
-      const ownerB = canonicalize(game?.owner2 ?? "").trim();
-      if (!Number.isFinite(week) || !ownerA || !ownerB) return;
-
-      const push = (owner, opponent) => {
-        if (!owner || !opponent) return;
-        if (!map.has(owner)) map.set(owner, []);
-        map.get(owner).push({ week, opponent });
-      };
-
-      push(ownerA, ownerB);
-      push(ownerB, ownerA);
-    });
-
-    map.forEach((arr) =>
-      arr.sort(
-        (a, b) =>
-          (a.week ?? 0) - (b.week ?? 0) ||
-          a.opponent.localeCompare(b.opponent)
-      )
-    );
-
-    return map;
-  }, [league, currentYear, canonicalize]);
 
   // A) This week's REGULAR-SEASON matchups from league.games (keep 0–0 & ties)
   const rowsThisWeek = React.useMemo(() => {
@@ -17291,158 +17251,6 @@ export function WeeklyOutlookTab({
     });
     return totals;
   }, [gamesBeforeThisWeek]);
-
-  const strengthOfScheduleRows = React.useMemo(() => {
-    const rows = [];
-    const ownerSet = new Set();
-
-    (league?.owners || []).forEach((name) => {
-      const canon = canonicalize(name);
-      if (canon) ownerSet.add(canon);
-    });
-
-    scheduleByOwner.forEach((entries, owner) => {
-      if (owner) ownerSet.add(owner);
-      (entries || []).forEach((entry) => {
-        const opp = canonicalize(entry?.opponent);
-        if (opp) ownerSet.add(opp);
-      });
-    });
-
-    if (!ownerSet.size) return [];
-
-    const cutWeekRaw = Number(currentWeek);
-    const hasCutWeek = Number.isFinite(cutWeekRaw);
-    const cutWeek = hasCutWeek ? cutWeekRaw : null;
-
-    const hiddenSet = new Set();
-    const hiddenList = Array.isArray(league?.hiddenManagers)
-      ? league.hiddenManagers
-      : [];
-    hiddenList.forEach((name) => {
-      const canon = canonicalize(name);
-      if (canon) hiddenSet.add(canon);
-    });
-
-    ownerSet.forEach((owner) => {
-      if (!owner) return;
-      if (hiddenSet.has(owner)) return;
-      const entries = scheduleByOwner.get(owner) || [];
-      let totalAll = 0;
-      let totalPast = 0;
-      let totalFuture = 0;
-
-      entries.forEach(({ week, opponent }) => {
-        const opp = canonicalize(opponent);
-        if (!opp) return;
-        const pf = Number(seasonTotalsByOwner.get(opp)?.pf) || 0;
-        totalAll += pf;
-
-        if (!hasCutWeek) {
-          totalFuture += pf;
-          return;
-        }
-
-        const wk = Number(week);
-        if (!Number.isFinite(wk)) {
-          totalFuture += pf;
-        } else if (wk < cutWeek) {
-          totalPast += pf;
-        } else {
-          totalFuture += pf;
-        }
-      });
-
-      rows.push({
-        owner,
-        totalAll,
-        totalPast,
-        totalFuture,
-      });
-    });
-
-    if (!rows.length) return rows;
-
-    const addRanks = (key, rankKey) => {
-      const sorted = [...rows].sort((a, b) => {
-        if (b[key] !== a[key]) return b[key] - a[key];
-        return a.owner.localeCompare(b.owner);
-      });
-      let prevVal = null;
-      let prevRank = 0;
-      sorted.forEach((row, index) => {
-        const val = row[key];
-        const rank =
-          prevVal != null && val === prevVal ? prevRank : index + 1;
-        row[rankKey] = rank;
-        prevVal = val;
-        prevRank = rank;
-      });
-    };
-
-    addRanks("totalAll", "rankAll");
-    addRanks("totalPast", "rankPast");
-    addRanks("totalFuture", "rankFuture");
-
-    rows.sort((a, b) => {
-      if ((a.rankAll ?? Infinity) !== (b.rankAll ?? Infinity)) {
-        return (a.rankAll ?? Infinity) - (b.rankAll ?? Infinity);
-      }
-      return a.owner.localeCompare(b.owner);
-    });
-
-    return rows;
-  }, [
-    scheduleByOwner,
-    seasonTotalsByOwner,
-    league?.owners,
-    league?.hiddenManagers,
-    canonicalize,
-    currentWeek,
-  ]);
-
-  const [sosSoFarHeader, sosRemainingHeader] = React.useMemo(() => {
-    const wk = Number(currentWeek);
-    if (!Number.isFinite(wk)) return ["So far", "Remaining"];
-    const prior = wk - 1;
-    const soFar =
-      prior >= 1
-        ? `So far (through Week ${prior})`
-        : `So far (before Week ${wk})`;
-    const remaining = `Remaining (Week ${wk}+)`;
-    return [soFar, remaining];
-  }, [currentWeek]);
-
-  const formatSosCell = React.useCallback(
-    (total, rank) => {
-      if (showSosTotals) {
-        return Number.isFinite(Number(total)) ? __fmtPts(total) : "—";
-      }
-      return Number.isFinite(rank) ? `#${rank}` : "—";
-    },
-    [showSosTotals]
-  );
-
-  const sosSeasonHeader = React.useMemo(
-    () => (showSosTotals ? "Full season (pts)" : "Full season rank"),
-    [showSosTotals]
-  );
-
-  const sosSoFarDisplayHeader = React.useMemo(
-    () =>
-      showSosTotals
-        ? `${sosSoFarHeader} (pts)`
-        : `${sosSoFarHeader} rank`,
-    [showSosTotals, sosSoFarHeader]
-  );
-
-  const sosRemainingDisplayHeader = React.useMemo(
-    () =>
-      showSosTotals
-        ? `${sosRemainingHeader} (pts)`
-        : `${sosRemainingHeader} rank`,
-    [showSosTotals, sosRemainingHeader]
-  );
 
   const standingsNow = React.useMemo(() => {
     const ownersSet = new Set();
@@ -19198,6 +19006,321 @@ export function WeeklyOutlookTab({
         )}
       </Card>
 
+    </div>
+  );
+}
+// ================== StrengthOfScheduleTab ==================
+export function StrengthOfScheduleTab({ league, seasonThisYear }) {
+  if (!league) return null;
+
+  React.useEffect(() => {
+    const aliases = window.__FL_ALIASES || {};
+    primeOwnerMaps({
+      league,
+      selectedLeague: league,
+      espnOwnerByTeamByYear: league.ownerByTeamByYear || {},
+      manualAliases: aliases,
+    });
+  }, [league]);
+
+  const canonicalize =
+    (typeof window !== "undefined" &&
+      window.__ownerMaps &&
+      typeof window.__ownerMaps.canon === "function" &&
+      window.__ownerMaps.canon.bind(window.__ownerMaps)) ||
+    ((s) => (s == null ? "" : String(s)));
+
+  const [showSosTotals, setShowSosTotals] = React.useState(false);
+
+  const pickNum = (...vals) => {
+    for (const v of vals) {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
+  };
+
+  const currentYear = React.useMemo(() => {
+    const yr = Number(seasonThisYear?.year);
+    if (Number.isFinite(yr)) return yr;
+    const yrs = Array.from(
+      new Set(
+        (league?.games || [])
+          .map((g) => Number(g?.season))
+          .filter(Number.isFinite)
+      )
+    );
+    return yrs.length ? Math.max(...yrs) : new Date().getFullYear();
+  }, [seasonThisYear, league?.games]);
+
+  const currentWeek = React.useMemo(() => {
+    const wk = Number(seasonThisYear?.currentWeek);
+    if (Number.isFinite(wk) && wk > 0) return wk;
+    const weeks = (league?.games || [])
+      .filter((g) => Number(g?.season) === Number(currentYear))
+      .map((g) => Number(g?.week))
+      .filter(Number.isFinite);
+    return weeks.length ? Math.max(...weeks) : 1;
+  }, [seasonThisYear, league?.games, currentYear]);
+
+  const scheduleByOwner = React.useMemo(() => {
+    const map = new Map();
+    if (!league) return map;
+
+    const seasonGames = __collectGamesForSeason(
+      league,
+      currentYear,
+      league?.ownerByTeamByYear || {}
+    );
+
+    seasonGames.forEach((game) => {
+      if (!game || game.is_playoff) return;
+      const week = Number(game?.week);
+      const ownerA = canonicalize(game?.owner1 ?? "").trim();
+      const ownerB = canonicalize(game?.owner2 ?? "").trim();
+      if (!Number.isFinite(week) || !ownerA || !ownerB) return;
+
+      const push = (owner, opponent) => {
+        if (!owner || !opponent) return;
+        if (!map.has(owner)) map.set(owner, []);
+        map.get(owner).push({ week, opponent });
+      };
+
+      push(ownerA, ownerB);
+      push(ownerB, ownerA);
+    });
+
+    map.forEach((arr) =>
+      arr.sort(
+        (a, b) =>
+          (a.week ?? 0) - (b.week ?? 0) ||
+          a.opponent.localeCompare(b.opponent)
+      )
+    );
+
+    return map;
+  }, [league, currentYear, canonicalize]);
+
+  const gamesBeforeThisWeek = React.useMemo(() => {
+    const cutYear = Number(currentYear) || 0;
+    const cutWeek = Number(currentWeek) || 0;
+    const all = Array.isArray(league?.games) ? league.games : [];
+
+    return all
+      .map((g) => {
+        const season = Number(g?.season);
+        const week = Number(g?.week);
+        if (!Number.isFinite(season) || season !== cutYear) return null;
+        if (!Number.isFinite(week)) return null;
+        if (cutWeek && week >= cutWeek) return null;
+
+        const owner = canonicalize(g?.owner ?? g?.manager ?? "");
+        const opp = canonicalize(g?.opp ?? g?.opponent ?? "");
+        if (!owner || !opp) return null;
+
+        return {
+          owner,
+          opp,
+          week,
+          res: String(g?.res || g?.result || "").toUpperCase(),
+          pf: pickNum(
+            g?.pf,
+            g?.points_for,
+            g?.points,
+            g?.score,
+            g?.owner_points,
+            g?.pts,
+            g?.fpts
+          ),
+          pa: pickNum(
+            g?.pa,
+            g?.points_against,
+            g?.opp_points,
+            g?.oppPts,
+            g?.against,
+            g?.opp_score
+          ),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.week ?? 0) - (b.week ?? 0));
+  }, [league?.games, currentYear, currentWeek, canonicalize]);
+
+  const seasonTotalsByOwner = React.useMemo(() => {
+    const totals = new Map();
+    gamesBeforeThisWeek.forEach((g) => {
+      if (!g?.owner) return;
+      const row = totals.get(g.owner) || {
+        pf: 0,
+        pa: 0,
+        games: 0,
+        wins: 0,
+        losses: 0,
+      };
+      if (Number.isFinite(g.pf)) row.pf += g.pf;
+      if (Number.isFinite(g.pa)) row.pa += g.pa;
+      if (g.res === "W") row.wins += 1;
+      else if (g.res === "L") row.losses += 1;
+      row.games += 1;
+      totals.set(g.owner, row);
+    });
+    return totals;
+  }, [gamesBeforeThisWeek]);
+
+  const strengthOfScheduleRows = React.useMemo(() => {
+    const rows = [];
+    const ownerSet = new Set();
+
+    (league?.owners || []).forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) ownerSet.add(canon);
+    });
+
+    scheduleByOwner.forEach((entries, owner) => {
+      if (owner) ownerSet.add(owner);
+      (entries || []).forEach((entry) => {
+        const opp = canonicalize(entry?.opponent);
+        if (opp) ownerSet.add(opp);
+      });
+    });
+
+    if (!ownerSet.size) return [];
+
+    const cutWeekRaw = Number(currentWeek);
+    const hasCutWeek = Number.isFinite(cutWeekRaw);
+    const cutWeek = hasCutWeek ? cutWeekRaw : null;
+
+    const hiddenSet = new Set();
+    const hiddenList = Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
+      : [];
+    hiddenList.forEach((name) => {
+      const canon = canonicalize(name);
+      if (canon) hiddenSet.add(canon);
+    });
+
+    ownerSet.forEach((owner) => {
+      if (!owner) return;
+      if (hiddenSet.has(owner)) return;
+      const entries = scheduleByOwner.get(owner) || [];
+      let totalAll = 0;
+      let totalPast = 0;
+      let totalFuture = 0;
+
+      entries.forEach(({ week, opponent }) => {
+        const opp = canonicalize(opponent);
+        if (!opp) return;
+        const pf = Number(seasonTotalsByOwner.get(opp)?.pf) || 0;
+        totalAll += pf;
+
+        if (!hasCutWeek) {
+          totalFuture += pf;
+          return;
+        }
+
+        const wk = Number(week);
+        if (!Number.isFinite(wk)) {
+          totalFuture += pf;
+        } else if (wk < cutWeek) {
+          totalPast += pf;
+        } else {
+          totalFuture += pf;
+        }
+      });
+
+      rows.push({
+        owner,
+        totalAll,
+        totalPast,
+        totalFuture,
+      });
+    });
+
+    if (!rows.length) return rows;
+
+    const addRanks = (key, rankKey) => {
+      const sorted = [...rows].sort((a, b) => {
+        if (b[key] !== a[key]) return b[key] - a[key];
+        return a.owner.localeCompare(b.owner);
+      });
+      let prevVal = null;
+      let prevRank = 0;
+      sorted.forEach((row, index) => {
+        const val = row[key];
+        const rank =
+          prevVal != null && val === prevVal ? prevRank : index + 1;
+        row[rankKey] = rank;
+        prevVal = val;
+        prevRank = rank;
+      });
+    };
+
+    addRanks("totalAll", "rankAll");
+    addRanks("totalPast", "rankPast");
+    addRanks("totalFuture", "rankFuture");
+
+    rows.sort((a, b) => {
+      if ((a.rankAll ?? Infinity) !== (b.rankAll ?? Infinity)) {
+        return (a.rankAll ?? Infinity) - (b.rankAll ?? Infinity);
+      }
+      return a.owner.localeCompare(b.owner);
+    });
+
+    return rows;
+  }, [
+    scheduleByOwner,
+    seasonTotalsByOwner,
+    league?.owners,
+    league?.hiddenManagers,
+    canonicalize,
+    currentWeek,
+  ]);
+
+  const [sosSoFarHeader, sosRemainingHeader] = React.useMemo(() => {
+    const wk = Number(currentWeek);
+    if (!Number.isFinite(wk)) return ["So far", "Remaining"];
+    const prior = wk - 1;
+    const soFar =
+      prior >= 1
+        ? `So far (through Week ${prior})`
+        : `So far (before Week ${wk})`;
+    const remaining = `Remaining (Week ${wk}+)`;
+    return [soFar, remaining];
+  }, [currentWeek]);
+
+  const formatSosCell = React.useCallback(
+    (total, rank) => {
+      if (showSosTotals) {
+        return Number.isFinite(Number(total)) ? __fmtPts(total) : "—";
+      }
+      return Number.isFinite(rank) ? `#${rank}` : "—";
+    },
+    [showSosTotals]
+  );
+
+  const sosSeasonHeader = React.useMemo(
+    () => (showSosTotals ? "Full season (pts)" : "Full season rank"),
+    [showSosTotals]
+  );
+
+  const sosSoFarDisplayHeader = React.useMemo(
+    () =>
+      showSosTotals
+        ? `${sosSoFarHeader} (pts)`
+        : `${sosSoFarHeader} rank`,
+    [showSosTotals, sosSoFarHeader]
+  );
+
+  const sosRemainingDisplayHeader = React.useMemo(
+    () =>
+      showSosTotals
+        ? `${sosRemainingHeader} (pts)`
+        : `${sosRemainingHeader} rank`,
+    [showSosTotals, sosRemainingHeader]
+  );
+
+  return (
+    <div className="space-y-6">
       <Card>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -19258,8 +19381,8 @@ export function WeeklyOutlookTab({
                 </table>
               </div>
             ) : (
-              <div className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-300">
-                No schedule data available for this season.
+              <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                Not enough data to compute strength of schedule yet.
               </div>
             )}
           </div>
