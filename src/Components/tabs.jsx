@@ -11397,19 +11397,6 @@ export function TradingTab({
 //----------------------------------------------------------------------
 //------------------------------------------------------------------------
 //------------------------trade tab, TradeTab, Tradetab ----------------
-// Helper: load league-specific merge map (Combine Managers)
-function getMergeMap(league) {
-  try {
-    const lid = league?.meta?.leagueId || league?.leagueId || null;
-    if (!lid) return {};
-    const key = `fl_merge_map::${lid}`;
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
 export function TradesTab({
   league,
   rawRows = [],
@@ -11424,181 +11411,59 @@ export function TradesTab({
 }) {
   const fmt1 = (n) => Number(n || 0).toFixed(1);
   const fmt2 = (n) => Number(n || 0).toFixed(2);
-  const [ownerMapsVersion, setOwnerMapsVersion] = React.useState(0);
-
-  React.useEffect(() => {
-    if (!league) return;
-    try {
-      const aliases = window.__FL_ALIASES || {};
-      primeOwnerMaps({
-        league,
-        selectedLeague: league,
-        espnOwnerByTeamByYear: espnOwnerByTeamByYear || {},
-        manualAliases: aliases,
-      });
-      setOwnerMapsVersion((v) => v + 1);
-    } catch (err) {
-      console.warn("primeOwnerMaps failed", err);
-    }
-  }, [league, espnOwnerByTeamByYear]);
-
-  const canonicalizeViaOwnerMaps = React.useCallback((raw) => {
-    const name = String(raw || "").trim();
-    if (!name) return name;
-    try {
-      if (
-        typeof window !== "undefined" &&
-        window.__ownerMaps &&
-        typeof window.__ownerMaps.canon === "function"
-      ) {
-        const mapped = window.__ownerMaps.canon(name);
-        if (mapped) return mapped;
-      }
-    } catch (err) {
-      console.warn("ownerMaps canon failed", err);
-    }
-    return canonicalizeOwner(name);
-  }, []);
-
-  const seasonsWithOwnerMaps = React.useMemo(() => {
-    const seasons = new Set();
-    Object.keys(espnOwnerByTeamByYear || {}).forEach((yr) => {
-      const num = Number(yr);
-      if (Number.isFinite(num)) seasons.add(num);
-    });
-    try {
-      const payload = parsePayloadString(window.name) || {};
-      const allSeasons = [
-        ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
-        ...(Array.isArray(payload?.legacySeasonsLite)
-          ? payload.legacySeasonsLite
-          : []),
-      ];
-      allSeasons.forEach((s) => {
-        const yr = Number(s?.seasonId);
-        if (Number.isFinite(yr)) seasons.add(yr);
-      });
-    } catch {}
-    return Array.from(seasons);
-  }, [espnOwnerByTeamByYear, ownerMapsVersion]);
-
-  const handleToPrettyName = React.useMemo(() => {
-    const map = new Map();
-    seasonsWithOwnerMaps.forEach((season) => {
-      const seasonMap = ownerMapFor(season) || {};
-      Object.values(seasonMap).forEach((entry) => {
-        const handle = String(entry?.handle || "").trim();
-        const pretty = canonicalizeViaOwnerMaps(entry?.name || "");
-        if (!handle || !pretty) return;
-        const key = handle.toLowerCase();
-        if (!map.has(key)) map.set(key, pretty);
-      });
-    });
-    return map;
-  }, [seasonsWithOwnerMaps, canonicalizeViaOwnerMaps]);
-
-  // Build an expanded merge map so aliases like "Jacob966788" also match the pretty member name ("Jacob Teitelbaum")
-  const expandedMergeMap = React.useMemo(() => {
-    const out = new Map();
-    const norm = (s) =>
-      String(s || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, "")
-        .trim();
-
-    try {
-      // 1) Base entries from your league-specific localStorage map
-      const mm = getMergeMap(league) || {};
-      for (const [alias, canonical] of Object.entries(mm)) {
-        out.set(norm(alias), canonical);
-      }
-
-      // 2) If any alias is actually an ESPN "handle"/displayName, add that member's pretty name as an alias too
-      const payload = JSON.parse(window.name || "{}");
-      const seasons = [
-        ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
-        ...(Array.isArray(payload?.legacySeasonsLite)
-          ? payload.legacySeasonsLite
-          : []),
-      ];
-
-      // Build a set of (handle -> prettyName) for all seasons we have
-      const handleToPretty = new Map();
-      for (const s of seasons) {
-        (s?.members || []).forEach((m) => {
-          const handle = String(m?.displayName || "").trim(); // may be "Jacob966788" or already a name
-          const pretty =
-            [m?.firstName || "", m?.lastName || ""]
-              .filter(Boolean)
-              .join(" ")
-              .trim() || handle;
-          if (handle) handleToPretty.set(handle.toLowerCase(), pretty);
-        });
-      }
-
-      // For each saved alias, if it equals some member handle, also map that member's pretty name to the same canonical
-      for (const [alias, canonical] of Object.entries(mm)) {
-        const pretty = handleToPretty.get(String(alias).toLowerCase());
-        if (pretty) {
-          out.set(norm(pretty), canonical); // e.g., norm("Jacob Teitelbaum") → "Jake Teitelbaum"
+  const resolverLeague = React.useMemo(() => {
+    if (!league) return league;
+    const extraEntries = Object.entries(espnOwnerByTeamByYear || {});
+    if (!extraEntries.length) return league;
+    const existing = league.ownerByTeamByYear || {};
+    let changed = false;
+    const merged = { ...existing };
+    extraEntries.forEach(([season, owners]) => {
+      if (merged[season] !== owners) {
+        merged[season] = owners;
+        if (owners !== existing[season]) {
+          changed = true;
         }
       }
-    } catch (e) {
-      console.warn("expandedMergeMap build failed", e);
-    }
+    });
+    if (!changed) return league;
+    return { ...league, ownerByTeamByYear: merged };
+  }, [league, espnOwnerByTeamByYear]);
+  const { normalizeOwnerNameLoose, managerBySeasonTeam } =
+    useOwnerNameResolver({
+      league: resolverLeague,
+      rawRows,
+    });
 
-    try {
-      handleToPrettyName.forEach((pretty, handle) => {
-        const canonical = canonicalizeViaOwnerMaps(pretty);
-        if (!canonical) return;
-        out.set(norm(handle), canonical);
-        out.set(norm(pretty), canonical);
-      });
-    } catch (e) {
-      console.warn("expandedMergeMap handle merge failed", e);
-    }
-
-    return out;
-  }, [league, handleToPrettyName, canonicalizeViaOwnerMaps]);
-
-  // Canonicalize owner names; honor the merge map if present
-  // Canonicalize owner names; honor the merge map if present
-  // Canonicalize owner names; honor expanded merge map (aliases + pretty names)
   const canonOwner = React.useCallback(
     (raw) => {
-      const name = String(raw || "").trim();
-      if (!name) return name;
-
-      const norm = name
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, "")
-        .trim();
-
-      // 1) Try expanded map (covers both saved alias AND that alias's pretty name)
-      const hit = expandedMergeMap.get(norm);
-      if (hit) return canonicalizeViaOwnerMaps(hit);
-
-      const prettyFromHandle = handleToPrettyName.get(name.toLowerCase());
-      if (prettyFromHandle) {
-        const canonical = canonicalizeViaOwnerMaps(prettyFromHandle);
-        if (canonical) return canonical;
-        return prettyFromHandle;
+      if (raw == null) return "";
+      const str = String(raw).trim();
+      if (!str) return "";
+      if (typeof normalizeOwnerNameLoose === "function") {
+        const normalized = normalizeOwnerNameLoose(str);
+        if (normalized) return normalized;
       }
-
-      // 2) Fallback: use the global owner maps canonicalizer
-      return canonicalizeViaOwnerMaps(name);
+      return str;
     },
-    [expandedMergeMap, canonicalizeViaOwnerMaps, handleToPrettyName]
+    [normalizeOwnerNameLoose]
   );
 
-  // ✅ canonicalized hidden set (league prop wins, else explicit prop)
   const hiddenSet = React.useMemo(() => {
-    const list = Array.isArray(league?.hiddenManagers)
-      ? league.hiddenManagers
-      : Array.isArray(hiddenManagers)
+    const source = Array.isArray(hiddenManagers)
       ? hiddenManagers
+      : Array.isArray(league?.hiddenManagers)
+      ? league.hiddenManagers
       : [];
-    return new Set(list.map((n) => canonOwner(n)));
+    const set = new Set();
+    source.forEach((name) => {
+      if (!name) return;
+      const trimmed = String(name).trim();
+      if (trimmed) set.add(trimmed);
+      const canonical = canonOwner(name);
+      if (canonical) set.add(canonical);
+    });
+    return set;
   }, [league?.hiddenManagers, hiddenManagers, canonOwner]);
 
   const rosterAcqByYear = React.useMemo(
@@ -11616,25 +11481,42 @@ export function TradesTab({
 
   const leagueOwners = React.useMemo(() => {
     const out = new Set();
+    const push = (value) => {
+      const canonical = canonOwner(value);
+      if (canonical && !hiddenSet.has(canonical)) {
+        out.add(canonical);
+      }
+    };
+    (Array.isArray(league?.owners) ? league.owners : []).forEach(push);
+    Object.values(managerBySeasonTeam || {}).forEach((byTeam) => {
+      Object.values(byTeam || {}).forEach(push);
+    });
     try {
       const payload = parsePayloadString(window.name) || {};
       const map = payload?.ownerByTeamByYear || {};
       Object.values(map).forEach((byTeam) => {
-        Object.values(byTeam || {}).forEach((owner) => {
-          const o = canonOwner(owner);
-          if (o && !hiddenSet.has(o)) out.add(o);
+        Object.values(byTeam || {}).forEach(push);
+      });
+      const seasons = [
+        ...(Array.isArray(payload?.seasons) ? payload.seasons : []),
+        ...(Array.isArray(payload?.legacySeasonsLite)
+          ? payload.legacySeasonsLite
+          : []),
+      ];
+      seasons.forEach((season) => {
+        (season?.members || []).forEach((member) => {
+          push(member?.displayName);
+          const full = [member?.firstName, member?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          if (full) push(full);
+          push(member?.nickname);
         });
       });
     } catch {}
     return Array.from(out).sort((a, b) => a.localeCompare(b));
-  }, [hiddenSet, canonOwner]);
-
-  // Map normalized → canonical (from leagueOwners)
-  const canonByNorm = React.useMemo(() => {
-    const m = new Map();
-    leagueOwners.forEach((o) => m.set(normName(o), o));
-    return m;
-  }, [leagueOwners]);
+  }, [league?.owners, managerBySeasonTeam, hiddenSet, canonOwner]);
 
   const activityFromWindow = React.useMemo(() => {
     // shape: { [year]: { [Owner Name]: { acquisitions,drops,trades,moveToActive,ir } } }
