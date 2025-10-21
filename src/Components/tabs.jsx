@@ -20868,35 +20868,6 @@ export function LuckIndexTab({
     []
   );
 
-  // build starters-only totals per (year, teamId, week)
-  const teamWeekTotals = React.useMemo(() => {
-    const totals = {};
-    for (const [yStr, byTeam] of Object.entries(rostersByYear || {})) {
-      const y = Number(yStr);
-      const capExclusive = resolveCurrentWeekExclusive(yStr);
-      totals[y] = totals[y] || {};
-      for (const [tidStr, byWeek] of Object.entries(byTeam || {})) {
-        const tid = Number(tidStr);
-        totals[y][tid] = totals[y][tid] || {};
-        for (const [wStr, entries] of Object.entries(byWeek || {})) {
-          const w = Number(wStr);
-          if (capExclusive > 0 && w >= capExclusive) continue;
-          let proj = 0,
-            actual = 0;
-          for (const e of entries || []) {
-            const sid = Number(__entrySlotId(e));
-            if (!START_SLOTS.has(sid)) continue;
-            proj += __entryProj(e);
-            actual += __entryPts(e);
-          }
-          totals[y][tid][w] = { proj, actual };
-        }
-      }
-    }
-    return totals;
-  }, [rostersByYear, resolveCurrentWeekExclusive]);
-
-  const games = React.useMemo(() => getGamesFlexible(league), [league]);
   const draftIndexByYear = React.useMemo(() => {
     const map = new Map();
     const toNumber = (v) => {
@@ -20978,230 +20949,147 @@ export function LuckIndexTab({
     return map;
   }, [draftByYear]);
 
-    const comp1Data = React.useMemo(() => {
-      const totals = {};
-      const details = {};
+  const comp1Data = React.useMemo(() => {
+    const totals = {};
+    const details = {};
+    const rostersSource =
+      league?.espnRostersByYear || league?.rostersByYear || rostersByYear || {};
+    const currentWeekLookup =
+      league?.currentWeekBySeason ||
+      league?.espnCurrentWeekBySeason ||
+      league?.currentWeekByYear ||
+      currentWeekByYearOverride ||
+      {};
 
-      const toNumberOrNull = (value) => {
-        if (value == null) return null;
-        if (typeof value === "string" && value.trim() === "") return null;
-        const numeric = Number(value);
-        return Number.isFinite(numeric) ? numeric : null;
-      };
+    const toNumberSafe = (value) => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : 0;
+    };
 
-      const pickFirstFinite = (values = []) => {
-        for (const value of values) {
-          const numeric = toNumberOrNull(value);
-          if (Number.isFinite(numeric)) return numeric;
+    const resolveLastWeek = (seasonKey) => {
+      const seasonNum = Number(seasonKey);
+      const candidates = [
+        currentWeekLookup?.[seasonKey],
+        currentWeekLookup?.[seasonNum],
+        league?.currentWeekBySeason?.[seasonKey],
+        league?.currentWeekBySeason?.[seasonNum],
+        league?.espnCurrentWeekBySeason?.[seasonKey],
+        league?.espnCurrentWeekBySeason?.[seasonNum],
+        league?.currentWeekByYear?.[seasonKey],
+        league?.currentWeekByYear?.[seasonNum],
+        currentWeekByYearOverride?.[seasonKey],
+        currentWeekByYearOverride?.[seasonNum],
+        league?.currentWeek,
+      ];
+      for (const candidate of candidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric) && numeric > 0) {
+          return Math.floor(numeric);
         }
-        return null;
-      };
+      }
+      return 18;
+    };
 
-      const pushDetail = (owner, season, row) => {
-        if (!owner) return;
-        details[owner] ??= {};
-        details[owner][season] ??= [];
-        details[owner][season].push(row);
-      };
+    const resolveOwnerName = (seasonNum, teamId) => {
+      const resolved = ownerNameOf(seasonNum, teamId);
+      if (resolved) {
+        const normalized = normalizeOwnerNameLoose(resolved);
+        return normalized || resolved;
+      }
+      const fallback = managerBySeasonTeam?.[seasonNum]?.[teamId];
+      if (fallback) {
+        const normalized = normalizeOwnerNameLoose(fallback);
+        return normalized || fallback;
+      }
+      return `Team ${teamId}`;
+    };
 
-      const pushTotal = (owner, season, amount) => {
-        if (!owner || !Number.isFinite(amount)) return;
-        totals[owner] ??= {};
-        totals[owner][season] = (totals[owner][season] || 0) + amount;
-      };
+    const luck1 = {};
+    const aggTotals = {};
 
-      const ownerTeamMap = new Map(); // `${season}|${owner}` -> Set<teamId>
-      Object.entries(managerBySeasonTeam || {}).forEach(([seasonKey, byTeam]) => {
-        const seasonNum = Number(seasonKey);
-        if (!Number.isFinite(seasonNum)) return;
-        Object.entries(byTeam || {}).forEach(([teamKey, ownerName]) => {
-          const teamId = Number(teamKey);
-          if (!Number.isFinite(teamId)) return;
-          const normalizedOwner = normalizeOwnerNameLoose(ownerName);
-          if (!normalizedOwner) return;
-          const mapKey = `${seasonNum}|${normalizedOwner}`;
-          if (!ownerTeamMap.has(mapKey)) ownerTeamMap.set(mapKey, new Set());
-          ownerTeamMap.get(mapKey).add(teamId);
-        });
-      });
+    for (const [seasonKey, byTeam] of Object.entries(rostersSource || {})) {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) continue;
+      const lastWeek = resolveLastWeek(seasonKey);
+      luck1[seasonNum] = {};
 
-      const teamIdsForOwner = (seasonNum, owner) => {
-        if (!Number.isFinite(seasonNum)) return [];
-        const normalizedOwner = normalizeOwnerNameLoose(owner);
-        if (!normalizedOwner) return [];
-        const mapKey = `${seasonNum}|${normalizedOwner}`;
-        return ownerTeamMap.has(mapKey)
-          ? Array.from(ownerTeamMap.get(mapKey))
-          : [];
-      };
+      for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
+        const teamId = Number(teamKey);
+        if (!Number.isFinite(teamId)) continue;
+        const ownerName = resolveOwnerName(seasonNum, teamId);
+        const ownerKey =
+          normalizeOwnerNameLoose(ownerName) || ownerName || `Team ${teamId}`;
 
-      const getTotals = (y, t, w) =>
-        get(teamWeekTotals, y, t, w) ??
-        get(teamWeekTotals, y, t, String(w)) ??
-        get(teamWeekTotals, y, String(t), w) ??
-        get(teamWeekTotals, y, String(t), String(w)) ??
-        get(teamWeekTotals, String(y), t, w) ??
-        get(teamWeekTotals, String(y), t, String(w)) ??
-        get(teamWeekTotals, String(y), String(t), w) ??
-        get(teamWeekTotals, String(y), String(t), String(w)) ??
-        null;
+        luck1[seasonNum][teamId] = {};
 
-      const resolveOwnerForSide = (season, side, fallbackOwners = []) => {
-        const candidates = [];
-        if (side && typeof side === "object") {
-          candidates.push(side.ownerName);
-        }
-        candidates.push(...fallbackOwners);
-        if (Number.isFinite(side?.teamId)) {
-          candidates.push(ownerNameOf(season, side.teamId));
-        }
-        for (const cand of candidates) {
-          const normalized = normalizeOwnerNameLoose(cand);
-          if (normalized) return normalized;
-        }
-        return null;
-      };
+        for (let wk = 1; wk <= lastWeek; wk += 1) {
+          const roster =
+            (byWeek && (byWeek[wk] ?? byWeek[String(wk)])) || [];
+          const entries = Array.isArray(roster) ? roster : [];
+          const actual = entries.reduce(
+            (sum, player) => sum + toNumberSafe(player?.pts ?? 0),
+            0
+          );
+          const projected = entries.reduce(
+            (sum, player) =>
+              sum +
+              toNumberSafe(
+                player?.projStart ??
+                  player?.proj ??
+                  player?.projected ??
+                  0
+              ),
+            0
+          );
+          const diff = actual - projected;
 
-      const gatherOpponentTotals = (
-        season,
-        week,
-        opponentSide,
-        opponentOwner
-      ) => {
-        const actualCandidates = [];
-        const projectedCandidates = [];
-        let teamIdUsed = Number.isFinite(opponentSide?.teamId)
-          ? opponentSide.teamId
-          : null;
-
-        if (opponentSide && typeof opponentSide === "object") {
-          actualCandidates.push(opponentSide.score);
-          projectedCandidates.push(opponentSide.projected);
-        }
-
-        const tryTeamId = (teamId) => {
-          if (!Number.isFinite(teamId)) return;
-          const totals = getTotals(season, teamId, week);
-          if (!totals) return;
-          actualCandidates.push(totals.actual);
-          projectedCandidates.push(totals.proj);
-          if (!Number.isFinite(teamIdUsed)) teamIdUsed = teamId;
-        };
-
-        if (Number.isFinite(opponentSide?.teamId)) {
-          tryTeamId(opponentSide.teamId);
-        }
-
-        if (opponentOwner) {
-          for (const teamId of teamIdsForOwner(season, opponentOwner)) {
-            tryTeamId(teamId);
-          }
-        }
-
-        return {
-          actual: pickFirstFinite(actualCandidates),
-          projected: pickFirstFinite(projectedCandidates),
-          teamId: Number.isFinite(teamIdUsed) ? teamIdUsed : null,
-        };
-      };
-
-      for (const game of games || []) {
-        if (!game) continue;
-        if (game.isPlayoff) continue;
-
-        const seasonNum = Number(game.season ?? game.year);
-        const weekNum = Number(game.week ?? game.matchupPeriodId);
-        if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) continue;
-        if (weekNum <= 0) continue;
-
-        const capExclusive = resolveCurrentWeekExclusive(seasonNum);
-        if (capExclusive > 0 && weekNum >= capExclusive) continue;
-
-        const team1 = game.team1 || {};
-        const team2 = game.team2 || {};
-
-        const owner1 = resolveOwnerForSide(seasonNum, team1, [
-          game?.team1Owner,
-          game?.homeOwner,
-          game?.owner1,
-          game?.team1OwnerName,
-        ]);
-        const owner2 = resolveOwnerForSide(seasonNum, team2, [
-          game?.team2Owner,
-          game?.awayOwner,
-          game?.owner2,
-          game?.team2OwnerName,
-        ]);
-
-        if (!owner1 || !owner2) continue;
-
-        const oppForOwner1 = gatherOpponentTotals(
-          seasonNum,
-          weekNum,
-          team2,
-          owner2
-        );
-        if (
-          Number.isFinite(oppForOwner1.actual) &&
-          Number.isFinite(oppForOwner1.projected)
-        ) {
-          const diff = oppForOwner1.actual - oppForOwner1.projected;
-          pushTotal(owner1, seasonNum, diff);
-          pushDetail(owner1, seasonNum, {
-            week: weekNum,
-            opponentOwner: owner2,
-            opponentTeamId: oppForOwner1.teamId,
-            opponentProjected: oppForOwner1.projected,
-            opponentActual: oppForOwner1.actual,
+          luck1[seasonNum][teamId][wk] = {
+            actual,
+            proj: projected,
             diff,
-          });
-        }
+          };
 
-        const oppForOwner2 = gatherOpponentTotals(
-          seasonNum,
-          weekNum,
-          team1,
-          owner1
-        );
-        if (
-          Number.isFinite(oppForOwner2.actual) &&
-          Number.isFinite(oppForOwner2.projected)
-        ) {
-          const diff = oppForOwner2.actual - oppForOwner2.projected;
-          pushTotal(owner2, seasonNum, diff);
-          pushDetail(owner2, seasonNum, {
-            week: weekNum,
-            opponentOwner: owner1,
-            opponentTeamId: oppForOwner2.teamId,
-            opponentProjected: oppForOwner2.projected,
-            opponentActual: oppForOwner2.actual,
+          if (!ownerKey) continue;
+          totals[ownerKey] ??= {};
+          totals[ownerKey][seasonNum] =
+            (totals[ownerKey][seasonNum] || 0) + diff;
+
+          details[ownerKey] ??= {};
+          details[ownerKey][seasonNum] ??= [];
+          details[ownerKey][seasonNum].push({
+            week: wk,
+            projected,
+            actual,
             diff,
+            teamId,
           });
         }
       }
+    }
 
-      Object.values(details).forEach((bySeason) => {
-        Object.values(bySeason || {}).forEach((rows) => {
-          rows.sort(
-            (a, b) => (a.week ?? 0) - (b.week ?? 0) || (a.opponentOwner || "")
-          );
-        });
-      });
-
-      console.log(
-        "[Luck] comp1 (opp actual - opp projected) by owner/year:",
-        totals
+    Object.entries(totals).forEach(([owner, bySeason]) => {
+      aggTotals[owner] = Object.values(bySeason || {}).reduce(
+        (sum, value) => sum + toNumberSafe(value),
+        0
       );
-      return { totals, details };
-    }, [
-      games,
-      teamWeekTotals,
-      resolveCurrentWeekExclusive,
-      ownerNameOf,
-      normalizeOwnerNameLoose,
-      managerBySeasonTeam,
-      get,
-    ]);
+    });
+
+    if (typeof window !== "undefined") {
+      window.__luck1 = luck1;
+      window.__luck1Agg = aggTotals;
+      console.log("[Luck1] built", window.__luck1);
+      console.table(window.__luck1Agg);
+    }
+
+    return { totals, details };
+  }, [
+    league,
+    rostersByYear,
+    ownerNameOf,
+    normalizeOwnerNameLoose,
+    managerBySeasonTeam,
+    currentWeekByYearOverride,
+  ]);
   const comp2Data = React.useMemo(() => {
     const totals = {};
     const details = {};
@@ -21862,7 +21750,7 @@ export function LuckIndexTab({
 
       {/* ===== Component Breakdown ===== */}
       <Card title="Luck Components (Preview)">
-        <Card title="Component 1 — Opponent vs Projection (sum to date)">
+        <Card title="Component 1 — Actual vs Projection (sum to date)">
           <div className="overflow-x-auto">
             <div className={tableShellWide}>
               <div className="pointer-events-none absolute inset-0 opacity-85">
@@ -22067,8 +21955,8 @@ export function LuckIndexTab({
 
         <div className="text-[12px] leading-relaxed text-slate-500/90 dark:text-slate-400 space-y-2">
           <p>
-            Component 1: Opponent Overperformance — how much opponents exceeded
-            projections.
+            Component 1: Actual vs Projection — how much each manager’s teams
+            outperformed or fell short of their projected totals.
           </p>
           <p>
             Component 2: Injury Index — total starter player-weeks with a zero
@@ -22090,7 +21978,7 @@ export function LuckIndexTab({
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                  Opponent Luck Breakdown
+                  Actual vs Projection Breakdown
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
                   {comp1Detail.owner} — {comp1Detail.season}
@@ -22126,7 +22014,6 @@ export function LuckIndexTab({
                   <thead className="sticky top-0">
                     <tr className={headRowClass}>
                       <th className="px-4 py-3 text-left">Week</th>
-                      <th className="px-4 py-3 text-left">Opponent</th>
                       <th className="px-4 py-3 text-right">Proj</th>
                       <th className="px-4 py-3 text-right">Actual</th>
                       <th className="px-4 py-3 text-right">Diff</th>
@@ -22139,21 +22026,18 @@ export function LuckIndexTab({
                         (a, b) => Number(a?.week || 0) - Number(b?.week || 0)
                       )
                       .map((row, idx) => (
-                        <tr key={`${row.week}-${row.opponentTeamId}-${idx}`}>
+                        <tr key={`${row.week}-${row.teamId ?? ""}-${idx}`}>
                           <td className="px-4 py-3 tabular-nums text-left text-slate-800 dark:text-slate-100">
                             W{row.week}
                           </td>
-                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                            {row.opponentOwner}
-                          </td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">
-                            {Number.isFinite(row?.opponentProjected)
-                              ? row.opponentProjected.toFixed(1)
+                            {Number.isFinite(row?.projected)
+                              ? row.projected.toFixed(1)
                               : "—"}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">
-                            {Number.isFinite(row?.opponentActual)
-                              ? row.opponentActual.toFixed(1)
+                            {Number.isFinite(row?.actual)
+                              ? row.actual.toFixed(1)
                               : "—"}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
@@ -22166,7 +22050,7 @@ export function LuckIndexTab({
                     {comp1Detail.rows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={4}
                           className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
                         >
                           No weekly results available.
