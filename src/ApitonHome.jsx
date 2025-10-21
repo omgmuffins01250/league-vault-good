@@ -1,5 +1,5 @@
 // src/ApitonHome.jsx
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "./contexts/AppContext.jsx";
 
 // template CSS (scoped to the landing page)
@@ -22,7 +22,6 @@ export default function ApitonHome() {
   const loc = useLocation();
   const { isSignedIn, user, signOut } = useAppContext();
   const currentUser = user;
-  const userInitial = currentUser ? currentUser.charAt(0).toUpperCase() : "?";
 
   const handleSignOut = () => {
     signOut();
@@ -37,16 +36,24 @@ export default function ApitonHome() {
     nav("/profile");
   };
 
+  const handleEnterVault = () => {
+    if (isSignedIn) {
+      nav("/app");
+      return;
+    }
+    handleSignInNavigate();
+  };
+
   return (
     <div className="vault-page text-slate-100">
       <div className="vault-page__inner flex min-h-screen flex-col">
         {/* NAV */}
-        <header className="sticky top-0 z-20 flex justify-center px-3 pt-6">
-          <div className="flex w-[min(1100px,92vw)] items-center justify-between gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm shadow-[0_24px_70px_-45px_rgba(15,23,42,0.85)] backdrop-blur-xl">
-            <span className="text-lg font-semibold tracking-wide text-white">
-              LeagueVault
-            </span>
-            <nav className="flex items-center gap-2 text-[13px] font-medium text-slate-200/90">
+        <header className="sticky top-0 z-20 flex justify-center px-3 pt-6 sm:px-6">
+          <div className="flex w-full max-w-[1100px] flex-wrap items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm shadow-[0_24px_70px_-45px_rgba(15,23,42,0.85)] backdrop-blur-xl">
+            <div className="flex items-center gap-3 text-white">
+              <span className="text-lg font-semibold tracking-wide">LeagueVault</span>
+            </div>
+            <nav className="order-3 flex w-full flex-wrap items-center justify-center gap-1 text-[13px] font-medium text-slate-200/90 sm:order-none sm:w-auto sm:flex-1 sm:justify-center md:gap-2">
               <a className="rounded-full px-3 py-1.5 transition hover:bg-white/10" href="#features">
                 Features
               </a>
@@ -59,36 +66,50 @@ export default function ApitonHome() {
               <a className="rounded-full px-3 py-1.5 transition hover:bg-white/10" href="#contact">
                 Contact
               </a>
-              {isSignedIn && <CartDropdown />}
-              {isSignedIn && (
-                <Link className="btn btn-vault btn-sm" to="/app">
-                  Enter App
-                </Link>
-              )}
+            </nav>
+            <div className="order-2 ml-auto flex flex-1 items-center justify-end gap-2 sm:order-none sm:flex-none sm:justify-end sm:gap-3">
+              <CartDropdown />
+              <button
+                type="button"
+                className="btn btn-vault h-11 rounded-full px-6 text-[12px] font-semibold uppercase tracking-[0.28em]"
+                onClick={handleEnterVault}
+              >
+                Enter Vault
+              </button>
               <div className="dropdown dropdown-end">
-                <div
+                <button
                   tabIndex={0}
-                  role="button"
-                  className="btn btn-ghost btn-circle avatar border border-white/10 bg-white/10 text-white"
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:border-white/30 hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+                  aria-label="Account menu"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <span className="font-semibold">{userInitial}</span>
-                  </div>
-                </div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+                    <path d="M4.7 19.2a7.5 7.5 0 0 1 14.6 0" />
+                  </svg>
+                </button>
                 <ul
                   tabIndex={0}
-                  className="menu menu-sm dropdown-content mt-3 w-60 rounded-2xl border border-white/10 bg-slate-900/90 p-3 text-[13px] shadow-2xl backdrop-blur"
+                  className="menu menu-sm dropdown-content mt-3 w-56 rounded-2xl border border-white/10 bg-slate-900/95 p-3 text-[13px] shadow-2xl backdrop-blur"
                 >
                   {isSignedIn ? (
                     <>
-                      <li className="menu-title">
-                        <span className="uppercase text-xs text-slate-400">Signed in as</span>
-                      </li>
-                      <li>
-                        <span className="break-all text-sm font-medium text-slate-200">
-                          {currentUser}
-                        </span>
-                      </li>
+                      {currentUser && (
+                        <li className="px-2 pb-2 text-[12px] text-slate-400">
+                          <span className="block text-[11px] uppercase tracking-[0.2em] text-slate-500">Signed in as</span>
+                          <span className="break-all text-slate-200">{currentUser}</span>
+                        </li>
+                      )}
                       <li>
                         <button onClick={handleProfileNavigate}>View profile</button>
                       </li>
@@ -97,21 +118,13 @@ export default function ApitonHome() {
                       </li>
                     </>
                   ) : (
-                    <>
-                      <li>
-                        <button onClick={handleSignInNavigate}>Sign in</button>
-                      </li>
-                      <li className="text-sm text-slate-400">
-                        Sign in to manage your account and access the app.
-                      </li>
-                      <li className="disabled opacity-50">
-                        <span>Profile (sign in required)</span>
-                      </li>
-                    </>
+                    <li>
+                      <button onClick={handleSignInNavigate}>Sign in</button>
+                    </li>
                   )}
                 </ul>
               </div>
-            </nav>
+            </div>
           </div>
         </header>
 
