@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import Features from "./landing/components/Features.jsx";
-import AppScreen from "./landing/components/AppScreen.jsx";
 import Pricing from "./landing/components/Pricing.jsx";
 import QASection from "./landing/components/QASection.jsx";
 import Contact from "./landing/components/Contact.jsx";
@@ -11,7 +10,6 @@ import { useAppContext } from "./contexts/AppContext.jsx";
 import "./landing/assets/css/style.css";
 
 const ORBIT_LINKS = [
-  { label: "App Tour", href: "#screens" },
   { label: "Features", href: "#features" },
   { label: "About", href: "#about" },
   { label: "Pricing", href: "#pricing" },
@@ -412,8 +410,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      <AppScreen />
       <Features />
       <Pricing />
       <QASection />

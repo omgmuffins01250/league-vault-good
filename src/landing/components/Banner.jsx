@@ -1,7 +1,6 @@
 // src/landing/components/Banner.jsx
 import React from "react";
 import { Link } from "react-router-dom";
-import hero from "../assets/images/app-shots/app-shot-n-1-1.png";
 
 export default function Banner() {
   return (
@@ -25,18 +24,27 @@ export default function Banner() {
                 Enter App
               </Link>
               <a className="btn btn-keycard" href="#features">
-                See Screens
+                Explore Features
               </a>
             </div>
           </div>
 
           {/* Right visual */}
           <div className="vault-card rounded-2xl overflow-hidden p-2">
-            <img
-              src={hero}
-              alt="LeagueVault preview"
-              className="w-full h-auto rounded-xl"
-            />
+            <div
+              className="w-full rounded-xl bg-gradient-to-br from-indigo-500/30 via-amber-400/20 to-transparent p-8 text-sm text-slate-200"
+              aria-hidden="true"
+            >
+              <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-300/80">
+                Live league insights
+              </div>
+              <p className="mt-4 text-2xl font-semibold text-slate-100">
+                Draft boards, trade ledgers, rivalries, and more—organized automatically.
+              </p>
+              <p className="mt-4 text-sm text-slate-200/80">
+                Import a JSON export and LeagueVault builds the story for every season.
+              </p>
+            </div>
           </div>
         </div>
       </div>
