@@ -4469,8 +4469,11 @@ button {
   /* Vault hero with big “door” ring */
   .vault-hero {
     position: relative;
+    overflow: hidden;
     background:
-      radial-gradient(closest-side, rgba(255,255,255,0.04), transparent 70%),
+      linear-gradient(155deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 36%, rgba(5,7,11,0.38) 100%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0px, rgba(255,255,255,0.08) 1px, rgba(8,11,17,0.08) 3px),
+      radial-gradient(closest-side, rgba(255,255,255,0.05), transparent 70%),
       linear-gradient(180deg, var(--vault-surface), var(--vault-surface-2));
     border: 1px solid var(--vault-line);
     border-radius: 24px;
@@ -4497,9 +4500,12 @@ button {
   }
   .vault-hero::after {
     background:
+      linear-gradient(120deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 42%),
+      repeating-linear-gradient(110deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 1px, transparent 3.5px),
       radial-gradient(300px 300px at 85% 20%, rgba(255,255,255,0.05), transparent 60%),
       radial-gradient(200px 200px at 15% 85%, rgba(255,255,255,0.04), transparent 65%);
-    opacity: 0.9;
+    background-blend-mode: screen, soft-light, normal, normal;
+    opacity: 0.95;
   }
   
   /* Headline “unlocked” in brass gradient */
