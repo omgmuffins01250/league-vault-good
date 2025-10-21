@@ -531,10 +531,7 @@ function upsertLeague({
     espnTradesDetailedBySeason:
       espnTradesDetailedBySeason || prev.espnTradesDetailedBySeason || {},
     espnProTeamsByYear: espnProTeamsByYear || prev.espnProTeamsByYear || {},
-    espnSeasonsByYear: keepIfNonEmpty(
-      espnSeasonsByYear,
-      prev.espnSeasonsByYear || {}
-    ),
+
 
     hiddenManagers: Array.isArray(hiddenManagers)
       ? hiddenManagers
