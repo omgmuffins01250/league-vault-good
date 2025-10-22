@@ -20501,6 +20501,112 @@ export function LuckIndexTab({
     };
   }
 
+  const proTeamSourceCacheRef = React.useRef(new Map());
+  const proTeamLookupCacheRef = React.useRef(new Map());
+  const teamByeWeeksCacheRef = React.useRef(new Map());
+
+  const getProTeamSource = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamSourceCacheRef.current.has(cacheKey)) {
+        return proTeamSourceCacheRef.current.get(cacheKey);
+      }
+
+      const candidates = [];
+      const pushCandidate = (container) => {
+        if (!container) return;
+        const resolved = __resolveProTeamsForSeason(seasonKey, container);
+        if (__hasAnyEntries(resolved)) candidates.push(resolved);
+      };
+
+      pushCandidate(league);
+
+      if (typeof window !== "undefined") {
+        const src = window.__FL_SOURCES || window.__sources || {};
+        pushCandidate(src);
+        const selected =
+          src?.selectedLeague && typeof src.selectedLeague === "object"
+            ? src.selectedLeague
+            : null;
+        if (selected) pushCandidate(selected);
+      }
+
+      const source = candidates.find(__hasAnyEntries) || null;
+      proTeamSourceCacheRef.current.set(cacheKey, source);
+      return source;
+    },
+    [league]
+  );
+
+  const getProTeamLookup = React.useCallback(
+    (seasonKey) => {
+      const cacheKey = String(seasonKey ?? "");
+      if (proTeamLookupCacheRef.current.has(cacheKey)) {
+        return proTeamLookupCacheRef.current.get(cacheKey);
+      }
+      const lookup = __buildProTeamLookup(getProTeamSource(seasonKey));
+      proTeamLookupCacheRef.current.set(cacheKey, lookup);
+      return lookup;
+    },
+    [getProTeamSource]
+  );
+
+  const getTeamByeWeeks = React.useCallback(
+    (seasonKey, proTeamId) => {
+      const cacheKey = `${seasonKey}|${proTeamId}`;
+      if (teamByeWeeksCacheRef.current.has(cacheKey)) {
+        return teamByeWeeksCacheRef.current.get(cacheKey);
+      }
+
+      const targetId = Number(proTeamId);
+      if (!Number.isFinite(targetId)) {
+        teamByeWeeksCacheRef.current.set(cacheKey, []);
+        return [];
+      }
+
+      const weeks = [];
+      const source = getProTeamSource(seasonKey);
+      const pushWeeks = (team) => {
+        if (!team) return;
+        const arr = __teamByeWeekNumbers(team);
+        if (arr.length) weeks.push(...arr);
+      };
+
+      if (__hasAnyEntries(source)) {
+        if (source instanceof Map) {
+          pushWeeks(source.get(targetId));
+          pushWeeks(source.get(String(targetId)));
+        } else if (Array.isArray(source)) {
+          const found = source.find((team) => {
+            const idCandidate =
+              team?.id ?? team?.teamId ?? team?.proTeamId ?? team?.team?.id;
+            return Number(idCandidate) === targetId;
+          });
+          pushWeeks(found);
+        } else if (typeof source === "object") {
+          Object.entries(source || {}).forEach(([key, team]) => {
+            const idCandidate =
+              team?.id ?? team?.teamId ?? team?.proTeamId ?? key;
+            if (Number(idCandidate) === targetId) pushWeeks(team);
+          });
+        }
+      }
+
+      const uniqWeeks = Array.from(new Set(weeks.filter(Number.isFinite))).sort(
+        (a, b) => a - b
+      );
+      teamByeWeeksCacheRef.current.set(cacheKey, uniqWeeks);
+      return uniqWeeks;
+    },
+    [getProTeamSource]
+  );
+
+  React.useEffect(() => {
+    proTeamSourceCacheRef.current.clear();
+    proTeamLookupCacheRef.current.clear();
+    teamByeWeeksCacheRef.current.clear();
+  }, [league]);
+
   function getGamesFlexible(league) {
     const pickTeamId = (value) => {
       const n = Number(value);
@@ -21355,18 +21461,6 @@ export function LuckIndexTab({
     const totals = {};
     const details = {};
     const rosterMeta = {};
-    const proTeamLookupCache = new Map();
-    const getProTeamLookup = (seasonKey) => {
-      const cacheKey = String(seasonKey ?? "");
-      if (proTeamLookupCache.has(cacheKey)) {
-        return proTeamLookupCache.get(cacheKey);
-      }
-      const lookup = __buildProTeamLookup(
-        __resolveProTeamsForSeason(seasonKey, league)
-      );
-      proTeamLookupCache.set(cacheKey, lookup);
-      return lookup;
-    };
 
     const resolvePlayerId = (entry) => {
       const cand =
@@ -21559,6 +21653,7 @@ export function LuckIndexTab({
     START_SLOTS,
     normalizeOwnerNameLoose,
     isHiddenManager,
+    getProTeamLookup,
     league?.proTeamsByYear,
     league?.seasonsByYear,
     league?.proTeams,
@@ -22037,7 +22132,18 @@ export function LuckIndexTab({
           const players = [];
           const weightedPlayers = [];
           for (const entry of entries || []) {
-            if (!entry?.isStarter || !entry?.onBye) continue;
+            if (!entry?.isStarter) continue;
+            const proTeamIds = Array.isArray(entry?.proTeams)
+              ? entry.proTeams
+              : [];
+            const hasTeamBye = proTeamIds.some((teamId) => {
+              const teamNum = Number(teamId);
+              if (!Number.isFinite(teamNum)) return false;
+              const weeks = getTeamByeWeeks(seasonNum, teamNum);
+              return weeks.includes(weekNum);
+            });
+            const isBye = Boolean(entry?.onBye) || hasTeamBye;
+            if (!isBye) continue;
             count += 1;
             players.push(entry?.player);
             const weight = computeWeight(seasonNum, entry?.pid);
@@ -22064,6 +22170,7 @@ export function LuckIndexTab({
     injuryWeightAlpha,
     normalizedWaiverRound,
     isHiddenManager,
+    getTeamByeWeeks,
   ]);
   const comp5Data = React.useMemo(() => {
     const rawTotals = {};
