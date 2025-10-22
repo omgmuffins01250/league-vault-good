@@ -1644,7 +1644,9 @@ export function SetupTab({
             )}
           </div>
         </Card>
-        <Card
+      )}
+
+      <Card
           title="Opp Injury Luck — Opponent Player-Weeks Lost"
           allowOverflow
         >
@@ -1907,7 +1909,6 @@ export function SetupTab({
             </div>
           </div>
         </Card>
-      )}
       {comp3Detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
