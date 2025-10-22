@@ -2,6 +2,31 @@ import React from "react";
 import { canonicalizeOwner, primeOwnerMaps } from "../ownerMaps.jsx";
 import { normalizeNicknameMap } from "./nicknames.js";
 
+const extractOwnerName = (value) => {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object") {
+    const direct =
+      value?.name ??
+      value?.owner ??
+      value?.ownerName ??
+      value?.fullName ??
+      value?.displayName ??
+      value?.nickname ??
+      value?.teamManager ??
+      value?.teamOwner ??
+      value?.manager ??
+      null;
+    if (direct && String(direct).trim()) return String(direct).trim();
+    const composed = [value?.firstName, value?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (composed) return composed;
+  }
+  return String(value ?? "").trim();
+};
+
 export function useOwnerNameResolver({
   league,
   managerNicknames = {},
@@ -18,6 +43,24 @@ export function useOwnerNameResolver({
     [league?.managerNicknames]
   );
 
+  const ownerMapsForPrime = React.useMemo(() => {
+    const merged = {};
+    const mergeSource = (source = {}) => {
+      Object.entries(source || {}).forEach(([seasonKey, teamMap]) => {
+        if (!merged[seasonKey]) merged[seasonKey] = {};
+        Object.assign(merged[seasonKey], teamMap || {});
+      });
+    };
+    mergeSource(league?.ownerByTeamByYear);
+    mergeSource(league?.espnOwnerByTeamByYear);
+    mergeSource(league?.espnOwnerFullByTeamByYear);
+    return merged;
+  }, [
+    league?.ownerByTeamByYear,
+    league?.espnOwnerByTeamByYear,
+    league?.espnOwnerFullByTeamByYear,
+  ]);
+
   React.useEffect(() => {
     if (!league) return;
     const aliases =
@@ -26,14 +69,14 @@ export function useOwnerNameResolver({
       primeOwnerMaps({
         league,
         selectedLeague: league,
-        espnOwnerByTeamByYear: league?.ownerByTeamByYear || {},
+        espnOwnerByTeamByYear: ownerMapsForPrime,
         manualAliases: aliases,
       });
       setOwnerMapsVersion((v) => v + 1);
     } catch (err) {
       console.warn("useOwnerNameResolver primeOwnerMaps failed", err);
     }
-  }, [league, league?.ownerByTeamByYear]);
+  }, [league, ownerMapsForPrime]);
 
   const teamAliasMap = React.useMemo(() => {
     const map = new Map();
@@ -90,17 +133,24 @@ export function useOwnerNameResolver({
       }
     });
 
-    Object.values(league?.ownerByTeamByYear || {}).forEach((byTeam) => {
-      Object.entries(byTeam || {}).forEach(([teamKey, owner]) => {
-        const teamId = Number(teamKey);
-        if (!Number.isFinite(teamId)) return;
-        const normalizedOwner =
-          canonicalizeOwner(owner) || String(owner || "").trim();
-        if (!normalizedOwner) return;
-        if (/^team\s*\d+$/i.test(normalizedOwner)) return;
-        addTeamAliases(teamId, normalizedOwner);
+    const addFromOwnerMap = (source = {}) => {
+      Object.values(source || {}).forEach((byTeam) => {
+        Object.entries(byTeam || {}).forEach(([teamKey, owner]) => {
+          const teamId = Number(teamKey);
+          if (!Number.isFinite(teamId)) return;
+          const ownerName = extractOwnerName(owner);
+          const normalizedOwner =
+            canonicalizeOwner(ownerName) || ownerName || "";
+          if (!normalizedOwner) return;
+          if (/^team\s*\d+$/i.test(normalizedOwner)) return;
+          addTeamAliases(teamId, normalizedOwner);
+        });
       });
-    });
+    };
+
+    addFromOwnerMap(league?.ownerByTeamByYear);
+    addFromOwnerMap(league?.espnOwnerByTeamByYear);
+    addFromOwnerMap(league?.espnOwnerFullByTeamByYear);
 
     const ownersList = Array.isArray(league?.owners) ? league.owners : [];
     ownersList.forEach((ownerName, index) => {
@@ -115,6 +165,8 @@ export function useOwnerNameResolver({
   }, [
     league?.managerNicknames,
     league?.ownerByTeamByYear,
+    league?.espnOwnerByTeamByYear,
+    league?.espnOwnerFullByTeamByYear,
     league?.owners,
     managerNicknames,
     normalizedNicknamesLeague,
@@ -176,19 +228,7 @@ export function useOwnerNameResolver({
       const seasonNum = Number(seasonRaw);
       const teamId = Number(teamRaw);
       if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
-      let candidate = name;
-      if (candidate && typeof candidate === "object") {
-        candidate =
-          candidate?.name ??
-          candidate?.owner ??
-          candidate?.ownerName ??
-          candidate?.manager ??
-          candidate?.teamManager ??
-          candidate?.displayName ??
-          candidate?.fullName ??
-          candidate?.nickname ??
-          null;
-      }
+      let candidate = extractOwnerName(name);
       const normalized = normalizeOwnerNameLoose(candidate);
       if (!normalized) return;
       map[seasonNum] ??= {};
@@ -222,11 +262,16 @@ export function useOwnerNameResolver({
       console.warn("useOwnerNameResolver manager map from ownerMaps failed", err);
     }
 
-    Object.entries(league?.ownerByTeamByYear || {}).forEach(
-      ([seasonKey, ownerMap]) => {
+    const ownerMapSources = [
+      league?.ownerByTeamByYear,
+      league?.espnOwnerByTeamByYear,
+      league?.espnOwnerFullByTeamByYear,
+    ];
+    ownerMapSources.forEach((source) => {
+      Object.entries(source || {}).forEach(([seasonKey, ownerMap]) => {
         consumeOwnerMap(seasonKey, ownerMap);
-      }
-    );
+      });
+    });
 
     Object.entries(league?.seasonsByYear || {}).forEach(
       ([seasonKey, seasonValue]) => {
@@ -295,7 +340,14 @@ export function useOwnerNameResolver({
     });
 
     return map;
-  }, [league, rawRows, normalizeOwnerNameLoose, ownerMapsVersion]);
+  }, [
+    league,
+    league?.espnOwnerByTeamByYear,
+    league?.espnOwnerFullByTeamByYear,
+    rawRows,
+    normalizeOwnerNameLoose,
+    ownerMapsVersion,
+  ]);
 
   const ownerNameOf = React.useCallback(
     (season, teamId) => {
