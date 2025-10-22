@@ -22092,162 +22092,505 @@ export function LuckIndexTab({
     draftIndexByYear,
     isHiddenManager,
   ]);
-  const byeWeekMeta = React.useMemo(() => {
-    const raw = {};
-    const weighted = {};
-
-    const computeWeight = (seasonNum, pid) => {
-      const seasonMeta = draftIndexByYear.get(Number(seasonNum));
-      const pidMeta = seasonMeta?.pidMap?.get(Number(pid));
-      const draftedRound = Number(pidMeta?.round);
-      const baseRound = getBaseRoundForSeason(seasonNum);
-      const fallbackRound =
-        Number.isFinite(draftedRound) && draftedRound > 0
-          ? draftedRound
-          : normalizedWaiverRound;
-      const roundClamped = Math.min(
-        Math.max(1, Math.round(fallbackRound)),
-        baseRound
-      );
-      const base = baseRound + 1 - roundClamped;
-      return Math.pow(base, injuryWeightAlpha);
-    };
-
-    for (const [owner, bySeason] of Object.entries(
-      rosterMetaByOwnerSeasonWeek || {}
-    )) {
-      if (!owner || isHiddenManager(owner)) continue;
-      for (const [seasonKey, byWeek] of Object.entries(bySeason || {})) {
-        const seasonNum = Number(seasonKey);
-        if (!Number.isFinite(seasonNum)) continue;
-        raw[owner] ??= {};
-        weighted[owner] ??= {};
-        raw[owner][seasonNum] ??= {};
-        weighted[owner][seasonNum] ??= {};
-        for (const [weekKey, entries] of Object.entries(byWeek || {})) {
-          const weekNum = Number(weekKey);
-          if (!Number.isFinite(weekNum)) continue;
-          let count = 0;
-          let weightedSum = 0;
-          const players = [];
-          const weightedPlayers = [];
-          for (const entry of entries || []) {
-            if (!entry?.isStarter) continue;
-            const proTeamIds = Array.isArray(entry?.proTeams)
-              ? entry.proTeams
-              : [];
-            const hasTeamBye = proTeamIds.some((teamId) => {
-              const teamNum = Number(teamId);
-              if (!Number.isFinite(teamNum)) return false;
-              const weeks = getTeamByeWeeks(seasonNum, teamNum);
-              return weeks.includes(weekNum);
-            });
-            const isBye = Boolean(entry?.onBye) || hasTeamBye;
-            if (!isBye) continue;
-            count += 1;
-            players.push(entry?.player);
-            const weight = computeWeight(seasonNum, entry?.pid);
-            weightedSum += weight;
-            weightedPlayers.push({ player: entry?.player, weight });
-          }
-          raw[owner][seasonNum][weekNum] = {
-            count,
-            players,
-          };
-          weighted[owner][seasonNum][weekNum] = {
-            value: weightedSum,
-            players: weightedPlayers,
-          };
+  const draftOverallBySeason = React.useMemo(() => {
+    const map = new Map();
+    for (const [seasonKey, picks] of Object.entries(draftByYear || {})) {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) continue;
+      let maxOverall = 0;
+      const pickByPid = new Map();
+      for (const pick of picks || []) {
+        const pid = Number(
+          pick?.playerId ??
+            pick?.pid ??
+            pick?.player?.id ??
+            pick?.player?.playerId
+        );
+        const overall = Number(
+          pick?.overall ??
+            pick?.overallPick ??
+            pick?.pick ??
+            pick?.pickNumber ??
+            pick?.overallSelection ??
+            pick?.overall_index ??
+            pick?.slot ??
+            pick?.selection
+        );
+        if (!Number.isFinite(pid) || !Number.isFinite(overall) || overall <= 0)
+          continue;
+        if (!pickByPid.has(pid) || overall < pickByPid.get(pid)) {
+          pickByPid.set(pid, overall);
         }
+        if (overall > maxOverall) maxOverall = overall;
       }
+      map.set(seasonNum, {
+        maxOverall: maxOverall > 0 ? maxOverall : null,
+        pickByPid,
+      });
     }
-
-    return { raw, weighted };
-  }, [
-    rosterMetaByOwnerSeasonWeek,
-    draftIndexByYear,
-    getBaseRoundForSeason,
-    injuryWeightAlpha,
-    normalizedWaiverRound,
-    isHiddenManager,
-    getTeamByeWeeks,
-  ]);
+    return map;
+  }, [draftByYear]);
   const comp5Data = React.useMemo(() => {
     const rawTotals = {};
     const weightedTotals = {};
     const details = {};
-    const rawCounts = byeWeekMeta.raw || {};
-    const weightedCounts = byeWeekMeta.weighted || {};
+    const summary = {};
 
-    for (const [owner, seasonsMap] of Object.entries(
-      scheduleByOwnerSeason || {}
-    )) {
-      const ownerRawTotals = {};
-      const ownerWeightedTotals = {};
-      const ownerDetails = {};
+    const ownerMapsBySeason = new Map();
+    const ensureOwnerMapSeason = (seasonNum) => {
+      if (!ownerMapsBySeason.has(seasonNum)) {
+        ownerMapsBySeason.set(seasonNum, new Map());
+      }
+      return ownerMapsBySeason.get(seasonNum);
+    };
+    const addOwnerMapping = (seasonRaw, teamRaw, ownerValue) => {
+      const seasonNum = Number(seasonRaw);
+      const teamId = Number(teamRaw);
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
+      const normalized = normalizeOwnerNameLoose(ownerValue);
+      if (!normalized || isHiddenManager(normalized)) return;
+      const ownerMap = ensureOwnerMapSeason(seasonNum);
+      if (!ownerMap.has(normalized)) {
+        const displayName =
+          ownerNameOf(seasonNum, teamId) ||
+          (typeof ownerValue === "string" ? ownerValue : null) ||
+          normalized;
+        const info = {
+          ownerKey: normalized,
+          teamId,
+          ownerDisplay: displayName,
+        };
+        const keys = new Set([
+          normalized,
+          canonicalizeOwner(ownerValue) || null,
+          typeof ownerValue === "string" ? ownerValue.trim() : null,
+        ]);
+        keys.forEach((key) => {
+          const resolved = normalizeOwnerNameLoose(key);
+          if (resolved && !ownerMap.has(resolved)) {
+            ownerMap.set(resolved, info);
+          }
+        });
+      }
+    };
 
-      for (const [seasonKey, scheduleRows] of Object.entries(
-        seasonsMap || {}
-      )) {
-        const seasonNum = Number(seasonKey);
-        if (!Number.isFinite(seasonNum)) continue;
-        let ownRawSum = 0;
-        let oppRawSum = 0;
-        let ownWeightedSum = 0;
-        let oppWeightedSum = 0;
-        const rows = [];
+    Object.entries(league?.ownerByTeamByYear || {}).forEach(
+      ([seasonKey, ownerMap]) => {
+        Object.entries(ownerMap || {}).forEach(([teamKey, ownerName]) => {
+          addOwnerMapping(seasonKey, teamKey, ownerName);
+        });
+      }
+    );
+    Object.entries(managerBySeasonTeam || {}).forEach(
+      ([seasonKey, teamMap]) => {
+        Object.entries(teamMap || {}).forEach(([teamKey, ownerName]) => {
+          addOwnerMapping(seasonKey, teamKey, ownerName);
+        });
+      }
+    );
 
-        for (const entry of scheduleRows || []) {
-          const weekNum = Number(entry?.week);
-          if (!Number.isFinite(weekNum)) continue;
-          const opponent = entry?.opponent;
-          if (!opponent) continue;
-          const ownWeekRaw = rawCounts?.[owner]?.[seasonNum]?.[weekNum];
-          const oppWeekRaw = rawCounts?.[opponent]?.[seasonNum]?.[weekNum];
-          const ownCount = ownWeekRaw?.count || 0;
-          const oppCount = oppWeekRaw?.count || 0;
-          const ownWeekWeighted =
-            weightedCounts?.[owner]?.[seasonNum]?.[weekNum]?.value || 0;
-          const oppWeekWeighted =
-            weightedCounts?.[opponent]?.[seasonNum]?.[weekNum]?.value || 0;
+    const scheduleBySeason = new Map();
+    const ensureWeekBucket = (seasonNum, weekNum) => {
+      if (!scheduleBySeason.has(seasonNum)) {
+        scheduleBySeason.set(seasonNum, new Map());
+      }
+      const weekMap = scheduleBySeason.get(seasonNum);
+      if (!weekMap.has(weekNum)) {
+        weekMap.set(weekNum, []);
+      }
+      return weekMap.get(weekNum);
+    };
 
-          ownRawSum += ownCount;
-          oppRawSum += oppCount;
-          ownWeightedSum += ownWeekWeighted;
-          oppWeightedSum += oppWeekWeighted;
+    const resolveTeamInfo = (seasonNum, ownerValue) => {
+      const ownerMap = ownerMapsBySeason.get(seasonNum);
+      if (!ownerMap) return null;
+      const normalized = normalizeOwnerNameLoose(ownerValue);
+      if (!normalized) return null;
+      const info = ownerMap.get(normalized);
+      return info || null;
+    };
 
-          rows.push({
-            week: weekNum,
-            opponent: entry?.opponentDisplay || opponent,
-            opponentKey: opponent,
-            ownCount,
-            oppCount,
-            ownPlayers: ownWeekRaw?.players || [],
-            oppPlayers: oppWeekRaw?.players || [],
-            ownWeighted: ownWeekWeighted,
-            oppWeighted: oppWeekWeighted,
-            diff: ownCount - oppCount,
-            diffWeighted: ownWeekWeighted - oppWeekWeighted,
+    const seenPairs = new Set();
+    (rawRows || []).forEach((row) => {
+      const seasonNum = Number(
+        row?.season ??
+          row?.year ??
+          row?.seasonId ??
+          row?.season_id ??
+          row?.seasonYear
+      );
+      const weekNum = Number(
+        row?.week ??
+          row?.wk ??
+          row?.matchupPeriod ??
+          row?.matchupPeriodId ??
+          row?.scoringPeriod ??
+          row?.scoringPeriodId
+      );
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) return;
+      if (weekNum <= 0) return;
+      const managerInfo = resolveTeamInfo(seasonNum, row?.manager);
+      const opponentInfo = resolveTeamInfo(seasonNum, row?.opponent);
+      if (!managerInfo || !opponentInfo) return;
+      const { teamId: teamAId, ownerKey: ownerAKey } = managerInfo;
+      const { teamId: teamBId, ownerKey: ownerBKey } = opponentInfo;
+      if (
+        !Number.isFinite(teamAId) ||
+        !Number.isFinite(teamBId) ||
+        teamAId === teamBId
+      ) {
+        return;
+      }
+      if (isHiddenManager(ownerAKey) || isHiddenManager(ownerBKey)) return;
+      const pairKey = `${seasonNum}|${weekNum}|${Math.min(teamAId, teamBId)}-${Math.max(
+        teamAId,
+        teamBId
+      )}`;
+      if (seenPairs.has(pairKey)) return;
+      seenPairs.add(pairKey);
+
+      const weekBucket = ensureWeekBucket(seasonNum, weekNum);
+      weekBucket.push({
+        teamA: teamAId,
+        teamB: teamBId,
+        ownerAKey,
+        ownerBKey,
+        ownerADisplay: managerInfo.ownerDisplay || ownerAKey,
+        ownerBDisplay: opponentInfo.ownerDisplay || ownerBKey,
+      });
+    });
+
+    ownerMapsBySeason.forEach((ownerMap, seasonNum) => {
+      if (scheduleBySeason.has(seasonNum)) return;
+      const fallback = new Map();
+      const seen = new Set();
+      Object.entries(scheduleByOwnerSeason || {}).forEach(
+        ([ownerKey, bySeason]) => {
+          const rows = bySeason?.[seasonNum] ?? bySeason?.[String(seasonNum)];
+          if (!Array.isArray(rows)) return;
+          rows.forEach((entry) => {
+            const weekNum = Number(entry?.week);
+            if (!Number.isFinite(weekNum) || weekNum <= 0) return;
+            const ownerInfo = resolveTeamInfo(seasonNum, ownerKey);
+            const opponentInfo = resolveTeamInfo(seasonNum, entry?.opponent);
+            if (!ownerInfo || !opponentInfo) return;
+            const key = `${seasonNum}|${weekNum}|${[ownerInfo.ownerKey,
+              opponentInfo.ownerKey,
+            ]
+              .filter(Boolean)
+              .sort()
+              .join("|")}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            if (!fallback.has(weekNum)) fallback.set(weekNum, []);
+            fallback.get(weekNum).push({
+              teamA: ownerInfo.teamId,
+              teamB: opponentInfo.teamId,
+              ownerAKey: ownerInfo.ownerKey,
+              ownerBKey: opponentInfo.ownerKey,
+              ownerADisplay: entry?.manager ?? ownerInfo.ownerDisplay,
+              ownerBDisplay:
+                entry?.opponentDisplay ?? entry?.opponent ?? opponentInfo.ownerDisplay,
+            });
           });
         }
-
-        ownerRawTotals[seasonNum] = ownRawSum - oppRawSum;
-        ownerWeightedTotals[seasonNum] = ownWeightedSum - oppWeightedSum;
-        ownerDetails[seasonNum] = rows;
+      );
+      if (fallback.size) {
+        scheduleBySeason.set(seasonNum, fallback);
       }
+    });
 
-      if (Object.keys(ownerRawTotals).length)
-        rawTotals[owner] = ownerRawTotals;
-      if (Object.keys(ownerWeightedTotals).length)
-        weightedTotals[owner] = ownerWeightedTotals;
-      if (Object.keys(ownerDetails).length) details[owner] = ownerDetails;
-    }
+    const ownerSeasonData = new Map();
+    const resolveTeamNameFor = (ownerKey, seasonNum, teamId) => {
+      const sources = [];
+      if (league?.teamNamesByOwner) sources.push(league.teamNamesByOwner);
+      if (typeof window !== "undefined") {
+        const winSources = window.__sources || {};
+        if (winSources.teamNamesByOwner)
+          sources.push(winSources.teamNamesByOwner);
+        if (winSources.espnTeamNamesByOwner)
+          sources.push(winSources.espnTeamNamesByOwner);
+      }
+      const variants = new Set([
+        ownerKey,
+        canonicalizeOwner(ownerKey),
+        typeof ownerKey === "string" ? ownerKey.trim() : null,
+      ]);
+      for (const variant of variants) {
+        if (!variant) continue;
+        for (const source of sources) {
+          const bucket = source?.[variant];
+          if (!bucket) continue;
+          const value = bucket?.[seasonNum] ?? bucket?.[String(seasonNum)];
+          if (value != null && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+      }
+      const seasonObj =
+        get(league, "seasonsByYear", seasonNum) ??
+        get(league, "seasonsByYear", String(seasonNum));
+      if (seasonObj && Number.isFinite(teamId)) {
+        const teams = Array.isArray(seasonObj?.teams) ? seasonObj.teams : [];
+        const match = teams.find((team) => {
+          const ids = [team?.id, team?.teamId, team?.teamID, team?.team?.id];
+          return ids.some((cand) => Number(cand) === Number(teamId));
+        });
+        if (match) {
+          const candidates = [
+            match?.teamName,
+            match?.name,
+            match?.nickname,
+            match?.location && match?.nickname
+              ? `${match.location} ${match.nickname}`
+              : null,
+          ];
+          for (const cand of candidates) {
+            if (cand != null && String(cand).trim()) {
+              return String(cand).trim();
+            }
+          }
+        }
+      }
+      if (Number.isFinite(teamId)) {
+        return `Team ${teamId}`;
+      }
+      return null;
+    };
 
-    return { rawTotals, weightedTotals, details };
-  }, [scheduleByOwnerSeason, byeWeekMeta]);
+    const ensureOwnerSeason = (ownerKey, seasonNum, meta = {}) => {
+      if (!ownerSeasonData.has(ownerKey)) {
+        ownerSeasonData.set(ownerKey, {
+          displayName: meta.ownerDisplay || ownerKey,
+          seasons: new Map(),
+        });
+      }
+      const entry = ownerSeasonData.get(ownerKey);
+      if (!entry.displayName && meta.ownerDisplay) {
+        entry.displayName = meta.ownerDisplay;
+      }
+      if (!entry.seasons.has(seasonNum)) {
+        entry.seasons.set(seasonNum, {
+          teamId: Number.isFinite(meta.teamId) ? Number(meta.teamId) : null,
+          teamName: meta.teamName || null,
+          ownerDisplay: meta.ownerDisplay || entry.displayName || ownerKey,
+          ownRaw: 0,
+          oppRaw: 0,
+          ownWeighted: 0,
+          oppWeighted: 0,
+          detail: [],
+          weeks: new Set(),
+        });
+      } else {
+        const seasonEntry = entry.seasons.get(seasonNum);
+        if (seasonEntry.teamId == null && Number.isFinite(meta.teamId)) {
+          seasonEntry.teamId = Number(meta.teamId);
+        }
+        if (!seasonEntry.teamName && meta.teamName) {
+          seasonEntry.teamName = meta.teamName;
+        }
+      }
+      return entry.seasons.get(seasonNum);
+    };
+
+    const computeCounts = (ownerKey, seasonNum, weekNum, weightFn) => {
+      const byOwner = rosterMetaByOwnerSeasonWeek?.[ownerKey];
+      if (!byOwner) return { count: 0, weighted: 0, players: [] };
+      const bySeason =
+        byOwner?.[seasonNum] ?? byOwner?.[String(seasonNum)];
+      if (!bySeason) return { count: 0, weighted: 0, players: [] };
+      const arr = bySeason?.[weekNum] ?? bySeason?.[String(weekNum)];
+      const entries = Array.isArray(arr) ? arr : [];
+      let count = 0;
+      let weightedSum = 0;
+      const players = [];
+      for (const meta of entries) {
+        if (!meta?.isStarter) continue;
+        if (!meta?.onBye) continue;
+        count += 1;
+        const pid = Number(meta?.pid);
+        const weight = weightFn(pid);
+        weightedSum += weight;
+        if (meta?.player) players.push(meta.player);
+      }
+      return {
+        count,
+        weighted: Number(weightedSum.toFixed(6)),
+        players,
+      };
+    };
+
+    ownerMapsBySeason.forEach((ownerMap, seasonNum) => {
+      const weekMap = scheduleBySeason.get(seasonNum);
+      if (!weekMap || !weekMap.size) return;
+      const weekNums = Array.from(weekMap.keys())
+        .map((w) => Number(w))
+        .filter((w) => Number.isFinite(w) && w > 0)
+        .sort((a, b) => a - b);
+      if (!weekNums.length) return;
+
+      let maxWeekLimit = weekNums[weekNums.length - 1];
+      const currentWeekCandidates = [
+        get(league, "espnCurrentWeekBySeason", seasonNum),
+        get(league, "espnCurrentWeekBySeason", String(seasonNum)),
+        get(league, "currentWeekBySeason", seasonNum),
+        get(league, "currentWeekBySeason", String(seasonNum)),
+        get(league, "currentWeekByYear", seasonNum),
+        get(league, "currentWeekByYear", String(seasonNum)),
+      ];
+      currentWeekCandidates.forEach((cand) => {
+        const val = Number(cand);
+        if (Number.isFinite(val) && val > 0) {
+          maxWeekLimit = Math.min(maxWeekLimit, Math.floor(val));
+        }
+      });
+      const exclusive = resolveCurrentWeekExclusive(seasonNum);
+      if (Number.isFinite(exclusive) && exclusive > 0) {
+        maxWeekLimit = Math.min(maxWeekLimit, exclusive - 1);
+      }
+      if (!Number.isFinite(maxWeekLimit) || maxWeekLimit <= 0) return;
+      const activeWeeks = weekNums.filter((wk) => wk <= maxWeekLimit);
+      if (!activeWeeks.length) return;
+
+      const draftMeta = draftOverallBySeason.get(seasonNum) || {
+        maxOverall: null,
+        pickByPid: new Map(),
+      };
+      const weightFn = (pid) => {
+        if (!Number.isFinite(pid)) return 1;
+        const overall = draftMeta.pickByPid.get(Number(pid));
+        if (!Number.isFinite(overall)) return 1;
+        if (!Number.isFinite(draftMeta.maxOverall) || draftMeta.maxOverall <= 0)
+          return 1;
+        const weight =
+          ((draftMeta.maxOverall + 1 - overall) / draftMeta.maxOverall) * 2;
+        return Math.max(1, Math.min(2, weight));
+      };
+
+      activeWeeks.forEach((weekNum) => {
+        const matches = weekMap.get(weekNum) || [];
+        matches.forEach((match) => {
+          const ownerAKey = match?.ownerAKey;
+          const ownerBKey = match?.ownerBKey;
+          if (!ownerAKey || !ownerBKey) return;
+          if (isHiddenManager(ownerAKey) || isHiddenManager(ownerBKey)) return;
+
+          const teamNameA = resolveTeamNameFor(
+            ownerAKey,
+            seasonNum,
+            match?.teamA
+          );
+          const teamNameB = resolveTeamNameFor(
+            ownerBKey,
+            seasonNum,
+            match?.teamB
+          );
+          const seasonA = ensureOwnerSeason(ownerAKey, seasonNum, {
+            teamId: match?.teamA,
+            ownerDisplay: match?.ownerADisplay,
+            teamName: teamNameA,
+          });
+          const seasonB = ensureOwnerSeason(ownerBKey, seasonNum, {
+            teamId: match?.teamB,
+            ownerDisplay: match?.ownerBDisplay,
+            teamName: teamNameB,
+          });
+
+          const countsA = computeCounts(ownerAKey, seasonNum, weekNum, weightFn);
+          const countsB = computeCounts(ownerBKey, seasonNum, weekNum, weightFn);
+
+          seasonA.ownRaw += countsA.count;
+          seasonA.oppRaw += countsB.count;
+          seasonA.ownWeighted += countsA.weighted;
+          seasonA.oppWeighted += countsB.weighted;
+          seasonA.weeks.add(weekNum);
+          seasonA.detail.push({
+            week: weekNum,
+            opponent: match?.ownerBDisplay || ownerBKey,
+            opponentKey: ownerBKey,
+            ownCount: countsA.count,
+            oppCount: countsB.count,
+            ownPlayers: countsA.players,
+            oppPlayers: countsB.players,
+            ownWeighted: countsA.weighted,
+            oppWeighted: countsB.weighted,
+            diff: countsA.count - countsB.count,
+            diffWeighted: countsA.weighted - countsB.weighted,
+          });
+
+          seasonB.ownRaw += countsB.count;
+          seasonB.oppRaw += countsA.count;
+          seasonB.ownWeighted += countsB.weighted;
+          seasonB.oppWeighted += countsA.weighted;
+          seasonB.weeks.add(weekNum);
+          seasonB.detail.push({
+            week: weekNum,
+            opponent: match?.ownerADisplay || ownerAKey,
+            opponentKey: ownerAKey,
+            ownCount: countsB.count,
+            oppCount: countsA.count,
+            ownPlayers: countsB.players,
+            oppPlayers: countsA.players,
+            ownWeighted: countsB.weighted,
+            oppWeighted: countsA.weighted,
+            diff: countsB.count - countsA.count,
+            diffWeighted: countsB.weighted - countsA.weighted,
+          });
+        });
+      });
+    });
+
+    ownerSeasonData.forEach((ownerEntry, ownerKey) => {
+      const { displayName, seasons } = ownerEntry;
+      seasons.forEach((seasonEntry, seasonNum) => {
+        const weeksCounted = seasonEntry.weeks.size;
+        const netRaw = seasonEntry.ownRaw - seasonEntry.oppRaw;
+        const netWeighted =
+          Number((seasonEntry.ownWeighted - seasonEntry.oppWeighted).toFixed(6));
+        rawTotals[ownerKey] ??= {};
+        rawTotals[ownerKey][seasonNum] = netRaw;
+        weightedTotals[ownerKey] ??= {};
+        weightedTotals[ownerKey][seasonNum] = netWeighted;
+        if (seasonEntry.detail.length) {
+          details[ownerKey] ??= {};
+          details[ownerKey][seasonNum] = seasonEntry.detail;
+        }
+        summary[ownerKey] ??= {};
+        summary[ownerKey][seasonNum] = {
+          owner: displayName,
+          teamId: seasonEntry.teamId,
+          teamName:
+            seasonEntry.teamName ||
+            resolveTeamNameFor(ownerKey, seasonNum, seasonEntry.teamId),
+          weeksCounted,
+          yourByes: seasonEntry.ownRaw,
+          oppByes: seasonEntry.oppRaw,
+          net: netRaw,
+          yourByesWeighted: Number(seasonEntry.ownWeighted.toFixed(6)),
+          oppByesWeighted: Number(seasonEntry.oppWeighted.toFixed(6)),
+          netWeighted,
+        };
+      });
+    });
+
+    return { rawTotals, weightedTotals, details, summary };
+  }, [
+    rawRows,
+    league,
+    normalizeOwnerNameLoose,
+    canonicalizeOwner,
+    isHiddenManager,
+    ownerNameOf,
+    resolveCurrentWeekExclusive,
+    rosterMetaByOwnerSeasonWeek,
+    draftOverallBySeason,
+    scheduleByOwnerSeason,
+    managerBySeasonTeam,
+  ]);
   const comp5TotalsSource = isByeWeightedView
     ? comp5Data.weightedTotals
     : comp5Data.rawTotals;
+  const comp5SummaryByOwnerYear = comp5Data.summary || {};
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false } = options;
     const entries = [];
@@ -22996,6 +23339,14 @@ export function LuckIndexTab({
     },
     [isByeWeightedView]
   );
+  const formatByeCount = React.useCallback((v) => {
+    if (!Number.isFinite(v)) return "—";
+    return Number(v).toFixed(0);
+  }, []);
+  const formatByeWeighted = React.useCallback((v) => {
+    if (!Number.isFinite(v)) return "—";
+    return Number(v).toFixed(2);
+  }, []);
   const injuryTotalsSource = isWeightedView
     ? injuryWeightedByOwnerYear.totals
     : injuryByOwnerYear;
@@ -23058,6 +23409,21 @@ export function LuckIndexTab({
         : comp5Detail.season;
     return getDetailRows(comp5Data.details, comp5Detail.owner, seasonKey);
   }, [comp5Detail, comp5Data.details, getDetailRows]);
+  const comp5DetailSummary = React.useMemo(() => {
+    if (!comp5Detail?.owner) return null;
+    const seasonKey =
+      comp5Detail.seasonKey != null
+        ? comp5Detail.seasonKey
+        : comp5Detail.season;
+    if (seasonKey == null) return null;
+    const ownerSummary = comp5SummaryByOwnerYear?.[comp5Detail.owner];
+    if (!ownerSummary || typeof ownerSummary !== "object") return null;
+    const numericSeason = Number(seasonKey);
+    if (Number.isFinite(numericSeason) && ownerSummary[numericSeason]) {
+      return ownerSummary[numericSeason];
+    }
+    return ownerSummary[String(seasonKey)] || null;
+  }, [comp5Detail, comp5SummaryByOwnerYear]);
   const comp5RawTotal = React.useMemo(() => {
     if (!comp5Detail?.owner) return 0;
     const seasonKey =
@@ -24329,22 +24695,74 @@ export function LuckIndexTab({
               </button>
             </div>
 
-            <div className="px-6 py-4 space-y-1 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
-              <div>
-                Raw differential:{" "}
-                <span className="font-semibold text-slate-800 dark:text-slate-100">
-                  {Number.isFinite(comp5RawTotal)
-                    ? comp5RawTotal.toFixed(0)
-                    : "—"}
-                </span>
+            <div className="px-6 py-4 space-y-3 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Team
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {comp5DetailSummary?.teamName || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Weeks counted
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {Number.isFinite(comp5DetailSummary?.weeksCounted)
+                      ? comp5DetailSummary.weeksCounted
+                      : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Your byes
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {formatByeCount(comp5DetailSummary?.yourByes)}
+                  </div>
+                  <div className="text-[11px] text-slate-500/80 dark:text-slate-400/80">
+                    Weighted: {formatByeWeighted(comp5DetailSummary?.yourByesWeighted)}
+                  </div>
+                </div>
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Opponent byes
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {formatByeCount(comp5DetailSummary?.oppByes)}
+                  </div>
+                  <div className="text-[11px] text-slate-500/80 dark:text-slate-400/80">
+                    Weighted: {formatByeWeighted(comp5DetailSummary?.oppByesWeighted)}
+                  </div>
+                </div>
               </div>
-              <div>
-                Weighted differential:{" "}
-                <span className="font-semibold text-slate-800 dark:text-slate-100">
-                  {Number.isFinite(comp5WeightedTotal)
-                    ? comp5WeightedTotal.toFixed(2)
-                    : "—"}
-                </span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Net (You - Opp)
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {formatByeCount(
+                      Number.isFinite(comp5RawTotal)
+                        ? comp5RawTotal
+                        : comp5DetailSummary?.net
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="uppercase tracking-[0.18em] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Weighted net
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {formatByeWeighted(
+                      Number.isFinite(comp5WeightedTotal)
+                        ? comp5WeightedTotal
+                        : comp5DetailSummary?.netWeighted
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -24361,8 +24779,8 @@ export function LuckIndexTab({
                       <th className="px-4 py-3 text-left">Opponent</th>
                       <th className="px-4 py-3 text-left">Your byes</th>
                       <th className="px-4 py-3 text-left">Opponent byes</th>
-                      <th className="px-4 py-3 text-right">Diff</th>
-                      <th className="px-4 py-3 text-right">Weighted diff</th>
+                      <th className="px-4 py-3 text-right">Net (You - Opp)</th>
+                      <th className="px-4 py-3 text-right">Weighted net</th>
                     </tr>
                   </thead>
                   <tbody className={tableBodyClass}>
