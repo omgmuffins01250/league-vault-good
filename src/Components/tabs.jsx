@@ -21235,6 +21235,31 @@ export function LuckIndexTab({
     []
   );
 
+  const readOwnerNameValue = React.useCallback((value) => {
+    if (value == null) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "object") {
+      const direct =
+        value?.name ??
+        value?.owner ??
+        value?.ownerName ??
+        value?.fullName ??
+        value?.displayName ??
+        value?.nickname ??
+        value?.teamManager ??
+        value?.teamOwner ??
+        value?.manager ??
+        null;
+      if (direct && String(direct).trim()) return String(direct).trim();
+      const composed = [value?.firstName, value?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      if (composed) return composed;
+    }
+    return String(value ?? "").trim();
+  }, []);
+
   const draftIndexByYear = React.useMemo(() => {
     const map = new Map();
     const toNumber = (v) => {
@@ -22136,6 +22161,11 @@ export function LuckIndexTab({
     const details = {};
     const summary = {};
 
+    const scheduleRows = [];
+    if (Array.isArray(rawRows)) scheduleRows.push(...rawRows);
+    const leagueRows = league?.rows;
+    if (Array.isArray(leagueRows)) scheduleRows.push(...leagueRows);
+
     const ownerMapsBySeason = new Map();
     const ensureOwnerMapSeason = (seasonNum) => {
       if (!ownerMapsBySeason.has(seasonNum)) {
@@ -22147,40 +22177,60 @@ export function LuckIndexTab({
       const seasonNum = Number(seasonRaw);
       const teamId = Number(teamRaw);
       if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
-      const normalized = normalizeOwnerNameLoose(ownerValue);
+      const ownerName = readOwnerNameValue(ownerValue);
+      const normalized = normalizeOwnerNameLoose(ownerName);
       if (!normalized || isHiddenManager(normalized)) return;
       const ownerMap = ensureOwnerMapSeason(seasonNum);
-      if (!ownerMap.has(normalized)) {
-        const displayName =
-          ownerNameOf(seasonNum, teamId) ||
-          (typeof ownerValue === "string" ? ownerValue : null) ||
-          normalized;
-        const info = {
-          ownerKey: normalized,
-          teamId,
-          ownerDisplay: displayName,
-        };
-        const keys = new Set([
-          normalized,
-          canonicalizeOwner(ownerValue) || null,
-          typeof ownerValue === "string" ? ownerValue.trim() : null,
-        ]);
-        keys.forEach((key) => {
-          const resolved = normalizeOwnerNameLoose(key);
-          if (resolved && !ownerMap.has(resolved)) {
-            ownerMap.set(resolved, info);
-          }
-        });
-      }
+      const displayName =
+        ownerNameOf(seasonNum, teamId) ||
+        (ownerName ? ownerName : null) ||
+        normalized;
+      const info = {
+        ownerKey: normalized,
+        teamId,
+        ownerDisplay: displayName,
+      };
+      const keys = new Set([
+        normalized,
+        canonicalizeOwner(ownerName) || null,
+        ownerName,
+        ownerName ? ownerName.toLowerCase() : null,
+        `Team ${teamId}`,
+        `team ${teamId}`,
+        `Team${teamId}`,
+        `team${teamId}`,
+        String(teamId),
+        `team:${teamId}`,
+      ]);
+      keys.forEach((key) => {
+        const trimmed = typeof key === "string" ? key.trim() : "";
+        if (!trimmed) return;
+        if (!ownerMap.has(trimmed)) {
+          ownerMap.set(trimmed, info);
+        }
+        const lower = trimmed.toLowerCase();
+        if (lower && !ownerMap.has(lower)) {
+          ownerMap.set(lower, info);
+        }
+        const normalizedKey = normalizeOwnerNameLoose(trimmed);
+        if (normalizedKey && !ownerMap.has(normalizedKey)) {
+          ownerMap.set(normalizedKey, info);
+        }
+      });
     };
 
-    Object.entries(league?.ownerByTeamByYear || {}).forEach(
-      ([seasonKey, ownerMap]) => {
+    const addOwnerMappingsFromSource = (source) => {
+      Object.entries(source || {}).forEach(([seasonKey, ownerMap]) => {
         Object.entries(ownerMap || {}).forEach(([teamKey, ownerName]) => {
           addOwnerMapping(seasonKey, teamKey, ownerName);
         });
-      }
-    );
+      });
+    };
+
+    addOwnerMappingsFromSource(league?.ownerByTeamByYear);
+    addOwnerMappingsFromSource(league?.ownersByTeamByYear);
+    addOwnerMappingsFromSource(league?.espnOwnerByTeamByYear);
+    addOwnerMappingsFromSource(league?.espnOwnerFullByTeamByYear);
     Object.entries(managerBySeasonTeam || {}).forEach(
       ([seasonKey, teamMap]) => {
         Object.entries(teamMap || {}).forEach(([teamKey, ownerName]) => {
@@ -22201,17 +22251,47 @@ export function LuckIndexTab({
       return weekMap.get(weekNum);
     };
 
-    const resolveTeamInfo = (seasonNum, ownerValue) => {
+    const resolveTeamInfo = (seasonNum, ownerValue, teamHint) => {
       const ownerMap = ownerMapsBySeason.get(seasonNum);
       if (!ownerMap) return null;
-      const normalized = normalizeOwnerNameLoose(ownerValue);
-      if (!normalized) return null;
-      const info = ownerMap.get(normalized);
-      return info || null;
+      const candidates = [];
+      const rawName = readOwnerNameValue(ownerValue);
+      const normalizedDirect = normalizeOwnerNameLoose(ownerValue);
+      const normalizedRaw = normalizeOwnerNameLoose(rawName);
+      if (normalizedDirect) candidates.push(normalizedDirect);
+      if (normalizedRaw && normalizedRaw !== normalizedDirect)
+        candidates.push(normalizedRaw);
+      if (typeof ownerValue === "string") {
+        const trimmed = ownerValue.trim();
+        if (trimmed) {
+          candidates.push(trimmed, trimmed.toLowerCase());
+        }
+      }
+      if (rawName) {
+        candidates.push(rawName, rawName.toLowerCase());
+      }
+      const teamIdCandidate = Number(teamHint);
+      if (Number.isFinite(teamIdCandidate)) {
+        const tidStr = String(teamIdCandidate);
+        candidates.push(
+          tidStr,
+          `team:${tidStr}`,
+          `Team ${tidStr}`,
+          `team ${tidStr}`,
+          `Team${tidStr}`,
+          `team${tidStr}`
+        );
+      }
+      for (const key of candidates) {
+        if (!key) continue;
+        const info = ownerMap.get(key);
+        if (info) return info;
+      }
+      return null;
     };
 
     const seenPairs = new Set();
-    (rawRows || []).forEach((row) => {
+    scheduleRows.forEach((row) => {
       const seasonNum = Number(
         row?.season ??
           row?.year ??
@@ -22229,8 +22309,34 @@ export function LuckIndexTab({
       );
       if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) return;
       if (weekNum <= 0) return;
-      const managerInfo = resolveTeamInfo(seasonNum, row?.manager);
-      const opponentInfo = resolveTeamInfo(seasonNum, row?.opponent);
+      const managerTeamId =
+        row?.teamId ??
+        row?.team_id ??
+        row?.team ??
+        row?.teamID ??
+        row?.managerTeamId ??
+        row?.manager_team_id ??
+        row?.homeTeamId ??
+        row?.home_team_id;
+      const opponentTeamId =
+        row?.opponentTeamId ??
+        row?.opponent_team_id ??
+        row?.oppTeamId ??
+        row?.opp_team_id ??
+        row?.opponentTeamID ??
+        row?.opponent_teamID ??
+        row?.awayTeamId ??
+        row?.away_team_id;
+      const managerInfo = resolveTeamInfo(
+        seasonNum,
+        row?.manager,
+        managerTeamId
+      );
+      const opponentInfo = resolveTeamInfo(
+        seasonNum,
+        row?.opponent,
+        opponentTeamId
+      );
       if (!managerInfo || !opponentInfo) return;
       const { teamId: teamAId, ownerKey: ownerAKey } = managerInfo;
       const { teamId: teamBId, ownerKey: ownerBKey } = opponentInfo;
@@ -22255,8 +22361,16 @@ export function LuckIndexTab({
         teamB: teamBId,
         ownerAKey,
         ownerBKey,
-        ownerADisplay: managerInfo.ownerDisplay || ownerAKey,
-        ownerBDisplay: opponentInfo.ownerDisplay || ownerBKey,
+        ownerADisplay:
+          row?.managerDisplay ??
+          row?.manager_display ??
+          row?.manager ??
+          (managerInfo.ownerDisplay || ownerAKey),
+        ownerBDisplay:
+          row?.opponentDisplay ??
+          row?.opponent_display ??
+          row?.opponent ??
+          (opponentInfo.ownerDisplay || ownerBKey),
       });
     });
 
@@ -22304,6 +22418,8 @@ export function LuckIndexTab({
     const resolveTeamNameFor = (ownerKey, seasonNum, teamId) => {
       const sources = [];
       if (league?.teamNamesByOwner) sources.push(league.teamNamesByOwner);
+      if (league?.espnTeamNamesByOwner)
+        sources.push(league.espnTeamNamesByOwner);
       if (typeof window !== "undefined") {
         const winSources = window.__sources || {};
         if (winSources.teamNamesByOwner)
@@ -22577,6 +22693,11 @@ export function LuckIndexTab({
   }, [
     rawRows,
     league,
+    league?.rows,
+    league?.ownersByTeamByYear,
+    league?.espnOwnerByTeamByYear,
+    league?.espnOwnerFullByTeamByYear,
+    league?.espnTeamNamesByOwner,
     normalizeOwnerNameLoose,
     canonicalizeOwner,
     isHiddenManager,
@@ -22586,6 +22707,7 @@ export function LuckIndexTab({
     draftOverallBySeason,
     scheduleByOwnerSeason,
     managerBySeasonTeam,
+    readOwnerNameValue,
   ]);
   const comp5TotalsSource = isByeWeightedView
     ? comp5Data.weightedTotals
