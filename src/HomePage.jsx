@@ -391,8 +391,8 @@ export default function HomePage() {
       <section id="about" className="vault-panel">
         <div className="vault-panel__inner mx-auto max-w-5xl space-y-6 text-slate-100">
           <BlockTitle
-            title="Built for fantasy commissioners"
-            text="LeagueVault keeps every season within reach."
+            title="Built for everyone who loves fantasy football"
+            text="LeagueVault keeps every season within reach—perfect for bragging rights and roasting your friends."
           />
           <div className="grid gap-6 md:grid-cols-2">
             <article className="vault-card rounded-2xl p-6">
