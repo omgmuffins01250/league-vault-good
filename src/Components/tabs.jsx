@@ -22300,6 +22300,9 @@ export function LuckIndexTab({
 
   const comp1ScrollRef = useRef(null);
   const comp2ScrollRef = useRef(null);
+  const comp3ScrollRef = useRef(null);
+  const comp4ScrollRef = useRef(null);
+  const comp5ScrollRef = useRef(null);
   const [comp1ScrollState, setComp1ScrollState] = useState({
     canScroll: false,
     atStart: true,
@@ -22310,9 +22313,27 @@ export function LuckIndexTab({
     atStart: true,
     atEnd: true,
   });
+  const [comp3ScrollState, setComp3ScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
+  const [comp4ScrollState, setComp4ScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
+  const [comp5ScrollState, setComp5ScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
 
   useHorizontalWheelScroll(comp1ScrollRef);
   useHorizontalWheelScroll(comp2ScrollRef);
+  useHorizontalWheelScroll(comp3ScrollRef);
+  useHorizontalWheelScroll(comp4ScrollRef);
+  useHorizontalWheelScroll(comp5ScrollRef);
 
   useEffect(() => {
     const node = comp1ScrollRef.current;
@@ -22422,36 +22443,195 @@ export function LuckIndexTab({
     };
   }, [ownersKey, seasonsKeyForLuck]);
 
+  useEffect(() => {
+    const node = comp3ScrollRef.current;
+    if (!node) {
+      setComp3ScrollState((prev) =>
+        prev.canScroll || !prev.atStart || !prev.atEnd
+          ? { canScroll: false, atStart: true, atEnd: true }
+          : prev
+      );
+      return;
+    }
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setComp3ScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [ownersKey, seasonsKeyForLuck]);
+
+  useEffect(() => {
+    const node = comp4ScrollRef.current;
+    if (!node) {
+      setComp4ScrollState((prev) =>
+        prev.canScroll || !prev.atStart || !prev.atEnd
+          ? { canScroll: false, atStart: true, atEnd: true }
+          : prev
+      );
+      return;
+    }
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setComp4ScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [ownersKey, seasonsKeyForLuck]);
+
+  useEffect(() => {
+    const node = comp5ScrollRef.current;
+    if (!node) {
+      setComp5ScrollState((prev) =>
+        prev.canScroll || !prev.atStart || !prev.atEnd
+          ? { canScroll: false, atStart: true, atEnd: true }
+          : prev
+      );
+      return;
+    }
+
+    const update = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const next = {
+        canScroll: maxScrollLeft > 1,
+        atStart: node.scrollLeft <= 1,
+        atEnd: node.scrollLeft >= maxScrollLeft - 1,
+      };
+
+      setComp5ScrollState((prev) =>
+        prev.canScroll === next.canScroll &&
+        prev.atStart === next.atStart &&
+        prev.atEnd === next.atEnd
+          ? prev
+          : next
+      );
+    };
+
+    update();
+
+    node.addEventListener("scroll", update, { passive: true });
+
+    let resizeObserver;
+    const hasWindow = typeof window !== "undefined";
+    const hasResizeObserver =
+      hasWindow && typeof window.ResizeObserver === "function";
+
+    if (hasResizeObserver) {
+      resizeObserver = new window.ResizeObserver(update);
+      resizeObserver.observe(node);
+    } else if (hasWindow) {
+      window.addEventListener("resize", update);
+    }
+
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (hasResizeObserver) {
+        resizeObserver?.disconnect();
+      } else if (hasWindow) {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, [ownersKey, seasonsKeyForLuck, byeViewMode]);
+
   const [comp1Detail, setComp1Detail] = React.useState(null);
   React.useEffect(() => {
     if (comp1Detail?.owner && hiddenManagersSet.has(comp1Detail.owner)) {
       setComp1Detail(null);
     }
   }, [comp1Detail, hiddenManagersSet]);
-  const getComp1DetailRows = React.useCallback(
-    (owner, season) => {
-      if (!owner) return [];
-      const seasonNum = Number(season);
-      if (!Number.isFinite(seasonNum)) return [];
-      const byOwner = comp1DetailByOwnerYear?.[owner];
-      if (!byOwner) return [];
-      const rows =
-        byOwner?.[seasonNum] ??
-        byOwner?.[String(seasonNum)] ??
-        [];
-      return Array.isArray(rows) ? rows.slice() : [];
-    },
-    [comp1DetailByOwnerYear]
-  );
+  const getDetailRows = React.useCallback((detailsMap, owner, season) => {
+    if (!owner) return [];
+    if (season == null) return [];
+    const seasonNum = Number(season);
+    if (!Number.isFinite(seasonNum)) return [];
+    const byOwner = detailsMap?.[owner];
+    if (!byOwner || typeof byOwner !== "object") return [];
+    const direct = byOwner?.[seasonNum];
+    if (Array.isArray(direct)) return direct.slice();
+    const fallback = byOwner?.[String(seasonNum)];
+    return Array.isArray(fallback) ? fallback.slice() : [];
+  }, []);
   const resolveSeasonForOwner = React.useCallback(
-    (owner, seasonOverride) => {
+    (detailsMap, owner, seasonOverride) => {
       if (!owner) return null;
       const explicit = Number(seasonOverride);
       if (Number.isFinite(explicit)) return explicit;
       if (Number.isFinite(selectedLuckSeasonNumber)) {
         return selectedLuckSeasonNumber;
       }
-      const byOwner = comp1DetailByOwnerYear?.[owner];
+      const byOwner = detailsMap?.[owner];
       if (!byOwner || typeof byOwner !== "object") return null;
       const seasons = Object.keys(byOwner)
         .map((key) => {
@@ -22462,20 +22642,26 @@ export function LuckIndexTab({
         .sort((a, b) => b - a);
       return seasons[0] ?? null;
     },
-    [comp1DetailByOwnerYear, selectedLuckSeasonNumber]
+    [selectedLuckSeasonNumber]
   );
   const openComp1Detail = React.useCallback(
     (owner, seasonOverride) => {
       if (!owner) return;
-      const seasonNum = resolveSeasonForOwner(owner, seasonOverride);
+      const seasonNum = resolveSeasonForOwner(
+        comp1DetailByOwnerYear,
+        owner,
+        seasonOverride
+      );
       const hasSeason = Number.isFinite(seasonNum);
       setComp1Detail({
         owner,
         season: hasSeason ? seasonNum : "—",
-        rows: hasSeason ? getComp1DetailRows(owner, seasonNum) : [],
+        rows: hasSeason
+          ? getDetailRows(comp1DetailByOwnerYear, owner, seasonNum)
+          : [],
       });
     },
-    [getComp1DetailRows, resolveSeasonForOwner]
+    [comp1DetailByOwnerYear, getDetailRows, resolveSeasonForOwner]
   );
   const [comp2Detail, setComp2Detail] = React.useState(null);
   React.useEffect(() => {
@@ -22501,6 +22687,57 @@ export function LuckIndexTab({
       setComp5Detail(null);
     }
   }, [comp5Detail, hiddenManagersSet]);
+  const openComp3Detail = React.useCallback(
+    (owner, seasonOverride) => {
+      if (!owner) return;
+      const seasonNum = resolveSeasonForOwner(
+        comp3Data.details,
+        owner,
+        seasonOverride
+      );
+      const hasSeason = Number.isFinite(seasonNum);
+      setComp3Detail({
+        owner,
+        season: hasSeason ? seasonNum : "—",
+        seasonKey: hasSeason ? seasonNum : null,
+      });
+    },
+    [comp3Data.details, resolveSeasonForOwner]
+  );
+  const openComp4Detail = React.useCallback(
+    (owner, seasonOverride) => {
+      if (!owner) return;
+      const seasonNum = resolveSeasonForOwner(
+        comp4Data.details,
+        owner,
+        seasonOverride
+      );
+      const hasSeason = Number.isFinite(seasonNum);
+      setComp4Detail({
+        owner,
+        season: hasSeason ? seasonNum : "—",
+        seasonKey: hasSeason ? seasonNum : null,
+      });
+    },
+    [comp4Data.details, resolveSeasonForOwner]
+  );
+  const openComp5Detail = React.useCallback(
+    (owner, seasonOverride) => {
+      if (!owner) return;
+      const seasonNum = resolveSeasonForOwner(
+        comp5Data.details,
+        owner,
+        seasonOverride
+      );
+      const hasSeason = Number.isFinite(seasonNum);
+      setComp5Detail({
+        owner,
+        season: hasSeason ? seasonNum : "—",
+        seasonKey: hasSeason ? seasonNum : null,
+      });
+    },
+    [comp5Data.details, resolveSeasonForOwner]
+  );
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
@@ -22682,34 +22919,66 @@ export function LuckIndexTab({
     comp2Detail?.season != null
       ? getBaseRoundForSeason(comp2Detail.season)
       : normalizedWaiverRound;
-  const comp3DetailRows =
-    comp3Detail?.owner != null && comp3Detail?.season != null
-      ? comp3Data.details?.[comp3Detail.owner]?.[comp3Detail.season] || []
-      : [];
+  const comp3DetailRows = React.useMemo(() => {
+    if (!comp3Detail?.owner) return [];
+    const seasonKey =
+      comp3Detail.seasonKey != null
+        ? comp3Detail.seasonKey
+        : comp3Detail.season;
+    return getDetailRows(comp3Data.details, comp3Detail.owner, seasonKey);
+  }, [comp3Detail, comp3Data.details, getDetailRows]);
   const comp3TotalCount = comp3DetailRows.reduce(
     (sum, row) => sum + (Number.isFinite(row?.count) ? Number(row.count) : 0),
     0
   );
-  const comp4DetailRows =
-    comp4Detail?.owner != null && comp4Detail?.season != null
-      ? comp4Data.details?.[comp4Detail.owner]?.[comp4Detail.season] || []
-      : [];
+  const comp4DetailRows = React.useMemo(() => {
+    if (!comp4Detail?.owner) return [];
+    const seasonKey =
+      comp4Detail.seasonKey != null
+        ? comp4Detail.seasonKey
+        : comp4Detail.season;
+    return getDetailRows(comp4Data.details, comp4Detail.owner, seasonKey);
+  }, [comp4Detail, comp4Data.details, getDetailRows]);
   const comp4TotalCredit = comp4DetailRows.reduce(
     (sum, row) => sum + (Number.isFinite(row?.credit) ? Number(row.credit) : 0),
     0
   );
-  const comp5DetailRows =
-    comp5Detail?.owner != null && comp5Detail?.season != null
-      ? comp5Data.details?.[comp5Detail.owner]?.[comp5Detail.season] || []
-      : [];
-  const comp5RawTotal =
-    comp5Detail?.owner != null && comp5Detail?.season != null
-      ? comp5Data.rawTotals?.[comp5Detail.owner]?.[comp5Detail.season] ?? 0
-      : 0;
-  const comp5WeightedTotal =
-    comp5Detail?.owner != null && comp5Detail?.season != null
-      ? comp5Data.weightedTotals?.[comp5Detail.owner]?.[comp5Detail.season] ?? 0
-      : 0;
+  const comp5DetailRows = React.useMemo(() => {
+    if (!comp5Detail?.owner) return [];
+    const seasonKey =
+      comp5Detail.seasonKey != null
+        ? comp5Detail.seasonKey
+        : comp5Detail.season;
+    return getDetailRows(comp5Data.details, comp5Detail.owner, seasonKey);
+  }, [comp5Detail, comp5Data.details, getDetailRows]);
+  const comp5RawTotal = React.useMemo(() => {
+    if (!comp5Detail?.owner) return 0;
+    const seasonKey =
+      comp5Detail.seasonKey != null
+        ? comp5Detail.seasonKey
+        : comp5Detail.season;
+    if (seasonKey == null) return 0;
+    const ownerTotals = comp5Data.rawTotals?.[comp5Detail.owner];
+    if (!ownerTotals || typeof ownerTotals !== "object") return 0;
+    const direct = ownerTotals?.[seasonKey];
+    if (Number.isFinite(direct)) return Number(direct);
+    const fallback = ownerTotals?.[String(seasonKey)];
+    return Number.isFinite(fallback) ? Number(fallback) : 0;
+  }, [comp5Detail, comp5Data.rawTotals]);
+  const comp5WeightedTotal = React.useMemo(() => {
+    if (!comp5Detail?.owner) return 0;
+    const seasonKey =
+      comp5Detail.seasonKey != null
+        ? comp5Detail.seasonKey
+        : comp5Detail.season;
+    if (seasonKey == null) return 0;
+    const ownerTotals = comp5Data.weightedTotals?.[comp5Detail.owner];
+    if (!ownerTotals || typeof ownerTotals !== "object") return 0;
+    const direct = ownerTotals?.[seasonKey];
+    if (Number.isFinite(direct)) return Number(direct);
+    const fallback = ownerTotals?.[String(seasonKey)];
+    return Number.isFinite(fallback) ? Number(fallback) : 0;
+  }, [comp5Detail, comp5Data.weightedTotals]);
 
     const tableShellBase = TABLE_SHELL_BASE_CLASS;
     const tableShellWide = TABLE_SHELL_BASE_CLASS;
@@ -23132,6 +23401,320 @@ export function LuckIndexTab({
           </div>
         </Card>
 
+        <Card
+          title="Opp Injury Luck — Opponent Weeks Lost"
+          allowOverflow
+        >
+          <div className="relative">
+            {comp3ScrollState.canScroll && !comp3ScrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {comp3ScrollState.canScroll && !comp3ScrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={comp3ScrollRef}
+              role="region"
+              tabIndex={comp3ScrollState.canScroll ? 0 : -1}
+              aria-label="Opponent injury luck history table"
+              className="relative w-full overflow-x-auto overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/45 custom-scrollbar"
+              style={{
+                scrollbarGutter: "stable both-edges",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="inline-block min-w-full align-top">
+                <div
+                  className={tableShellWide}
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-85">
+                    <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(16,185,129,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(6,182,212,0.14),transparent_65%)]" />
+                    <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                  </div>
+                  <table className="relative z-10 min-w-full border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className={headRowClass}>
+                        <th className="px-4 py-3 text-left">Manager</th>
+                        {seasons.map((y) => (
+                          <th key={y} className="px-4 py-3 text-center">
+                            {y}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={tableBodyClass}>
+                      {owners.map((o) => (
+                        <tr key={`${o}-opp-injury`}>
+                          <td className={managerCellClass}>{o}</td>
+                          {seasons.map((y) => {
+                            const totalsByOwner = comp3Data.totals?.[o] || {};
+                            const rawValue =
+                              totalsByOwner?.[y] ?? totalsByOwner?.[String(y)];
+                            const numeric = Number(rawValue);
+                            const hasValue = Number.isFinite(numeric);
+                            const detailRows = getDetailRows(
+                              comp3Data.details,
+                              o,
+                              y
+                            );
+                            const hasDetail = detailRows.length > 0;
+                            const canOpen = hasDetail || hasValue;
+                            return (
+                              <td
+                                key={`${y}-opp-injury`}
+                                className={valueCellClass}
+                              >
+                                {canOpen ? (
+                                  <button
+                                    type="button"
+                                    className={valueButtonClass}
+                                    onClick={() => openComp3Detail(o, y)}
+                                  >
+                                    {hasValue ? numeric.toFixed(0) : "View"}
+                                  </button>
+                                ) : hasValue ? (
+                                  numeric.toFixed(0)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          title="Teammate Injury Ripple — Draft Equity Credit"
+          allowOverflow
+        >
+          <div className="relative">
+            {comp4ScrollState.canScroll && !comp4ScrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {comp4ScrollState.canScroll && !comp4ScrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={comp4ScrollRef}
+              role="region"
+              tabIndex={comp4ScrollState.canScroll ? 0 : -1}
+              aria-label="Teammate injury ripple history table"
+              className="relative w-full overflow-x-auto overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/45 custom-scrollbar"
+              style={{
+                scrollbarGutter: "stable both-edges",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="inline-block min-w-full align-top">
+                <div
+                  className={tableShellWide}
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-85">
+                    <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(236,72,153,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(79,70,229,0.15),transparent_65%)]" />
+                    <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                  </div>
+                  <table className="relative z-10 min-w-full border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className={headRowClass}>
+                        <th className="px-4 py-3 text-left">Manager</th>
+                        {seasons.map((y) => (
+                          <th key={y} className="px-4 py-3 text-center">
+                            {y}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={tableBodyClass}>
+                      {owners.map((o) => (
+                        <tr key={`${o}-ripple`}>
+                          <td className={managerCellClass}>{o}</td>
+                          {seasons.map((y) => {
+                            const totalsByOwner = comp4Data.totals?.[o] || {};
+                            const rawValue =
+                              totalsByOwner?.[y] ?? totalsByOwner?.[String(y)];
+                            const numeric = Number(rawValue);
+                            const hasValue = Number.isFinite(numeric);
+                            const detailRows = getDetailRows(
+                              comp4Data.details,
+                              o,
+                              y
+                            );
+                            const hasDetail = detailRows.length > 0;
+                            const canOpen = hasDetail || hasValue;
+                            return (
+                              <td key={`${y}-ripple`} className={valueCellClass}>
+                                {canOpen ? (
+                                  <button
+                                    type="button"
+                                    className={valueButtonClass}
+                                    onClick={() => openComp4Detail(o, y)}
+                                  >
+                                    {hasValue ? numeric.toFixed(1) : "View"}
+                                  </button>
+                                ) : hasValue ? (
+                                  numeric.toFixed(1)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          title="Bye Week Differential — Your Starters vs Opponents"
+          allowOverflow
+        >
+          <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                View
+              </span>
+              <button
+                type="button"
+                className={`${toggleButtonBase} ${
+                  byeViewMode === "raw" ? toggleButtonActive : toggleButtonInactive
+                }`}
+                onClick={() => setByeViewMode("raw")}
+              >
+                Raw differential
+              </button>
+              <button
+                type="button"
+                className={`${toggleButtonBase} ${
+                  byeViewMode === "weighted"
+                    ? toggleButtonActive
+                    : toggleButtonInactive
+                }`}
+                onClick={() => setByeViewMode("weighted")}
+              >
+                Weighted
+              </button>
+            </div>
+            {isByeWeightedView ? (
+              <div className="text-[11px] text-slate-500/85 dark:text-slate-400">
+                Uses the injury weighting controls above.
+              </div>
+            ) : null}
+          </div>
+          <div className="relative">
+            {comp5ScrollState.canScroll && !comp5ScrollState.atStart ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 z-20 w-6 bg-gradient-to-r from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            {comp5ScrollState.canScroll && !comp5ScrollState.atEnd ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 z-20 w-6 bg-gradient-to-l from-white/80 via-white/45 to-transparent dark:from-zinc-950/85 dark:via-zinc-950/50"
+              />
+            ) : null}
+            <div
+              ref={comp5ScrollRef}
+              role="region"
+              tabIndex={comp5ScrollState.canScroll ? 0 : -1}
+              aria-label="Bye week differential history table"
+              className="relative w-full overflow-x-auto overscroll-x-contain px-2 pb-5 sm:px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/45 custom-scrollbar"
+              style={{
+                scrollbarGutter: "stable both-edges",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="inline-block min-w-full align-top">
+                <div
+                  className={tableShellWide}
+                  style={{ minWidth: "100%", width: "max-content" }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-85">
+                    <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(96,165,250,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(250,204,21,0.16),transparent_65%)]" />
+                    <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                  </div>
+                  <table className="relative z-10 min-w-full border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className={headRowClass}>
+                        <th className="px-4 py-3 text-left">Manager</th>
+                        {seasons.map((y) => (
+                          <th key={y} className="px-4 py-3 text-center">
+                            {y}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={tableBodyClass}>
+                      {owners.map((o) => (
+                        <tr key={`${o}-bye`}>
+                          <td className={managerCellClass}>{o}</td>
+                          {seasons.map((y) => {
+                            const totalsByOwner = comp5TotalsSource?.[o] || {};
+                            const rawValue =
+                              totalsByOwner?.[y] ?? totalsByOwner?.[String(y)];
+                            const numeric = Number(rawValue);
+                            const hasValue = Number.isFinite(numeric);
+                            const detailRows = getDetailRows(
+                              comp5Data.details,
+                              o,
+                              y
+                            );
+                            const hasDetail = detailRows.length > 0;
+                            const canOpen = hasDetail || hasValue;
+                            return (
+                              <td key={`${y}-bye`} className={valueCellClass}>
+                                {canOpen ? (
+                                  <button
+                                    type="button"
+                                    className={valueButtonClass}
+                                    onClick={() => openComp5Detail(o, y)}
+                                  >
+                                    {hasValue ? fmtComp5Value(numeric) : "View"}
+                                  </button>
+                                ) : hasValue ? (
+                                  fmtComp5Value(numeric)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
         <div className="text-[12px] leading-relaxed text-slate-500/90 dark:text-slate-400 space-y-2">
           <p>
             Opp Scoring Luck: Actual vs Projection — how much each manager’s
@@ -23378,6 +23961,373 @@ export function LuckIndexTab({
                           className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
                         >
                           No injury rows recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp3Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp3Detail(null)}
+          />
+          <div className="relative w-[min(720px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Opp Injury Luck Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp3Detail.owner} —{" "}
+                  {Number.isFinite(comp3Detail.season)
+                    ? comp3Detail.season
+                    : "—"}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp3Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              Total opponent injury weeks:{" "}
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {Number.isFinite(comp3TotalCount)
+                  ? Math.round(comp3TotalCount)
+                  : "—"}
+              </span>
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(16,185,129,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(6,182,212,0.14),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Opponent</th>
+                      <th className="px-4 py-3 text-right">Injury weeks</th>
+                      <th className="px-4 py-3 text-left">Players</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp3DetailRows
+                      .slice()
+                      .sort((a, b) => {
+                        const weekDiff =
+                          Number(a?.week || 0) - Number(b?.week || 0);
+                        if (weekDiff !== 0) return weekDiff;
+                        return (a?.opponent || "").localeCompare(
+                          b?.opponent || ""
+                        );
+                      })
+                      .map((row, idx) => {
+                        const playersList = Array.isArray(row?.players)
+                          ? row.players
+                              .map((p) =>
+                                p?.slot
+                                  ? `${p.player || "Player"} (${p.slot})`
+                                  : p?.player || "Player"
+                              )
+                              .join(", ")
+                          : "";
+                        return (
+                          <tr
+                            key={`${row.week}-${row.opponentKey || ""}-${idx}`}
+                          >
+                            <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                              W{row.week}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.opponent || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.count)
+                                ? Number(row.count).toFixed(0)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {playersList || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {comp3DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No opponent injury weeks recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp4Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp4Detail(null)}
+          />
+          <div className="relative w-[min(760px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Teammate Ripple Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp4Detail.owner} —{" "}
+                  {Number.isFinite(comp4Detail.season)
+                    ? comp4Detail.season
+                    : "—"}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp4Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              Total ripple credit:{" "}
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {Number.isFinite(comp4TotalCredit)
+                  ? comp4TotalCredit.toFixed(1)
+                  : "—"}
+              </span>
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(236,72,153,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(79,70,229,0.15),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Benefiting player</th>
+                      <th className="px-4 py-3 text-left">Injured teammate</th>
+                      <th className="px-4 py-3 text-right">Credit</th>
+                      <th className="px-4 py-3 text-left">Draft context</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp4DetailRows
+                      .slice()
+                      .sort((a, b) => {
+                        const weekDiff =
+                          Number(a?.week || 0) - Number(b?.week || 0);
+                        if (weekDiff !== 0) return weekDiff;
+                        return (a?.player || "").localeCompare(b?.player || "");
+                      })
+                      .map((row, idx) => {
+                        const draftLabel = [
+                          row?.benefitingDraftRound
+                            ? `You: R${row.benefitingDraftRound}`
+                            : "You: —",
+                          row?.injuredDraftRound
+                            ? `Injured: R${row.injuredDraftRound}`
+                            : "Injured: —",
+                        ].join(" • ");
+                        return (
+                          <tr key={`${row.week}-${row.player || idx}-${idx}`}>
+                            <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                              W{row.week}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.player || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.injuredPlayer || "—"}
+                              {row.injuredOwner ? (
+                                <span className="ml-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                  ({row.injuredOwner})
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.credit)
+                                ? Number(row.credit).toFixed(1)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                              {draftLabel}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {comp4DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No ripple credit recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp5Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp5Detail(null)}
+          />
+          <div className="relative w-[min(860px,94vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Bye Week Differential Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp5Detail.owner} —{" "}
+                  {Number.isFinite(comp5Detail.season)
+                    ? comp5Detail.season
+                    : "—"}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp5Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-1 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              <div>
+                Raw differential:{" "}
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                  {Number.isFinite(comp5RawTotal)
+                    ? comp5RawTotal.toFixed(0)
+                    : "—"}
+                </span>
+              </div>
+              <div>
+                Weighted differential:{" "}
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                  {Number.isFinite(comp5WeightedTotal)
+                    ? comp5WeightedTotal.toFixed(2)
+                    : "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(96,165,250,0.16),transparent_60%),radial-gradient(125%_150%_at_100%_100%,rgba(250,204,21,0.16),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Opponent</th>
+                      <th className="px-4 py-3 text-left">Your byes</th>
+                      <th className="px-4 py-3 text-left">Opponent byes</th>
+                      <th className="px-4 py-3 text-right">Diff</th>
+                      <th className="px-4 py-3 text-right">Weighted diff</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp5DetailRows
+                      .slice()
+                      .sort((a, b) => {
+                        const weekDiff =
+                          Number(a?.week || 0) - Number(b?.week || 0);
+                        if (weekDiff !== 0) return weekDiff;
+                        return (a?.opponent || "").localeCompare(
+                          b?.opponent || ""
+                        );
+                      })
+                      .map((row, idx) => {
+                        const ownPlayers = Array.isArray(row?.ownPlayers)
+                          ? row.ownPlayers.join(", ")
+                          : "";
+                        const oppPlayers = Array.isArray(row?.oppPlayers)
+                          ? row.oppPlayers.join(", ")
+                          : "";
+                        return (
+                          <tr key={`${row.week}-${row.opponentKey || idx}-${idx}`}>
+                            <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                              W{row.week}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.opponent || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              <div className="font-semibold tabular-nums">
+                                {Number.isFinite(row?.ownCount)
+                                  ? Number(row.ownCount).toFixed(0)
+                                  : "—"}
+                              </div>
+                              {ownPlayers ? (
+                                <div className="mt-1 text-[11px] leading-relaxed text-slate-500/85 dark:text-slate-400/85">
+                                  {ownPlayers}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              <div className="font-semibold tabular-nums">
+                                {Number.isFinite(row?.oppCount)
+                                  ? Number(row.oppCount).toFixed(0)
+                                  : "—"}
+                              </div>
+                              {oppPlayers ? (
+                                <div className="mt-1 text-[11px] leading-relaxed text-slate-500/85 dark:text-slate-400/85">
+                                  {oppPlayers}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.diff)
+                                ? Number(row.diff).toFixed(0)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.diffWeighted)
+                                ? Number(row.diffWeighted).toFixed(2)
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {comp5DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No bye week differential recorded.
                         </td>
                       </tr>
                     )}
