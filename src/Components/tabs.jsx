@@ -21222,7 +21222,9 @@ export function LuckIndexTab({
     Object.values(managerBySeasonTeam || {}).forEach((byTeam) => {
       Object.values(byTeam || {}).forEach((owner) => pushOwner(owner));
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).sort((a, b) =>
+      String(a ?? "").localeCompare(String(b ?? ""))
+    );
   }, [
     league,
     rawRows,
@@ -23101,7 +23103,9 @@ export function LuckIndexTab({
     Object.keys(comp3Data.totals || {}).forEach((o) => pushOwner(o));
     Object.keys(comp4Data.totals || {}).forEach((o) => pushOwner(o));
     Object.keys(comp5TotalsSource || {}).forEach((o) => pushOwner(o));
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
+    return Array.from(s).sort((a, b) =>
+      String(a ?? "").localeCompare(String(b ?? ""))
+    );
   }, [
     ownersBase,
     comp1ByOwnerYear,
@@ -23601,13 +23605,15 @@ export function LuckIndexTab({
         const bVal = b.value;
         const aHas = Number.isFinite(aVal);
         const bHas = Number.isFinite(bVal);
+        const ownerA = String(a.owner ?? "");
+        const ownerB = String(b.owner ?? "");
         if (aHas && bHas) {
           if (bVal !== aVal) return bVal - aVal;
-          return a.owner.localeCompare(b.owner);
+          return ownerA.localeCompare(ownerB);
         }
         if (aHas) return -1;
         if (bHas) return 1;
-        return a.owner.localeCompare(b.owner);
+        return ownerA.localeCompare(ownerB);
       })
       .map((row, index) => ({ ...row, rank: index + 1 }));
   }, [
