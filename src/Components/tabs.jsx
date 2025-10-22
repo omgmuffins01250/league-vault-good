@@ -20600,6 +20600,126 @@ export function LuckIndexTab({
     },
     [getProTeamSource]
   );
+  const playerProTeamCacheRef = React.useRef(new Map());
+  const resolveProTeamId = React.useCallback(
+    (seasonKey, playerId) => {
+      const cacheKey = `${seasonKey}|${playerId}`;
+      if (playerProTeamCacheRef.current.has(cacheKey)) {
+        return playerProTeamCacheRef.current.get(cacheKey);
+      }
+
+      const pid = Number(playerId);
+      if (!Number.isFinite(pid)) {
+        playerProTeamCacheRef.current.set(cacheKey, null);
+        return null;
+      }
+
+      const seasonSources = [
+        league?.espnRostersByYear,
+        league?.rostersByYear,
+        rostersByYear,
+      ];
+
+      for (const source of seasonSources) {
+        if (!source) continue;
+        const seasonData =
+          source?.[seasonKey] ?? source?.[String(seasonKey)] ?? null;
+        if (!seasonData) continue;
+
+        for (const teamWeeks of Object.values(seasonData || {})) {
+          for (const entries of Object.values(teamWeeks || {})) {
+            const list = Array.isArray(entries)
+              ? entries
+              : Array.isArray(entries?.entries)
+              ? entries.entries
+              : [];
+
+            for (const entry of list) {
+              const entryPid = Number(
+                entry?.pid ??
+                  entry?.playerId ??
+                  entry?.player?.id ??
+                  entry?.playerPoolEntry?.player?.id
+              );
+              if (entryPid !== pid) continue;
+
+              const directCandidates = [
+                entry?.proTeamId,
+                entry?.teamId,
+                entry?.nflTeamId,
+                entry?.player?.proTeamId,
+                entry?.player?.teamId,
+                entry?.player?.proTeam?.id,
+                entry?.playerPoolEntry?.player?.proTeamId,
+                entry?.playerPoolEntry?.player?.teamId,
+              ];
+
+              for (const cand of directCandidates) {
+                const numeric = Number(cand);
+                if (Number.isFinite(numeric)) {
+                  playerProTeamCacheRef.current.set(cacheKey, numeric);
+                  return numeric;
+                }
+              }
+
+              const lookup = getProTeamLookup(seasonKey);
+              const abbrevToId = lookup?.abbrevToId;
+              if (abbrevToId) {
+                const ids = __entryProTeamIds(entry, abbrevToId);
+                for (const id of ids) {
+                  if (Number.isFinite(id)) {
+                    playerProTeamCacheRef.current.set(cacheKey, id);
+                    return id;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const acquisitionSources = [
+        league?.espnRosterAcqByYear,
+        league?.rosterAcqByYear,
+      ];
+
+      for (const source of acquisitionSources) {
+        if (!source) continue;
+        const seasonData =
+          source?.[seasonKey] ?? source?.[String(seasonKey)] ?? null;
+        if (!seasonData) continue;
+
+        for (const team of Object.values(seasonData || {})) {
+          const rec = team?.[pid] ?? team?.[String(pid)];
+          if (!rec || typeof rec !== "object") continue;
+
+          const candidates = [
+            rec?.proTeamId,
+            rec?.teamId,
+            rec?.nflTeamId,
+            rec?.player?.proTeamId,
+            rec?.player?.teamId,
+            rec?.playerPoolEntry?.player?.proTeamId,
+          ];
+
+          for (const cand of candidates) {
+            const numeric = Number(cand);
+            if (Number.isFinite(numeric)) {
+              playerProTeamCacheRef.current.set(cacheKey, numeric);
+              return numeric;
+            }
+          }
+        }
+      }
+
+      playerProTeamCacheRef.current.set(cacheKey, null);
+      return null;
+    },
+    [league, rostersByYear, getProTeamLookup]
+  );
+  React.useEffect(() => {
+    playerProTeamCacheRef.current.clear();
+  }, [league, rostersByYear]);
 
   React.useEffect(() => {
     proTeamSourceCacheRef.current.clear();
