@@ -22577,25 +22577,192 @@ export function LuckIndexTab({
       return entry.seasons.get(seasonNum);
     };
 
-    const computeCounts = (ownerKey, seasonNum, weekNum, weightFn) => {
-      const byOwner = rosterMetaByOwnerSeasonWeek?.[ownerKey];
-      if (!byOwner) return { count: 0, weighted: 0, players: [] };
-      const bySeason =
-        byOwner?.[seasonNum] ?? byOwner?.[String(seasonNum)];
-      if (!bySeason) return { count: 0, weighted: 0, players: [] };
-      const arr = bySeason?.[weekNum] ?? bySeason?.[String(weekNum)];
-      const entries = Array.isArray(arr) ? arr : [];
+    const rosterSources = [];
+    if (rostersByYear && typeof rostersByYear === "object") {
+      rosterSources.push(rostersByYear);
+    }
+    if (
+      league?.espnRostersByYear &&
+      league.espnRostersByYear !== rostersByYear &&
+      typeof league.espnRostersByYear === "object"
+    ) {
+      rosterSources.push(league.espnRostersByYear);
+    }
+    if (
+      league?.rostersByYear &&
+      league.rostersByYear !== rostersByYear &&
+      typeof league.rostersByYear === "object"
+    ) {
+      rosterSources.push(league.rostersByYear);
+    }
+    if (typeof window !== "undefined") {
+      const winSources = window.__FL_SOURCES || window.__sources || {};
+      if (winSources?.rostersByYear && typeof winSources.rostersByYear === "object") {
+        rosterSources.push(winSources.rostersByYear);
+      }
+      if (
+        winSources?.espnRostersByYear &&
+        typeof winSources.espnRostersByYear === "object"
+      ) {
+        rosterSources.push(winSources.espnRostersByYear);
+      }
+    }
+
+    const readNested = (container, key) => {
+      if (!container) return undefined;
+      const candidates = [];
+      candidates.push(key);
+      const keyStr = String(key);
+      if (!candidates.includes(keyStr)) candidates.push(keyStr);
+      const keyNum = Number(key);
+      if (Number.isFinite(keyNum) && !candidates.includes(keyNum)) {
+        candidates.push(keyNum);
+      }
+      for (const token of candidates) {
+        if (container instanceof Map) {
+          if (container.has(token)) return container.get(token);
+        } else if (typeof container === "object" && container !== null) {
+          if (Object.prototype.hasOwnProperty.call(container, token)) {
+            return container[token];
+          }
+        }
+      }
+      return undefined;
+    };
+
+    const getRosterEntries = (seasonNum, teamId, weekNum) => {
+      for (const source of rosterSources) {
+        const seasonBucket = readNested(source, seasonNum);
+        if (!seasonBucket) continue;
+        const teamBucket = readNested(seasonBucket, teamId);
+        if (!teamBucket) continue;
+        if (Array.isArray(teamBucket)) {
+          const wkIdx = Number(weekNum);
+          const arr = teamBucket?.[wkIdx] ?? teamBucket?.[String(wkIdx)];
+          if (Array.isArray(arr)) return arr;
+        }
+        const entries = readNested(teamBucket, weekNum);
+        if (Array.isArray(entries)) return entries;
+      }
+      return [];
+    };
+
+    const resolveRosterPlayerName = (entry) => {
+      const candidates = [
+        entry?.player?.fullName,
+        entry?.player?.displayName,
+        entry?.player?.name,
+        entry?.name,
+        entry?.fullName,
+        entry?.playerPoolEntry?.player?.fullName,
+        entry?.playerPoolEntry?.player?.displayName,
+        entry?.playerPoolEntry?.player?.name,
+        [entry?.player?.firstName, entry?.player?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || null,
+        [
+          entry?.playerPoolEntry?.player?.firstName,
+          entry?.playerPoolEntry?.player?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || null,
+      ];
+      for (const cand of candidates) {
+        const trimmed = typeof cand === "string" ? cand.trim() : "";
+        if (trimmed) return trimmed;
+      }
+      return null;
+    };
+
+    const hasTeamBye = (seasonNum, proTeamId, weekNum) => {
+      const pid = Number(proTeamId);
+      if (!Number.isFinite(pid)) return false;
+      const weeks = getTeamByeWeeks(seasonNum, pid) || [];
+      return weeks.some((wk) => Number(wk) === Number(weekNum));
+    };
+
+    const entryHasBye = (seasonNum, entry, weekNum, abbrevToIdMap) => {
+      const numericWeek = Number(weekNum);
+      if (!Number.isFinite(numericWeek)) return false;
+      const directWeeks = __entryByeWeekNumbers(entry);
+      if (directWeeks.includes(numericWeek)) return true;
+
+      const ids = __entryProTeamIds(entry, abbrevToIdMap);
+      for (const id of ids) {
+        if (hasTeamBye(seasonNum, id, numericWeek)) return true;
+      }
+
+      const directIdCandidates = [
+        entry?.proTeamId,
+        entry?.teamId,
+        entry?.nflTeamId,
+        entry?.proTeam,
+        entry?.team,
+        entry?.player?.proTeamId,
+        entry?.player?.teamId,
+        entry?.player?.nflTeamId,
+        entry?.player?.proTeam,
+        entry?.player?.team,
+        entry?.player?.nflTeam,
+        entry?.playerPoolEntry?.proTeamId,
+        entry?.playerPoolEntry?.teamId,
+        entry?.playerPoolEntry?.player?.proTeamId,
+        entry?.playerPoolEntry?.player?.teamId,
+      ];
+      for (const cand of directIdCandidates) {
+        const id = Number(cand);
+        if (!Number.isFinite(id)) continue;
+        if (hasTeamBye(seasonNum, id, numericWeek)) return true;
+      }
+
+      const pid = Number(
+        entry?.pid ??
+          entry?.playerId ??
+          entry?.player?.id ??
+          entry?.playerPoolEntry?.player?.id
+      );
+      if (Number.isFinite(pid)) {
+        const resolved = resolveProTeamId(seasonNum, pid);
+        if (hasTeamBye(seasonNum, resolved, numericWeek)) return true;
+      }
+
+      return false;
+    };
+
+    const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn) => {
+      const entries = getRosterEntries(seasonNum, teamId, weekNum);
+      if (!Array.isArray(entries) || !entries.length) {
+        return { count: 0, weighted: 0, players: [] };
+      }
+      const lookup = getProTeamLookup(seasonNum);
+      const abbrevToId = lookup?.abbrevToId;
       let count = 0;
       let weightedSum = 0;
       const players = [];
-      for (const meta of entries) {
-        if (!meta?.isStarter) continue;
-        if (!meta?.onBye) continue;
+      for (const entry of entries) {
+        const slotId = Number(
+          entry?.lineupSlotId ??
+            entry?.slotId ??
+            entry?.slot ??
+            entry?.lineupSlot ??
+            entry?.slotCategoryId ??
+            entry?.positionId
+        );
+        if (slotId === 20 || slotId === 21) continue;
+        if (!entryHasBye(seasonNum, entry, weekNum, abbrevToId)) continue;
         count += 1;
-        const pid = Number(meta?.pid);
+        const pid = Number(
+          entry?.pid ??
+            entry?.playerId ??
+            entry?.player?.id ??
+            entry?.playerPoolEntry?.player?.id
+        );
         const weight = weightFn(pid);
         weightedSum += weight;
-        if (meta?.player) players.push(meta.player);
+        const name = resolveRosterPlayerName(entry);
+        if (name) players.push(name);
       }
       return {
         count,
@@ -22680,8 +22847,18 @@ export function LuckIndexTab({
             teamName: teamNameB,
           });
 
-          const countsA = computeCounts(ownerAKey, seasonNum, weekNum, weightFn);
-          const countsB = computeCounts(ownerBKey, seasonNum, weekNum, weightFn);
+          const countsA = countByesForTeamWeek(
+            seasonNum,
+            match?.teamA,
+            weekNum,
+            weightFn
+          );
+          const countsB = countByesForTeamWeek(
+            seasonNum,
+            match?.teamB,
+            weekNum,
+            weightFn
+          );
 
           seasonA.ownRaw += countsA.count;
           seasonA.oppRaw += countsB.count;
@@ -22771,11 +22948,14 @@ export function LuckIndexTab({
     isHiddenManager,
     ownerNameOf,
     resolveCurrentWeekExclusive,
-    rosterMetaByOwnerSeasonWeek,
     draftOverallBySeason,
     scheduleByOwnerSeason,
     managerBySeasonTeam,
     readOwnerNameValue,
+    rostersByYear,
+    getTeamByeWeeks,
+    getProTeamLookup,
+    resolveProTeamId,
   ]);
   const comp5TotalsSource = isByeWeightedView
     ? comp5Data.weightedTotals
