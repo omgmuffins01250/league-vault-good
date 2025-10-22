@@ -22116,6 +22116,8 @@ export function LuckIndexTab({
   const [injuryWeightAlpha, setInjuryWeightAlpha] = React.useState(1);
   const [injuryWaiverRound, setInjuryWaiverRound] = React.useState(12);
   const [byeViewMode, setByeViewMode] = React.useState("raw");
+  const isWeightedView = injuryViewMode === "weighted";
+  const isByeWeightedView = byeViewMode === "weighted";
   const normalizedWaiverRound = React.useMemo(
     () =>
       Math.max(
@@ -22679,6 +22681,9 @@ export function LuckIndexTab({
 
     return { rawTotals, weightedTotals, details };
   }, [scheduleByOwnerSeason, byeWeekMeta]);
+  const comp5TotalsSource = isByeWeightedView
+    ? comp5Data.weightedTotals
+    : comp5Data.rawTotals;
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false } = options;
     const entries = [];
@@ -22741,6 +22746,20 @@ export function LuckIndexTab({
   const comp3ScaledByOwnerYear = comp3ScaledData.scaled;
   const comp3Min = comp3ScaledData.min;
   const comp3Max = comp3ScaledData.max;
+  const comp4ScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(comp4Data.totals),
+    [comp4Data.totals, normalizeOwnerYearTotals]
+  );
+  const comp4ScaledByOwnerYear = comp4ScaledData.scaled;
+  const comp4Min = comp4ScaledData.min;
+  const comp4Max = comp4ScaledData.max;
+  const comp5ScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(comp5TotalsSource),
+    [comp5TotalsSource, normalizeOwnerYearTotals]
+  );
+  const comp5ScaledByOwnerYear = comp5ScaledData.scaled;
+  const comp5Min = comp5ScaledData.min;
+  const comp5Max = comp5ScaledData.max;
 
   const luckByOwnerYear = React.useMemo(() => {
     const out = {};
@@ -22748,6 +22767,8 @@ export function LuckIndexTab({
       ...Object.keys(comp1ScaledByOwnerYear || {}),
       ...Object.keys(injuryScaledByOwnerYear || {}),
       ...Object.keys(comp3ScaledByOwnerYear || {}),
+      ...Object.keys(comp4ScaledByOwnerYear || {}),
+      ...Object.keys(comp5ScaledByOwnerYear || {}),
     ]);
 
     for (const owner of ownersSet) {
@@ -22755,6 +22776,8 @@ export function LuckIndexTab({
         ...Object.keys(comp1ScaledByOwnerYear?.[owner] || {}),
         ...Object.keys(injuryScaledByOwnerYear?.[owner] || {}),
         ...Object.keys(comp3ScaledByOwnerYear?.[owner] || {}),
+        ...Object.keys(comp4ScaledByOwnerYear?.[owner] || {}),
+        ...Object.keys(comp5ScaledByOwnerYear?.[owner] || {}),
       ]);
 
       for (const seasonKey of seasonsSet) {
@@ -22762,9 +22785,13 @@ export function LuckIndexTab({
         const c1 = comp1ScaledByOwnerYear?.[owner]?.[seasonKey];
         const c2 = injuryScaledByOwnerYear?.[owner]?.[seasonKey];
         const c3 = comp3ScaledByOwnerYear?.[owner]?.[seasonKey];
+        const c4 = comp4ScaledByOwnerYear?.[owner]?.[seasonKey];
+        const c5 = comp5ScaledByOwnerYear?.[owner]?.[seasonKey];
         if (Number.isFinite(c1)) values.push(c1);
         if (Number.isFinite(c2)) values.push(c2);
         if (Number.isFinite(c3)) values.push(c3);
+        if (Number.isFinite(c4)) values.push(c4);
+        if (Number.isFinite(c5)) values.push(c5);
         if (values.length) {
           out[owner] ??= {};
           out[owner][seasonKey] =
@@ -22778,6 +22805,8 @@ export function LuckIndexTab({
     comp1ScaledByOwnerYear,
     injuryScaledByOwnerYear,
     comp3ScaledByOwnerYear,
+    comp4ScaledByOwnerYear,
+    comp5ScaledByOwnerYear,
   ]);
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
@@ -22793,12 +22822,16 @@ export function LuckIndexTab({
     Object.keys(comp1ByOwnerYear || {}).forEach((o) => pushOwner(o));
     Object.keys(injuryByOwnerYear || {}).forEach((o) => pushOwner(o));
     Object.keys(comp3Data.totals || {}).forEach((o) => pushOwner(o));
+    Object.keys(comp4Data.totals || {}).forEach((o) => pushOwner(o));
+    Object.keys(comp5TotalsSource || {}).forEach((o) => pushOwner(o));
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [
     ownersBase,
     comp1ByOwnerYear,
     injuryByOwnerYear,
     comp3Data.totals,
+    comp4Data.totals,
+    comp5TotalsSource,
     normalizeOwnerNameLoose,
     isHiddenManager,
   ]);
@@ -23044,7 +23077,9 @@ export function LuckIndexTab({
       const comp1 = getSeasonValue(comp1ScaledByOwnerYear, owner);
       const comp2 = getSeasonValue(injuryScaledByOwnerYear, owner);
       const comp3 = getSeasonValue(comp3ScaledByOwnerYear, owner);
-      return { owner, value, comp1, comp2, comp3 };
+      const comp4 = getSeasonValue(comp4ScaledByOwnerYear, owner);
+      const comp5 = getSeasonValue(comp5ScaledByOwnerYear, owner);
+      return { owner, value, comp1, comp2, comp3, comp4, comp5 };
     });
     return rows
       .sort((a, b) => {
@@ -23068,6 +23103,8 @@ export function LuckIndexTab({
     comp1ScaledByOwnerYear,
     injuryScaledByOwnerYear,
     comp3ScaledByOwnerYear,
+    comp4ScaledByOwnerYear,
+    comp5ScaledByOwnerYear,
   ]);
   const totalLuckRows = luckRows.length;
   const renderLuckPlace = React.useCallback(
@@ -23145,14 +23182,12 @@ export function LuckIndexTab({
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
-      return injuryViewMode === "weighted"
+      return isWeightedView
         ? Number(v).toFixed(2)
         : Math.round(Number(v)).toString();
     },
-    [injuryViewMode]
+    [isWeightedView]
   );
-  const isWeightedView = injuryViewMode === "weighted";
-  const isByeWeightedView = byeViewMode === "weighted";
   const fmtComp5Value = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -23166,9 +23201,6 @@ export function LuckIndexTab({
   const injuryDetailSource = isWeightedView
     ? injuryWeightedByOwnerYear.details
     : injuryDetailByOwnerYear;
-  const comp5TotalsSource = isByeWeightedView
-    ? comp5Data.weightedTotals
-    : comp5Data.rawTotals;
   const comp2RawRowsForDetail =
     comp2Detail?.owner != null && comp2Detail?.season != null
       ? injuryDetailByOwnerYear?.[comp2Detail.owner]?.[comp2Detail.season] || []
@@ -23291,35 +23323,53 @@ export function LuckIndexTab({
                   <th className="px-4 py-3 text-center">Opp Scoring Luck</th>
                   <th className="px-4 py-3 text-center">Your Injury Luck</th>
                   <th className="px-4 py-3 text-center">Opp Injury Luck</th>
+                  <th className="px-4 py-3 text-center">Teammate Injury Ripple</th>
+                  <th className="px-4 py-3 text-center">Bye Week Differential</th>
                   <th className="px-4 py-3 text-center">Luck Metric</th>
                 </tr>
               </thead>
               <tbody className={tableBodyClass}>
                 {luckRows.length ? (
-                  luckRows.map(({ owner, value, rank, comp1, comp2, comp3 }) => (
-                    <tr key={owner}>
-                      <td className={placeCellClass}>
-                        {renderLuckPlace(rank)}
-                      </td>
-                      <td className={managerCellClass}>{owner}</td>
-                      <td className={valueCellClass}>
-                        {renderLuckMetricCell(comp1)}
-                      </td>
-                      <td className={valueCellClass}>
-                        {renderLuckMetricCell(comp2)}
-                      </td>
-                      <td className={valueCellClass}>
-                        {renderLuckMetricCell(comp3)}
-                      </td>
-                      <td className={valueCellClass}>
-                        {renderLuckMetricCell(value)}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
+                  luckRows.map(
+                    ({
+                      owner,
+                      value,
+                      rank,
+                      comp1,
+                      comp2,
+                      comp3,
+                      comp4,
+                      comp5,
+                    }) => (
+                      <tr key={owner}>
+                        <td className={placeCellClass}>
+                          {renderLuckPlace(rank)}
+                        </td>
+                        <td className={managerCellClass}>{owner}</td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(comp1)}
+                        </td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(comp2)}
+                        </td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(comp3)}
+                        </td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(comp4)}
+                        </td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(comp5)}
+                        </td>
+                        <td className={valueCellClass}>
+                          {renderLuckMetricCell(value)}
+                        </td>
+                      </tr>
+                    )
+                  )) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={8}
                       className="px-6 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400"
                     >
                       No luck data available for the selected year yet.
@@ -23332,8 +23382,8 @@ export function LuckIndexTab({
         </div>
         <p className="mt-3 text-[11px] text-slate-500/85 dark:text-slate-400">
           Scores are normalized between 0 (least lucky) and 100 (most lucky) for
-          the selected year by averaging opponent luck and injury resilience on
-          their respective ranges.
+          the selected year by averaging all five components on their respective
+          ranges.
           {Number.isFinite(comp1Min) && Number.isFinite(comp1Max) && (
             <>
               {" "}
@@ -23352,6 +23402,18 @@ export function LuckIndexTab({
             <>
               {" "}
               Opponent injury weeks span: {comp3Min.toFixed(0)} to {comp3Max.toFixed(0)}.
+            </>
+          )}
+          {Number.isFinite(comp4Min) && Number.isFinite(comp4Max) && (
+            <>
+              {" "}
+              Teammate ripple span: {comp4Min.toFixed(1)} to {comp4Max.toFixed(1)}.
+            </>
+          )}
+          {Number.isFinite(comp5Min) && Number.isFinite(comp5Max) && (
+            <>
+              {" "}
+              Bye differential span: {fmtComp5Value(comp5Min)} to {fmtComp5Value(comp5Max)}.
             </>
           )}
         </p>
