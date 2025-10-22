@@ -1644,6 +1644,571 @@ export function SetupTab({
             )}
           </div>
         </Card>
+        <Card
+          title="Opp Injury Luck — Opponent Player-Weeks Lost"
+          allowOverflow
+        >
+          <div className="overflow-x-auto">
+            <div
+              className={tableShellWide}
+              style={{ minWidth: "100%", width: "max-content" }}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-85">
+                <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(56,189,248,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(236,72,153,0.16),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <table className="relative z-10 min-w-full border-collapse">
+                <thead className="sticky top-0">
+                  <tr className={headRowClass}>
+                    <th className="px-4 py-3 text-left">Manager</th>
+                    {seasons.map((y) => (
+                      <th key={y} className="px-4 py-3 text-center">
+                        {y}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className={tableBodyClass}>
+                  {owners.map((o) => (
+                    <tr key={o}>
+                      <td className={managerCellClass}>{o}</td>
+                      {seasons.map((y) => {
+                        const v = comp3Data.totals?.[o]?.[y];
+                        const detailRows =
+                          comp3Data.details?.[o]?.[y] ||
+                          comp3Data.details?.[o]?.[String(y)] ||
+                          [];
+                        const hasValue = Number.isFinite(v);
+                        const canOpen = hasValue || detailRows.length > 0;
+                        return (
+                          <td key={y} className={valueCellClass}>
+                            {canOpen ? (
+                              <button
+                                type="button"
+                                className={valueButtonClass}
+                                onClick={() =>
+                                  setComp3Detail({ owner: o, season: y })
+                                }
+                              >
+                                {hasValue ? Number(v).toFixed(0) : "View"}
+                              </button>
+                            ) : hasValue ? (
+                              Number(v).toFixed(0)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Card>
+        <Card title="Component 4 — Teammate Injury Ripple" allowOverflow>
+          <div className="overflow-x-auto">
+            <div
+              className={tableShellWide}
+              style={{ minWidth: "100%", width: "max-content" }}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-85">
+                <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(147,197,253,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(167,139,250,0.14),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <table className="relative z-10 min-w-full border-collapse">
+                <thead className="sticky top-0">
+                  <tr className={headRowClass}>
+                    <th className="px-4 py-3 text-left">Manager</th>
+                    {seasons.map((y) => (
+                      <th key={y} className="px-4 py-3 text-center">
+                        {y}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className={tableBodyClass}>
+                  {owners.map((o) => (
+                    <tr key={o}>
+                      <td className={managerCellClass}>{o}</td>
+                      {seasons.map((y) => {
+                        const v = comp4Data.totals?.[o]?.[y];
+                        const detailRows =
+                          comp4Data.details?.[o]?.[y] ||
+                          comp4Data.details?.[o]?.[String(y)] ||
+                          [];
+                        const hasValue = Number.isFinite(v);
+                        const canOpen = hasValue || detailRows.length > 0;
+                        return (
+                          <td key={y} className={valueCellClass}>
+                            {canOpen ? (
+                              <button
+                                type="button"
+                                className={valueButtonClass}
+                                onClick={() =>
+                                  setComp4Detail({ owner: o, season: y })
+                                }
+                              >
+                                {hasValue ? Number(v).toFixed(1) : "View"}
+                              </button>
+                            ) : hasValue ? (
+                              Number(v).toFixed(1)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Card>
+        <Card title="Component 5 — Bye Week Differential" allowOverflow>
+          <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                View
+              </span>
+              <button
+                type="button"
+                className={`${toggleButtonBase} ${
+                  byeViewMode === "raw" ? toggleButtonActive : toggleButtonInactive
+                }`}
+                onClick={() => setByeViewMode("raw")}
+              >
+                Raw diff
+              </button>
+              <button
+                type="button"
+                className={`${toggleButtonBase} ${
+                  byeViewMode === "weighted"
+                    ? toggleButtonActive
+                    : toggleButtonInactive
+                }`}
+                onClick={() => setByeViewMode("weighted")}
+              >
+                Weighted
+              </button>
+            </div>
+            {isByeWeightedView && (
+              <>
+                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                    Waiver round
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    step={1}
+                    value={injuryWaiverRound}
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      if (raw === "") {
+                        setInjuryWaiverRound(1);
+                        return;
+                      }
+                      const next = Number(raw);
+                      if (Number.isFinite(next)) {
+                        const clamped = Math.min(30, Math.max(1, Math.round(next)));
+                        setInjuryWaiverRound(clamped);
+                      }
+                    }}
+                    className="w-20 rounded-lg border border-white/50 dark:border-white/10 bg-white/90 dark:bg-white/[0.08] px-2.5 py-1 text-[12px] text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:focus-visible:ring-sky-400/60"
+                  />
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                    α
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={3}
+                    step={0.1}
+                    value={injuryWeightAlpha}
+                    onChange={(event) =>
+                      setInjuryWeightAlpha(Number(event.target.value))
+                    }
+                    className="w-36 accent-amber-400"
+                  />
+                  <span className="tabular-nums w-12 text-right text-[12px] text-slate-700 dark:text-slate-200">
+                    {injuryWeightAlpha.toFixed(2)}
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+          {isByeWeightedView && (
+            <div className="px-5 pb-4 text-[11px] text-slate-500/85 dark:text-slate-400">
+              Weighted bye counts reuse the injury component’s draft-based weighting.
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <div
+              className={tableShellWide}
+              style={{ minWidth: "100%", width: "max-content" }}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-85">
+                <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(20,184,166,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(59,130,246,0.14),transparent_65%)]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+              </div>
+              <table className="relative z-10 min-w-full border-collapse">
+                <thead className="sticky top-0">
+                  <tr className={headRowClass}>
+                    <th className="px-4 py-3 text-left">Manager</th>
+                    {seasons.map((y) => (
+                      <th key={y} className="px-4 py-3 text-center">
+                        {y}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className={tableBodyClass}>
+                  {owners.map((o) => (
+                    <tr key={o}>
+                      <td className={managerCellClass}>{o}</td>
+                      {seasons.map((y) => {
+                        const v = comp5TotalsSource?.[o]?.[y];
+                        const detailRows =
+                          comp5Data.details?.[o]?.[y] ||
+                          comp5Data.details?.[o]?.[String(y)] ||
+                          [];
+                        const hasValue = Number.isFinite(v);
+                        const canOpen = hasValue || detailRows.length > 0;
+                        return (
+                          <td key={y} className={valueCellClass}>
+                            {canOpen ? (
+                              <button
+                                type="button"
+                                className={valueButtonClass}
+                                onClick={() =>
+                                  setComp5Detail({ owner: o, season: y })
+                                }
+                              >
+                                {hasValue ? fmtComp5Value(v) : "View"}
+                              </button>
+                            ) : hasValue ? (
+                              fmtComp5Value(v)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Card>
+      )}
+      {comp3Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp3Detail(null)}
+          />
+          <div className="relative w-[min(720px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Opp Injury Luck Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp3Detail.owner} — {comp3Detail.season}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp3Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              Total opponent injury weeks: {comp3TotalCount}
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(115%_135%_at_0%_0%,rgba(56,189,248,0.16),transparent_60%),radial-gradient(130%_150%_at_100%_100%,rgba(236,72,153,0.16),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Opponent</th>
+                      <th className="px-4 py-3 text-right">Injury Weeks</th>
+                      <th className="px-4 py-3 text-left">Players</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp3DetailRows
+                      .slice()
+                      .sort((a, b) => Number(a?.week || 0) - Number(b?.week || 0))
+                      .map((row, idx) => (
+                        <tr key={`${row.week}-${row.opponentKey}-${idx}`}>
+                          <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                            W{row.week}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {row.opponent}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                            {Number.isFinite(row?.count) ? Number(row.count).toFixed(0) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {(row.players || [])
+                              .map((p) => p?.player)
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    {comp3DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No opponent injury weeks recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp4Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp4Detail(null)}
+          />
+          <div className="relative w-[min(760px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Teammate Injury Ripple Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp4Detail.owner} — {comp4Detail.season}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp4Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              Total credit: {comp4TotalCredit.toFixed(1)}
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(147,197,253,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(167,139,250,0.14),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Your Player</th>
+                      <th className="px-4 py-3 text-left">Injured Player</th>
+                      <th className="px-4 py-3 text-left">Injured Manager</th>
+                      <th className="px-4 py-3 text-right">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp4DetailRows
+                      .slice()
+                      .sort((a, b) => Number(a?.week || 0) - Number(b?.week || 0))
+                      .map((row, idx) => (
+                        <tr key={`${row.week}-${row.player}-${idx}`}>
+                          <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                            W{row.week}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {row.player}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                            {row.injuredPlayer}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
+                            {row.injuredOwner || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                            {Number.isFinite(row?.credit)
+                              ? Number(row.credit).toFixed(1)
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    {comp4DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No teammate injury ripple events recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {comp5Detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur"
+            onClick={() => setComp5Detail(null)}
+          />
+          <div className="relative w-[min(820px,92vw)] max-h-[85vh] overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/92 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/60 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  Bye Week Differential Detail
+                </span>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  {comp5Detail.owner} — {comp5Detail.season}
+                </div>
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setComp5Detail(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
+              <div>
+                Raw differential:{" "}
+                {Number.isFinite(comp5RawTotal)
+                  ? Number(comp5RawTotal).toFixed(0)
+                  : "—"}
+              </div>
+              <div>
+                Weighted differential:{" "}
+                {Number.isFinite(comp5WeightedTotal)
+                  ? Number(comp5WeightedTotal).toFixed(2)
+                  : "—"}
+              </div>
+            </div>
+
+            <div className="px-6 py-5 overflow-auto">
+              <div className={`${tableShellBase} min-w-full`}>
+                <div className="pointer-events-none absolute inset-0 opacity-85">
+                  <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(20,184,166,0.16),transparent_60%),radial-gradient(120%_150%_at_100%_100%,rgba(59,130,246,0.14),transparent_65%)]" />
+                  <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
+                </div>
+                <table className="relative z-10 w-full text-sm border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className={headRowClass}>
+                      <th className="px-4 py-3 text-left">Week</th>
+                      <th className="px-4 py-3 text-left">Opponent</th>
+                      <th className="px-4 py-3 text-right">Your Byes</th>
+                      <th className="px-4 py-3 text-right">Opponent Byes</th>
+                      <th className="px-4 py-3 text-right">Diff</th>
+                      <th className="px-4 py-3 text-left">Players</th>
+                    </tr>
+                  </thead>
+                  <tbody className={tableBodyClass}>
+                    {comp5DetailRows
+                      .slice()
+                      .sort((a, b) => Number(a?.week || 0) - Number(b?.week || 0))
+                      .map((row, idx) => {
+                        const ownValue = isByeWeightedView
+                          ? row?.ownWeighted
+                          : row?.ownCount;
+                        const oppValue = isByeWeightedView
+                          ? row?.oppWeighted
+                          : row?.oppCount;
+                        const diffValue = isByeWeightedView
+                          ? row?.diffWeighted
+                          : row?.diff;
+                        return (
+                          <tr key={`${row.week}-${row.opponentKey}-${idx}`}>
+                            <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
+                              W{row.week}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                              {row.opponent}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(ownValue)
+                                ? isByeWeightedView
+                                  ? Number(ownValue).toFixed(2)
+                                  : Number(ownValue).toFixed(0)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(oppValue)
+                                ? isByeWeightedView
+                                  ? Number(oppValue).toFixed(2)
+                                  : Number(oppValue).toFixed(0)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(diffValue)
+                                ? isByeWeightedView
+                                  ? Number(diffValue).toFixed(2)
+                                  : Number(diffValue).toFixed(0)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
+                              <div>
+                                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                  You:
+                                </span>{" "}
+                                {(row.ownPlayers || []).join(", ") || "—"}
+                              </div>
+                              <div>
+                                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                  Opp:
+                                </span>{" "}
+                                {(row.oppPlayers || []).join(", ") || "—"}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {comp5DetailRows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
+                        >
+                          No bye week differential data recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       <Card title="League selection">
         <select
@@ -21322,6 +21887,7 @@ export function LuckIndexTab({
   const comp2Data = React.useMemo(() => {
     const totals = {};
     const details = {};
+    const rosterMeta = {};
     const proTeamLookupCache = new Map();
     const getProTeamLookup = (seasonKey) => {
       const cacheKey = String(seasonKey ?? "");
@@ -21388,14 +21954,48 @@ export function LuckIndexTab({
       details[owner][season].push(row);
     };
 
+    const pushRosterMeta = (owner, season, week, pid, meta) => {
+      if (pid == null) return;
+      rosterMeta[owner] ??= {};
+      rosterMeta[owner][season] ??= {};
+      rosterMeta[owner][season][week] ??= new Map();
+      const bucket = rosterMeta[owner][season][week];
+      const existing = bucket.get(pid) || {
+        pid,
+        player: meta?.player || null,
+        posId: Number.isFinite(meta?.posId) ? meta.posId : null,
+        proTeams: new Set(),
+        slotIds: new Set(),
+        isStarter: false,
+        onBye: false,
+      };
+
+      if (!existing.player && meta?.player) existing.player = meta.player;
+      if (Number.isFinite(meta?.posId) && existing.posId == null)
+        existing.posId = meta.posId;
+      if (Array.isArray(meta?.proTeams)) {
+        meta.proTeams.forEach((teamId) => {
+          const numeric = Number(teamId);
+          if (Number.isFinite(numeric)) existing.proTeams.add(numeric);
+        });
+      }
+      if (Number.isFinite(meta?.slotId)) existing.slotIds.add(meta.slotId);
+      if (meta?.isStarter) existing.isStarter = true;
+      if (meta?.onBye) existing.onBye = true;
+
+      bucket.set(pid, existing);
+    };
+
     for (const [seasonKey, byTeam] of Object.entries(rostersByYear || {})) {
       const seasonNum = Number(seasonKey);
       const currentWeekExclusive = resolveCurrentWeekExclusive(seasonKey);
       const proTeamLookup = getProTeamLookup(seasonKey);
       for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
         const teamId = Number(teamKey);
-        const owner = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
-        if (!owner) continue;
+        const ownerRaw = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
+        const ownerKey =
+          normalizeOwnerNameLoose(ownerRaw) || ownerRaw || `Team ${teamId}`;
+        if (!ownerKey || isHiddenManager(ownerKey)) continue;
 
         for (const [weekKey, entries] of Object.entries(byWeek || {})) {
           const weekNum = Number(weekKey);
@@ -21405,26 +22005,52 @@ export function LuckIndexTab({
 
           for (const entry of entries || []) {
             const slotId = Number(__entrySlotId(entry));
-            if (__entryIsOnByeForWeek(entry, weekNum)) continue;
+            const pid = resolvePlayerId(entry);
+            const playerName = resolvePlayerName(seasonKey, seasonNum, entry);
+            const posId = __entryPosId(entry);
+            const proTeams = __entryProTeamIds(
+              entry,
+              proTeamLookup?.abbrevToId
+            );
+            const onTeamBye = __entryHasTeamBye(
+              entry,
+              weekNum,
+              proTeamLookup
+            );
+            const onEntryBye = __entryIsOnByeForWeek(entry, weekNum);
+            const isStarter = START_SLOTS.has(slotId);
+
+            pushRosterMeta(ownerKey, seasonNum, weekNum, pid, {
+              player: playerName,
+              posId,
+              proTeams,
+              slotId,
+              isStarter,
+              onBye: onTeamBye || onEntryBye,
+            });
+
+            if (onEntryBye) continue;
             const proj = __entryProj(entry);
             if (proj > 0) continue;
-            if (__entryHasTeamBye(entry, weekNum, proTeamLookup)) continue;
+            if (onTeamBye) continue;
 
-            const pid = resolvePlayerId(entry);
             const seenKey =
               pid != null ? `pid:${pid}` : `slot:${slotId}|${weekNum}`;
             if (seen.has(seenKey)) continue;
             seen.add(seenKey);
 
-            totals[owner] ??= {};
-            totals[owner][seasonNum] = (totals[owner][seasonNum] || 0) + 1;
+            totals[ownerKey] ??= {};
+            totals[ownerKey][seasonNum] =
+              (totals[ownerKey][seasonNum] || 0) + 1;
 
-            pushDetail(owner, seasonNum, {
+            pushDetail(ownerKey, seasonNum, {
               week: weekNum,
-              player: resolvePlayerName(seasonKey, seasonNum, entry),
+              player: playerName,
               slot: __SLOT_LABEL[slotId] || `Slot ${slotId}`,
               pid,
               projection: proj,
+              posId,
+              proTeams,
             });
           }
         }
@@ -21435,7 +22061,28 @@ export function LuckIndexTab({
       "[Luck] comp2 (injury weeks via proj=0) by owner/year:",
       totals
     );
-    return { totals, details };
+    const rosterMetaPlain = {};
+    Object.entries(rosterMeta).forEach(([owner, bySeason]) => {
+      rosterMetaPlain[owner] = {};
+      Object.entries(bySeason || {}).forEach(([season, byWeek]) => {
+        rosterMetaPlain[owner][season] = {};
+        Object.entries(byWeek || {}).forEach(([week, map]) => {
+          rosterMetaPlain[owner][season][week] = Array.from(map.values()).map(
+            (meta) => ({
+              pid: meta.pid,
+              player: meta.player,
+              posId: meta.posId,
+              proTeams: Array.from(meta.proTeams || []),
+              slotIds: Array.from(meta.slotIds || []),
+              isStarter: Boolean(meta.isStarter),
+              onBye: Boolean(meta.onBye),
+            })
+          );
+        });
+      });
+    });
+
+    return { totals, details, rosterMeta: rosterMetaPlain };
   }, [
     rostersByYear,
     league?.currentWeekByYear,
@@ -21443,6 +22090,8 @@ export function LuckIndexTab({
     ownerNameOf,
     nameIndex,
     START_SLOTS,
+    normalizeOwnerNameLoose,
+    isHiddenManager,
     league?.proTeamsByYear,
     league?.seasonsByYear,
     league?.proTeams,
@@ -21452,9 +22101,11 @@ export function LuckIndexTab({
   const comp1DetailByOwnerYear = comp1Data.details;
   const injuryByOwnerYear = comp2Data.totals;
   const injuryDetailByOwnerYear = comp2Data.details;
+  const rosterMetaByOwnerSeasonWeek = comp2Data.rosterMeta || {};
   const [injuryViewMode, setInjuryViewMode] = React.useState("raw");
   const [injuryWeightAlpha, setInjuryWeightAlpha] = React.useState(1);
   const [injuryWaiverRound, setInjuryWaiverRound] = React.useState(12);
+  const [byeViewMode, setByeViewMode] = React.useState("raw");
   const normalizedWaiverRound = React.useMemo(
     () =>
       Math.max(
@@ -21534,6 +22185,490 @@ export function LuckIndexTab({
     injuryWeightAlpha,
     normalizedWaiverRound,
   ]);
+  const injuryDetailByOwnerSeasonWeek = React.useMemo(() => {
+    const map = {};
+    for (const [owner, seasons] of Object.entries(
+      injuryDetailByOwnerYear || {}
+    )) {
+      const ownerKey = normalizeOwnerNameLoose(owner) || owner;
+      if (!ownerKey || isHiddenManager(ownerKey)) continue;
+      map[ownerKey] ??= {};
+      for (const [seasonKey, rows] of Object.entries(seasons || {})) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        map[ownerKey][seasonNum] ??= {};
+        for (const row of rows || []) {
+          const weekNum = Number(row?.week);
+          if (!Number.isFinite(weekNum)) continue;
+          map[ownerKey][seasonNum][weekNum] ??= [];
+          map[ownerKey][seasonNum][weekNum].push(row);
+        }
+      }
+    }
+    return map;
+  }, [injuryDetailByOwnerYear, normalizeOwnerNameLoose, isHiddenManager]);
+  const scheduleByOwnerSeason = React.useMemo(() => {
+    const out = {};
+    const seasonCandidates = new Set();
+    seasons.forEach((season) => {
+      const n = Number(season);
+      if (Number.isFinite(n)) seasonCandidates.add(n);
+    });
+    if (Array.isArray(league?.games)) {
+      league.games.forEach((game) => {
+        const n = Number(game?.season ?? game?.year);
+        if (Number.isFinite(n)) seasonCandidates.add(n);
+      });
+    }
+    const scheduleSources = [
+      league?.scheduleByYear,
+      league?.espnScheduleByYear,
+    ];
+    scheduleSources.forEach((source) => {
+      if (!source || typeof source !== "object") return;
+      Object.keys(source).forEach((key) => {
+        const n = Number(key);
+        if (Number.isFinite(n)) seasonCandidates.add(n);
+      });
+    });
+
+    const ownerByTeamByYear = league?.ownerByTeamByYear || {};
+
+    for (const seasonNum of seasonCandidates) {
+      if (!Number.isFinite(seasonNum)) continue;
+      const games = __collectGamesForSeason(
+        league,
+        seasonNum,
+        ownerByTeamByYear
+      );
+      if (!Array.isArray(games) || !games.length) continue;
+      const cutoff = resolveCurrentWeekExclusive(seasonNum);
+
+      games.forEach((game) => {
+        const week = Number(game?.week);
+        if (!Number.isFinite(week) || week <= 0) return;
+        if (cutoff > 0 && week >= cutoff) return;
+        const ownerA =
+          normalizeOwnerNameLoose(game?.owner1) || game?.owner1 || "";
+        const ownerB =
+          normalizeOwnerNameLoose(game?.owner2) || game?.owner2 || "";
+        if (!ownerA || !ownerB) return;
+        if (isHiddenManager(ownerA) || isHiddenManager(ownerB)) return;
+
+        const push = (owner, opponent, opponentDisplay) => {
+          if (!owner || !opponent) return;
+          out[owner] ??= {};
+          out[owner][seasonNum] ??= [];
+          out[owner][seasonNum].push({
+            week,
+            opponent,
+            opponentDisplay: opponentDisplay || opponent,
+            isPlayoff: Boolean(game?.is_playoff),
+          });
+        };
+
+        push(ownerA, ownerB, game?.owner2);
+        push(ownerB, ownerA, game?.owner1);
+      });
+    }
+
+    Object.values(out).forEach((bySeason) => {
+      Object.values(bySeason || {}).forEach((arr) => {
+        arr.sort((a, b) => {
+          const weekDiff = (a.week || 0) - (b.week || 0);
+          if (weekDiff !== 0) return weekDiff;
+          return (a.opponent || "").localeCompare(b.opponent || "");
+        });
+      });
+    });
+
+    return out;
+  }, [
+    league,
+    seasons,
+    normalizeOwnerNameLoose,
+    isHiddenManager,
+    resolveCurrentWeekExclusive,
+  ]);
+  const comp3Data = React.useMemo(() => {
+    const totals = {};
+    const details = {};
+
+    for (const [owner, seasonsMap] of Object.entries(
+      scheduleByOwnerSeason || {}
+    )) {
+      const ownerTotals = {};
+      const ownerDetails = {};
+
+      for (const [seasonKey, scheduleRows] of Object.entries(
+        seasonsMap || {}
+      )) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        let sum = 0;
+        const rows = [];
+
+        for (const entry of scheduleRows || []) {
+          const weekNum = Number(entry?.week);
+          if (!Number.isFinite(weekNum)) continue;
+          const opponentKey = entry?.opponent;
+          if (!opponentKey) continue;
+          const injuries =
+            injuryDetailByOwnerSeasonWeek?.[opponentKey]?.[seasonNum]?.[
+              weekNum
+            ] || [];
+          const count = injuries.length;
+          if (count > 0) {
+            sum += count;
+            rows.push({
+              week: weekNum,
+              opponent: entry?.opponentDisplay || opponentKey,
+              opponentKey,
+              count,
+              players: injuries.map((row) => ({
+                player: row?.player,
+                slot: row?.slot,
+              })),
+            });
+          }
+        }
+
+        ownerTotals[seasonNum] = sum;
+        ownerDetails[seasonNum] = rows;
+      }
+
+      if (Object.keys(ownerTotals).length) totals[owner] = ownerTotals;
+      if (Object.keys(ownerDetails).length) details[owner] = ownerDetails;
+    }
+
+    return { totals, details };
+  }, [scheduleByOwnerSeason, injuryDetailByOwnerSeasonWeek]);
+  const injuriesBySeasonWeekTeamPos = React.useMemo(() => {
+    const out = {};
+    for (const [owner, seasonsMap] of Object.entries(
+      injuryDetailByOwnerYear || {}
+    )) {
+      const ownerKey = normalizeOwnerNameLoose(owner) || owner;
+      for (const [seasonKey, rows] of Object.entries(seasonsMap || {})) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        out[seasonNum] ??= {};
+        for (const row of rows || []) {
+          const weekNum = Number(row?.week);
+          if (!Number.isFinite(weekNum)) continue;
+          const posId = Number(row?.posId);
+          if (!Number.isFinite(posId)) continue;
+          const proTeams = Array.isArray(row?.proTeams)
+            ? row.proTeams
+            : [];
+          const pid = Number(row?.pid);
+          proTeams.forEach((teamId) => {
+            const teamNum = Number(teamId);
+            if (!Number.isFinite(teamNum)) return;
+            out[seasonNum][weekNum] ??= {};
+            out[seasonNum][weekNum][teamNum] ??= {};
+            out[seasonNum][weekNum][teamNum][posId] ??= [];
+            out[seasonNum][weekNum][teamNum][posId].push({
+              owner: ownerKey,
+              player: row?.player,
+              pid,
+            });
+          });
+        }
+      }
+    }
+    return out;
+  }, [injuryDetailByOwnerYear, normalizeOwnerNameLoose]);
+  const rosterIndexBySeasonWeek = React.useMemo(() => {
+    const out = {};
+    for (const [owner, bySeason] of Object.entries(
+      rosterMetaByOwnerSeasonWeek || {}
+    )) {
+      if (!owner || isHiddenManager(owner)) continue;
+      for (const [seasonKey, byWeek] of Object.entries(bySeason || {})) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        out[seasonNum] ??= {};
+        for (const [weekKey, entries] of Object.entries(byWeek || {})) {
+          const weekNum = Number(weekKey);
+          if (!Number.isFinite(weekNum)) continue;
+          out[seasonNum][weekNum] ??= {};
+          for (const entry of entries || []) {
+            const pid = Number(entry?.pid);
+            if (!Number.isFinite(pid)) continue;
+            const posId = Number(entry?.posId);
+            if (!Number.isFinite(posId)) continue;
+            const proTeams = Array.isArray(entry?.proTeams)
+              ? entry.proTeams
+              : [];
+            proTeams.forEach((teamId) => {
+              const teamNum = Number(teamId);
+              if (!Number.isFinite(teamNum)) return;
+              out[seasonNum][weekNum][teamNum] ??= {};
+              out[seasonNum][weekNum][teamNum][posId] ??= [];
+              out[seasonNum][weekNum][teamNum][posId].push({
+                owner,
+                pid,
+                player: entry?.player,
+              });
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }, [rosterMetaByOwnerSeasonWeek, isHiddenManager]);
+  const comp4Data = React.useMemo(() => {
+    const totals = {};
+    const details = {};
+    const seenPairs = new Set();
+
+    const getDraftMeta = (seasonNum, pid) => {
+      const meta = draftIndexByYear.get(Number(seasonNum));
+      if (!meta || !meta.pidMap) return null;
+      const info = meta.pidMap.get(Number(pid));
+      if (!info) return null;
+      const round = Number(info.round);
+      if (!Number.isFinite(round) || round <= 0) return null;
+      const overall = Number(info.overall);
+      return {
+        round,
+        overall: Number.isFinite(overall) && overall > 0 ? overall : null,
+      };
+    };
+
+    const compareDraft = (injured, beneficiary) => {
+      if (!injured || !beneficiary) return null;
+      if (injured.round == null || beneficiary.round == null) return null;
+      if (injured.round !== beneficiary.round)
+        return injured.round - beneficiary.round;
+      if (
+        injured.overall != null &&
+        beneficiary.overall != null &&
+        injured.overall !== beneficiary.overall
+      ) {
+        return injured.overall - beneficiary.overall;
+      }
+      return 0;
+    };
+
+    for (const [seasonKey, weeksMap] of Object.entries(
+      injuriesBySeasonWeekTeamPos || {}
+    )) {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) continue;
+
+      for (const [weekKey, teamMap] of Object.entries(weeksMap || {})) {
+        const weekNum = Number(weekKey);
+        if (!Number.isFinite(weekNum)) continue;
+
+        for (const [teamKey, posMap] of Object.entries(teamMap || {})) {
+          const teamNum = Number(teamKey);
+          if (!Number.isFinite(teamNum)) continue;
+
+          for (const [posKey, injuryList] of Object.entries(posMap || {})) {
+            const posId = Number(posKey);
+            if (!Number.isFinite(posId)) continue;
+            const candidates =
+              rosterIndexBySeasonWeek?.[seasonNum]?.[weekNum]?.[teamNum]?.[
+                posId
+              ] || [];
+            if (!candidates.length) continue;
+
+            injuryList.forEach((injury) => {
+              const injuredDraft = getDraftMeta(seasonNum, injury.pid);
+              if (!injuredDraft) return;
+
+              candidates.forEach((candidate) => {
+                if (candidate.pid === injury.pid) return;
+                const draftInfo = getDraftMeta(seasonNum, candidate.pid);
+                if (!draftInfo) return;
+                const cmp = compareDraft(injuredDraft, draftInfo);
+                if (cmp == null) return;
+
+                let credit;
+                if (cmp < 0) credit = 1;
+                else if (cmp > 0) credit = 0.5;
+                else credit = 0.5;
+
+                if (!credit) return;
+                const owner = candidate.owner;
+                if (!owner || isHiddenManager(owner)) return;
+
+                const pairKey = `${owner}|${seasonNum}|${weekNum}|${candidate.pid}|${injury.pid}`;
+                if (seenPairs.has(pairKey)) return;
+                seenPairs.add(pairKey);
+
+                totals[owner] ??= {};
+                totals[owner][seasonNum] =
+                  (totals[owner][seasonNum] || 0) + credit;
+
+                details[owner] ??= {};
+                details[owner][seasonNum] ??= [];
+                details[owner][seasonNum].push({
+                  week: weekNum,
+                  player: candidate.player,
+                  injuredPlayer: injury.player,
+                  injuredOwner: injury.owner,
+                  credit,
+                  injuredDraftRound: injuredDraft.round,
+                  benefitingDraftRound: draftInfo.round,
+                });
+              });
+            });
+          }
+        }
+      }
+    }
+
+    return { totals, details };
+  }, [
+    injuriesBySeasonWeekTeamPos,
+    rosterIndexBySeasonWeek,
+    draftIndexByYear,
+    isHiddenManager,
+  ]);
+  const byeWeekMeta = React.useMemo(() => {
+    const raw = {};
+    const weighted = {};
+
+    const computeWeight = (seasonNum, pid) => {
+      const seasonMeta = draftIndexByYear.get(Number(seasonNum));
+      const pidMeta = seasonMeta?.pidMap?.get(Number(pid));
+      const draftedRound = Number(pidMeta?.round);
+      const baseRound = getBaseRoundForSeason(seasonNum);
+      const fallbackRound =
+        Number.isFinite(draftedRound) && draftedRound > 0
+          ? draftedRound
+          : normalizedWaiverRound;
+      const roundClamped = Math.min(
+        Math.max(1, Math.round(fallbackRound)),
+        baseRound
+      );
+      const base = baseRound + 1 - roundClamped;
+      return Math.pow(base, injuryWeightAlpha);
+    };
+
+    for (const [owner, bySeason] of Object.entries(
+      rosterMetaByOwnerSeasonWeek || {}
+    )) {
+      if (!owner || isHiddenManager(owner)) continue;
+      for (const [seasonKey, byWeek] of Object.entries(bySeason || {})) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        raw[owner] ??= {};
+        weighted[owner] ??= {};
+        raw[owner][seasonNum] ??= {};
+        weighted[owner][seasonNum] ??= {};
+        for (const [weekKey, entries] of Object.entries(byWeek || {})) {
+          const weekNum = Number(weekKey);
+          if (!Number.isFinite(weekNum)) continue;
+          let count = 0;
+          let weightedSum = 0;
+          const players = [];
+          const weightedPlayers = [];
+          for (const entry of entries || []) {
+            if (!entry?.isStarter || !entry?.onBye) continue;
+            count += 1;
+            players.push(entry?.player);
+            const weight = computeWeight(seasonNum, entry?.pid);
+            weightedSum += weight;
+            weightedPlayers.push({ player: entry?.player, weight });
+          }
+          raw[owner][seasonNum][weekNum] = {
+            count,
+            players,
+          };
+          weighted[owner][seasonNum][weekNum] = {
+            value: weightedSum,
+            players: weightedPlayers,
+          };
+        }
+      }
+    }
+
+    return { raw, weighted };
+  }, [
+    rosterMetaByOwnerSeasonWeek,
+    draftIndexByYear,
+    getBaseRoundForSeason,
+    injuryWeightAlpha,
+    normalizedWaiverRound,
+    isHiddenManager,
+  ]);
+  const comp5Data = React.useMemo(() => {
+    const rawTotals = {};
+    const weightedTotals = {};
+    const details = {};
+    const rawCounts = byeWeekMeta.raw || {};
+    const weightedCounts = byeWeekMeta.weighted || {};
+
+    for (const [owner, seasonsMap] of Object.entries(
+      scheduleByOwnerSeason || {}
+    )) {
+      const ownerRawTotals = {};
+      const ownerWeightedTotals = {};
+      const ownerDetails = {};
+
+      for (const [seasonKey, scheduleRows] of Object.entries(
+        seasonsMap || {}
+      )) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        let ownRawSum = 0;
+        let oppRawSum = 0;
+        let ownWeightedSum = 0;
+        let oppWeightedSum = 0;
+        const rows = [];
+
+        for (const entry of scheduleRows || []) {
+          const weekNum = Number(entry?.week);
+          if (!Number.isFinite(weekNum)) continue;
+          const opponent = entry?.opponent;
+          if (!opponent) continue;
+          const ownWeekRaw = rawCounts?.[owner]?.[seasonNum]?.[weekNum];
+          const oppWeekRaw = rawCounts?.[opponent]?.[seasonNum]?.[weekNum];
+          const ownCount = ownWeekRaw?.count || 0;
+          const oppCount = oppWeekRaw?.count || 0;
+          const ownWeekWeighted =
+            weightedCounts?.[owner]?.[seasonNum]?.[weekNum]?.value || 0;
+          const oppWeekWeighted =
+            weightedCounts?.[opponent]?.[seasonNum]?.[weekNum]?.value || 0;
+
+          ownRawSum += ownCount;
+          oppRawSum += oppCount;
+          ownWeightedSum += ownWeekWeighted;
+          oppWeightedSum += oppWeekWeighted;
+
+          rows.push({
+            week: weekNum,
+            opponent: entry?.opponentDisplay || opponent,
+            opponentKey: opponent,
+            ownCount,
+            oppCount,
+            ownPlayers: ownWeekRaw?.players || [],
+            oppPlayers: oppWeekRaw?.players || [],
+            ownWeighted: ownWeekWeighted,
+            oppWeighted: oppWeekWeighted,
+            diff: ownCount - oppCount,
+            diffWeighted: ownWeekWeighted - oppWeekWeighted,
+          });
+        }
+
+        ownerRawTotals[seasonNum] = ownRawSum - oppRawSum;
+        ownerWeightedTotals[seasonNum] = ownWeightedSum - oppWeightedSum;
+        ownerDetails[seasonNum] = rows;
+      }
+
+      if (Object.keys(ownerRawTotals).length)
+        rawTotals[owner] = ownerRawTotals;
+      if (Object.keys(ownerWeightedTotals).length)
+        weightedTotals[owner] = ownerWeightedTotals;
+      if (Object.keys(ownerDetails).length) details[owner] = ownerDetails;
+    }
+
+    return { rawTotals, weightedTotals, details };
+  }, [scheduleByOwnerSeason, byeWeekMeta]);
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false } = options;
     const entries = [];
@@ -21589,32 +22724,51 @@ export function LuckIndexTab({
   const injuryScaledByOwnerYear = injuryScaledData.scaled;
   const injuryMin = injuryScaledData.min;
   const injuryMax = injuryScaledData.max;
+  const comp3ScaledData = React.useMemo(
+    () => normalizeOwnerYearTotals(comp3Data.totals),
+    [comp3Data.totals, normalizeOwnerYearTotals]
+  );
+  const comp3ScaledByOwnerYear = comp3ScaledData.scaled;
+  const comp3Min = comp3ScaledData.min;
+  const comp3Max = comp3ScaledData.max;
 
   const luckByOwnerYear = React.useMemo(() => {
     const out = {};
     const ownersSet = new Set([
       ...Object.keys(comp1ScaledByOwnerYear || {}),
       ...Object.keys(injuryScaledByOwnerYear || {}),
+      ...Object.keys(comp3ScaledByOwnerYear || {}),
     ]);
 
     for (const owner of ownersSet) {
       const seasonsSet = new Set([
         ...Object.keys(comp1ScaledByOwnerYear?.[owner] || {}),
         ...Object.keys(injuryScaledByOwnerYear?.[owner] || {}),
+        ...Object.keys(comp3ScaledByOwnerYear?.[owner] || {}),
       ]);
 
       for (const seasonKey of seasonsSet) {
+        const values = [];
         const c1 = comp1ScaledByOwnerYear?.[owner]?.[seasonKey];
         const c2 = injuryScaledByOwnerYear?.[owner]?.[seasonKey];
-        if (Number.isFinite(c1) && Number.isFinite(c2)) {
+        const c3 = comp3ScaledByOwnerYear?.[owner]?.[seasonKey];
+        if (Number.isFinite(c1)) values.push(c1);
+        if (Number.isFinite(c2)) values.push(c2);
+        if (Number.isFinite(c3)) values.push(c3);
+        if (values.length) {
           out[owner] ??= {};
-          out[owner][seasonKey] = (c1 + c2) / 2;
+          out[owner][seasonKey] =
+            values.reduce((sum, v) => sum + v, 0) / values.length;
         }
       }
     }
 
     return out;
-  }, [comp1ScaledByOwnerYear, injuryScaledByOwnerYear]);
+  }, [
+    comp1ScaledByOwnerYear,
+    injuryScaledByOwnerYear,
+    comp3ScaledByOwnerYear,
+  ]);
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
   const owners = React.useMemo(() => {
@@ -21628,11 +22782,13 @@ export function LuckIndexTab({
     ownersBase.forEach((name) => pushOwner(name));
     Object.keys(comp1ByOwnerYear || {}).forEach((o) => pushOwner(o));
     Object.keys(injuryByOwnerYear || {}).forEach((o) => pushOwner(o));
+    Object.keys(comp3Data.totals || {}).forEach((o) => pushOwner(o));
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [
     ownersBase,
     comp1ByOwnerYear,
     injuryByOwnerYear,
+    comp3Data.totals,
     normalizeOwnerNameLoose,
     isHiddenManager,
   ]);
@@ -21827,6 +22983,24 @@ export function LuckIndexTab({
       setComp2Detail(null);
     }
   }, [comp2Detail, hiddenManagersSet]);
+  const [comp3Detail, setComp3Detail] = React.useState(null);
+  React.useEffect(() => {
+    if (comp3Detail?.owner && hiddenManagersSet.has(comp3Detail.owner)) {
+      setComp3Detail(null);
+    }
+  }, [comp3Detail, hiddenManagersSet]);
+  const [comp4Detail, setComp4Detail] = React.useState(null);
+  React.useEffect(() => {
+    if (comp4Detail?.owner && hiddenManagersSet.has(comp4Detail.owner)) {
+      setComp4Detail(null);
+    }
+  }, [comp4Detail, hiddenManagersSet]);
+  const [comp5Detail, setComp5Detail] = React.useState(null);
+  React.useEffect(() => {
+    if (comp5Detail?.owner && hiddenManagersSet.has(comp5Detail.owner)) {
+      setComp5Detail(null);
+    }
+  }, [comp5Detail, hiddenManagersSet]);
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
@@ -21859,7 +23033,8 @@ export function LuckIndexTab({
       const value = getSeasonValue(luckByOwnerYear, owner);
       const comp1 = getSeasonValue(comp1ScaledByOwnerYear, owner);
       const comp2 = getSeasonValue(injuryScaledByOwnerYear, owner);
-      return { owner, value, comp1, comp2 };
+      const comp3 = getSeasonValue(comp3ScaledByOwnerYear, owner);
+      return { owner, value, comp1, comp2, comp3 };
     });
     return rows
       .sort((a, b) => {
@@ -21882,6 +23057,7 @@ export function LuckIndexTab({
     selectedLuckSeason,
     comp1ScaledByOwnerYear,
     injuryScaledByOwnerYear,
+    comp3ScaledByOwnerYear,
   ]);
   const totalLuckRows = luckRows.length;
   const renderLuckPlace = React.useCallback(
@@ -21966,12 +23142,23 @@ export function LuckIndexTab({
     [injuryViewMode]
   );
   const isWeightedView = injuryViewMode === "weighted";
+  const isByeWeightedView = byeViewMode === "weighted";
+  const fmtComp5Value = React.useCallback(
+    (v) => {
+      if (!Number.isFinite(v)) return "—";
+      return isByeWeightedView ? Number(v).toFixed(2) : Number(v).toFixed(0);
+    },
+    [isByeWeightedView]
+  );
   const injuryTotalsSource = isWeightedView
     ? injuryWeightedByOwnerYear.totals
     : injuryByOwnerYear;
   const injuryDetailSource = isWeightedView
     ? injuryWeightedByOwnerYear.details
     : injuryDetailByOwnerYear;
+  const comp5TotalsSource = isByeWeightedView
+    ? comp5Data.weightedTotals
+    : comp5Data.rawTotals;
   const comp2RawRowsForDetail =
     comp2Detail?.owner != null && comp2Detail?.season != null
       ? injuryDetailByOwnerYear?.[comp2Detail.owner]?.[comp2Detail.season] || []
@@ -21996,6 +23183,34 @@ export function LuckIndexTab({
     comp2Detail?.season != null
       ? getBaseRoundForSeason(comp2Detail.season)
       : normalizedWaiverRound;
+  const comp3DetailRows =
+    comp3Detail?.owner != null && comp3Detail?.season != null
+      ? comp3Data.details?.[comp3Detail.owner]?.[comp3Detail.season] || []
+      : [];
+  const comp3TotalCount = comp3DetailRows.reduce(
+    (sum, row) => sum + (Number.isFinite(row?.count) ? Number(row.count) : 0),
+    0
+  );
+  const comp4DetailRows =
+    comp4Detail?.owner != null && comp4Detail?.season != null
+      ? comp4Data.details?.[comp4Detail.owner]?.[comp4Detail.season] || []
+      : [];
+  const comp4TotalCredit = comp4DetailRows.reduce(
+    (sum, row) => sum + (Number.isFinite(row?.credit) ? Number(row.credit) : 0),
+    0
+  );
+  const comp5DetailRows =
+    comp5Detail?.owner != null && comp5Detail?.season != null
+      ? comp5Data.details?.[comp5Detail.owner]?.[comp5Detail.season] || []
+      : [];
+  const comp5RawTotal =
+    comp5Detail?.owner != null && comp5Detail?.season != null
+      ? comp5Data.rawTotals?.[comp5Detail.owner]?.[comp5Detail.season] ?? 0
+      : 0;
+  const comp5WeightedTotal =
+    comp5Detail?.owner != null && comp5Detail?.season != null
+      ? comp5Data.weightedTotals?.[comp5Detail.owner]?.[comp5Detail.season] ?? 0
+      : 0;
 
   const tableShellBase =
     "relative overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/80 dark:bg-zinc-950/55 shadow-[0_30px_65px_-40px_rgba(15,23,42,0.85)] backdrop-blur-xl";
@@ -22064,13 +23279,14 @@ export function LuckIndexTab({
                   <th className="px-4 py-3 text-left">Luck Place</th>
                   <th className="px-4 py-3 text-left">Manager</th>
                   <th className="px-4 py-3 text-center">Opp Scoring Luck</th>
-                  <th className="px-4 py-3 text-center">Injury Luck</th>
+                  <th className="px-4 py-3 text-center">Your Injury Luck</th>
+                  <th className="px-4 py-3 text-center">Opp Injury Luck</th>
                   <th className="px-4 py-3 text-center">Luck Metric</th>
                 </tr>
               </thead>
               <tbody className={tableBodyClass}>
                 {luckRows.length ? (
-                  luckRows.map(({ owner, value, rank, comp1, comp2 }) => (
+                  luckRows.map(({ owner, value, rank, comp1, comp2, comp3 }) => (
                     <tr key={owner}>
                       <td className={placeCellClass}>
                         {renderLuckPlace(rank)}
@@ -22083,6 +23299,9 @@ export function LuckIndexTab({
                         {renderLuckMetricCell(comp2)}
                       </td>
                       <td className={valueCellClass}>
+                        {renderLuckMetricCell(comp3)}
+                      </td>
+                      <td className={valueCellClass}>
                         {renderLuckMetricCell(value)}
                       </td>
                     </tr>
@@ -22090,7 +23309,7 @@ export function LuckIndexTab({
                 ) : (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-6 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400"
                     >
                       No luck data available for the selected year yet.
@@ -22117,6 +23336,12 @@ export function LuckIndexTab({
               {" "}
               Injury weeks span: {injuryMin.toFixed(0)} to{" "}
               {injuryMax.toFixed(0)}.
+            </>
+          )}
+          {Number.isFinite(comp3Min) && Number.isFinite(comp3Max) && (
+            <>
+              {" "}
+              Opponent injury weeks span: {comp3Min.toFixed(0)} to {comp3Max.toFixed(0)}.
             </>
           )}
         </p>
@@ -22398,7 +23623,21 @@ export function LuckIndexTab({
             projection (proxy for weeks lost to injury). Weighted view applies a
             draft-round multiplier to emphasize early picks.
           </p>
-          <p>Component 3: TBD (future feature).</p>
+          <p>
+            Opp Injury Luck: Weekly opponent injury weeks accumulated across
+            your schedule — higher totals mean you caught opponents at less
+            than full strength.
+          </p>
+          <p>
+            Component 4: Teammate Injury Ripple — credit when a same-team,
+            same-position player drafted ahead of your player misses time (full
+            week) or when one drafted after misses time (half week).
+          </p>
+          <p>
+            Component 5: Bye Week Differential — your starters on bye minus the
+            byes your opponents had when facing you. Weighted view uses the same
+            draft weighting controls as the injury component.
+          </p>
           <p>Additional ideas below.</p>
         </div>
       </Card>
