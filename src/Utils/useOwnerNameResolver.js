@@ -2,6 +2,8 @@ import React from "react";
 import { canonicalizeOwner, primeOwnerMaps } from "../ownerMaps.jsx";
 import { normalizeNicknameMap } from "./nicknames.js";
 
+const TEAM_NAME_RE = /^team\s*\d+$/i;
+
 const extractOwnerName = (value) => {
   if (value == null) return "";
   if (typeof value === "string") return value.trim();
@@ -157,7 +159,7 @@ export function useOwnerNameResolver({
       const normalizedOwner =
         canonicalizeOwner(ownerName) || String(ownerName || "").trim();
       if (!normalizedOwner) return;
-      if (/^team\s*\d+$/i.test(normalizedOwner)) return;
+      if (TEAM_NAME_RE.test(normalizedOwner)) return;
       addTeamAliases(index + 1, normalizedOwner);
     });
 
@@ -173,6 +175,61 @@ export function useOwnerNameResolver({
     normalizedNicknamesProp,
     ownerMapsVersion,
   ]);
+
+  const canonicalOwnerList = React.useMemo(() => {
+    const seen = new Set();
+    const owners = [];
+    teamAliasMap.forEach((target) => {
+      const trimmed = String(target || "").trim();
+      if (!trimmed || TEAM_NAME_RE.test(trimmed)) return;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      owners.push(trimmed);
+    });
+    return owners;
+  }, [teamAliasMap]);
+
+  const looseMatchOwnerName = React.useCallback(
+    (value) => {
+      if (value == null) return null;
+      const str = String(value).trim();
+      if (!str) return null;
+      const parts = str.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) return null;
+      const firstRaw = parts[0].toLowerCase();
+      const last = parts.slice(1).join(" ").toLowerCase();
+      if (!last) return null;
+
+      const dedupeDoubleLetters = (text) =>
+        text.replace(/(.)\1+/g, "$1");
+      const first = dedupeDoubleLetters(firstRaw);
+
+      const matches = [];
+      canonicalOwnerList.forEach((candidate) => {
+        const tokens = candidate.split(/\s+/).filter(Boolean);
+        if (tokens.length < 2) return;
+        const candidateFirstRaw = tokens[0].toLowerCase();
+        const candidateLast = tokens.slice(1).join(" ").toLowerCase();
+        if (candidateLast !== last) return;
+
+        const candidateFirst = dedupeDoubleLetters(candidateFirstRaw);
+        if (
+          candidateFirstRaw.startsWith(firstRaw) ||
+          firstRaw.startsWith(candidateFirstRaw) ||
+          candidateFirst.startsWith(first) ||
+          first.startsWith(candidateFirst)
+        ) {
+          matches.push(candidate);
+        }
+      });
+
+      const uniqueMatches = Array.from(new Set(matches));
+      if (uniqueMatches.length === 1) return uniqueMatches[0];
+      return null;
+    },
+    [canonicalOwnerList]
+  );
 
   const normalizeOwnerNameLoose = React.useCallback(
     (value) => {
@@ -192,8 +249,15 @@ export function useOwnerNameResolver({
       if (canonical) {
         const aliasCanonical = lookup(canonical);
         if (aliasCanonical) return aliasCanonical;
-        if (!/^team\s*\d+$/i.test(canonical)) return canonical;
+        if (!TEAM_NAME_RE.test(canonical)) {
+          const looseCanonical = looseMatchOwnerName(canonical);
+          if (looseCanonical) return looseCanonical;
+          return canonical;
+        }
       }
+
+      const loose = looseMatchOwnerName(str);
+      if (loose) return loose;
 
       const numeric = Number(str.replace(/[^0-9]/g, ""));
       if (Number.isFinite(numeric)) {
@@ -203,7 +267,7 @@ export function useOwnerNameResolver({
 
       return canonical || str;
     },
-    [teamAliasMap]
+    [teamAliasMap, looseMatchOwnerName]
   );
 
   const resolveAliasForTeamId = React.useCallback(
