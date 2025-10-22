@@ -2217,11 +2217,20 @@ export function SetupTab({
           value={selectedLeague}
           onChange={(e) => setSelectedLeague(e.target.value)}
         >
-          {keys.map((k) => (
-            <option key={k} value={k}>
-              {derivedAll.byLeague[k].meta.name || k}
-            </option>
-          ))}
+          {keys.map((k) => {
+            const optionLeague = derivedAll?.byLeague?.[k];
+            const optionLabel =
+              optionLeague?.meta?.name ||
+              optionLeague?.leagueName ||
+              optionLeague?.settings?.leagueName ||
+              optionLeague?.name ||
+              k;
+            return (
+              <option key={k} value={k}>
+                {optionLabel}
+              </option>
+            );
+          })}
         </select>
       </Card>
       {league && (
