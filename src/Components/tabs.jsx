@@ -22173,6 +22173,47 @@ export function LuckIndexTab({
       }
       return ownerMapsBySeason.get(seasonNum);
     };
+    const TEAM_ID_LABEL_RE = /^team\s*\d+$/i;
+    const resolveOwnerDisplayName = (
+      seasonNum,
+      teamIdRaw,
+      ownerKey,
+      ...rawCandidates
+    ) => {
+      const candidates = [];
+      const seen = new Set();
+      const numericTeamId = Number(teamIdRaw);
+      if (Number.isFinite(numericTeamId)) {
+        const mapped = ownerNameOf(seasonNum, numericTeamId);
+        if (mapped != null) candidates.push(mapped);
+      }
+      rawCandidates.forEach((cand) => {
+        const parsed = readOwnerNameValue(cand);
+        if (parsed != null && parsed !== "") {
+          candidates.push(parsed);
+        }
+      });
+      if (ownerKey != null && ownerKey !== "") {
+        candidates.push(ownerKey);
+      }
+      let numericFallback = null;
+      for (const candidate of candidates) {
+        const value = readOwnerNameValue(candidate);
+        const trimmed = typeof value === "string" ? value.trim() : "";
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (TEAM_ID_LABEL_RE.test(trimmed)) {
+          if (!numericFallback) numericFallback = trimmed;
+          continue;
+        }
+        return trimmed;
+      }
+      if (numericFallback) return numericFallback;
+      const fallback = readOwnerNameValue(ownerKey);
+      return fallback || "";
+    };
     const addOwnerMapping = (seasonRaw, teamRaw, ownerValue) => {
       const seasonNum = Number(seasonRaw);
       const teamId = Number(teamRaw);
@@ -22181,10 +22222,12 @@ export function LuckIndexTab({
       const normalized = normalizeOwnerNameLoose(ownerName);
       if (!normalized || isHiddenManager(normalized)) return;
       const ownerMap = ensureOwnerMapSeason(seasonNum);
-      const displayName =
-        ownerNameOf(seasonNum, teamId) ||
-        (ownerName ? ownerName : null) ||
-        normalized;
+      const displayName = resolveOwnerDisplayName(
+        seasonNum,
+        teamId,
+        normalized,
+        ownerName
+      );
       const info = {
         ownerKey: normalized,
         teamId,
@@ -22356,21 +22399,31 @@ export function LuckIndexTab({
       seenPairs.add(pairKey);
 
       const weekBucket = ensureWeekBucket(seasonNum, weekNum);
+      const ownerADisplay = resolveOwnerDisplayName(
+        seasonNum,
+        teamAId,
+        ownerAKey,
+        managerInfo.ownerDisplay,
+        row?.managerDisplay,
+        row?.manager_display,
+        row?.manager
+      );
+      const ownerBDisplay = resolveOwnerDisplayName(
+        seasonNum,
+        teamBId,
+        ownerBKey,
+        opponentInfo.ownerDisplay,
+        row?.opponentDisplay,
+        row?.opponent_display,
+        row?.opponent
+      );
       weekBucket.push({
         teamA: teamAId,
         teamB: teamBId,
         ownerAKey,
         ownerBKey,
-        ownerADisplay:
-          row?.managerDisplay ??
-          row?.manager_display ??
-          row?.manager ??
-          (managerInfo.ownerDisplay || ownerAKey),
-        ownerBDisplay:
-          row?.opponentDisplay ??
-          row?.opponent_display ??
-          row?.opponent ??
-          (opponentInfo.ownerDisplay || ownerBKey),
+        ownerADisplay,
+        ownerBDisplay,
       });
     });
 
@@ -22397,14 +22450,29 @@ export function LuckIndexTab({
             if (seen.has(key)) return;
             seen.add(key);
             if (!fallback.has(weekNum)) fallback.set(weekNum, []);
+            const ownerADisplay = resolveOwnerDisplayName(
+              seasonNum,
+              ownerInfo.teamId,
+              ownerInfo.ownerKey,
+              ownerInfo.ownerDisplay,
+              entry?.manager,
+              entry?.managerDisplay
+            );
+            const ownerBDisplay = resolveOwnerDisplayName(
+              seasonNum,
+              opponentInfo.teamId,
+              opponentInfo.ownerKey,
+              opponentInfo.ownerDisplay,
+              entry?.opponentDisplay,
+              entry?.opponent
+            );
             fallback.get(weekNum).push({
               teamA: ownerInfo.teamId,
               teamB: opponentInfo.teamId,
               ownerAKey: ownerInfo.ownerKey,
               ownerBKey: opponentInfo.ownerKey,
-              ownerADisplay: entry?.manager ?? ownerInfo.ownerDisplay,
-              ownerBDisplay:
-                entry?.opponentDisplay ?? entry?.opponent ?? opponentInfo.ownerDisplay,
+              ownerADisplay,
+              ownerBDisplay,
             });
           });
         }
