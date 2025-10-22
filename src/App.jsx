@@ -2943,12 +2943,73 @@ export default function App() {
       : null;
   const leagueWithHidden = React.useMemo(() => {
     if (!league) return null;
+    const normalizedNicknames = normalizeNicknameMap(managerNicknames);
+    const mergedOwnerMap =
+      league.ownerByTeamByYear && Object.keys(league.ownerByTeamByYear).length
+        ? league.ownerByTeamByYear
+        : ownerByTeamByYear;
+    const mergedOwnerFullMap =
+      league.espnOwnerFullByTeamByYear &&
+      Object.keys(league.espnOwnerFullByTeamByYear).length
+        ? league.espnOwnerFullByTeamByYear
+        : ownerFullByTeamByYear;
+    const mergedTeamNames =
+      league.teamNamesByOwner && Object.keys(league.teamNamesByOwner).length
+        ? league.teamNamesByOwner
+        : teamNamesByOwner;
+    const mergedSchedule =
+      league.espnScheduleByYear && Object.keys(league.espnScheduleByYear).length
+        ? league.espnScheduleByYear
+        : scheduleByYear;
+    const mergedSeasons =
+      league.seasonsByYear && Object.keys(league.seasonsByYear).length
+        ? league.seasonsByYear
+        : seasonsByYear;
+    const mergedProTeams =
+      league.proTeamsByYear && Object.keys(league.proTeamsByYear).length
+        ? league.proTeamsByYear
+        : proTeamsByYear;
+    const mergedCurrentWeeks =
+      league.currentWeekByYear && Object.keys(league.currentWeekByYear).length
+        ? league.currentWeekByYear
+        : currentWeekBySeason;
+
     return {
       ...league,
       hiddenManagers: Array.from(hiddenManagers),
-      managerNicknames: normalizeNicknameMap(managerNicknames),
+      managerNicknames: normalizedNicknames,
+      ownerByTeamByYear: mergedOwnerMap,
+      ownersByTeamByYear: league.ownersByTeamByYear || mergedOwnerMap,
+      espnOwnerByTeamByYear: league.espnOwnerByTeamByYear || mergedOwnerMap,
+      espnOwnerFullByTeamByYear: mergedOwnerFullMap,
+      teamNamesByOwner: mergedTeamNames,
+      espnTeamNamesByOwner: league.espnTeamNamesByOwner || mergedTeamNames,
+      rostersByYear: league.rostersByYear || rostersByYear,
+      espnRostersByYear: league.espnRostersByYear || rostersByYear,
+      scheduleByYear: league.scheduleByYear || mergedSchedule,
+      espnScheduleByYear: mergedSchedule,
+      seasonsByYear: mergedSeasons,
+      espnSeasonsByYear: league.espnSeasonsByYear || mergedSeasons,
+      proTeamsByYear: mergedProTeams,
+      espnProTeamsByYear: league.espnProTeamsByYear || mergedProTeams,
+      currentWeekByYear: mergedCurrentWeeks,
+      currentWeekBySeason: league.currentWeekBySeason || mergedCurrentWeeks,
+      espnCurrentWeekBySeason:
+        league.espnCurrentWeekBySeason || mergedCurrentWeeks,
     };
-  }, [league, hiddenManagers, managerNicknames]);
+  }, [
+    league,
+    hiddenManagers,
+    managerNicknames,
+    ownerByTeamByYear,
+    ownerFullByTeamByYear,
+    teamNamesByOwner,
+    scheduleByYear,
+    seasonsByYear,
+    proTeamsByYear,
+    rostersByYear,
+    currentWeekBySeason,
+  ]);
 
   const currentWeekResolved = React.useMemo(() => {
     const wk = currentWeekBySeason?.[currentYear];
