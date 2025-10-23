@@ -23112,155 +23112,47 @@ function isStarterSlot(slotId) {
     canonOwner,
     isHiddenManager,
   ]);
-  const ownerDisplayPreferredMap = React.useMemo(() => {
+  const ownerDisplayLookup = React.useMemo(() => {
     const map = new Map();
-    const isGenericName = (value) => {
-      const trimmed = String(value || "").trim();
-      if (!trimmed) return true;
-      if (/^team\s*\d+$/i.test(trimmed)) return true;
-      if (/^espnfan\d+/i.test(trimmed)) return true;
-      return trimmed.toLowerCase() === "unknown";
-    };
     const assign = (keyRaw, displayRaw) => {
-      const keyTrimmed = String(keyRaw ?? "").trim();
-      const displayTrimmed = String(displayRaw ?? "").trim();
-      if (!keyTrimmed || !displayTrimmed) return;
-      const canonicalKey = canonOwner(keyTrimmed) || keyTrimmed;
+      const canonicalKey = canonOwner(keyRaw) || String(keyRaw ?? "").trim();
       if (!canonicalKey) return;
+      const displayTrimmed = String(displayRaw ?? keyRaw ?? "").trim();
+      if (!displayTrimmed) return;
+      if (!map.has(canonicalKey)) {
+        map.set(canonicalKey, displayTrimmed);
+        return;
+      }
       const existing = map.get(canonicalKey);
-      if (!existing) {
+      if (!existing && displayTrimmed) {
         map.set(canonicalKey, displayTrimmed);
-        return;
-      }
-      const existingGeneric = isGenericName(existing);
-      const nextGeneric = isGenericName(displayTrimmed);
-      if (existingGeneric && !nextGeneric) {
-        map.set(canonicalKey, displayTrimmed);
-        return;
-      }
-      if (existingGeneric === nextGeneric && nextGeneric) {
-        if (displayTrimmed.length < existing.length) {
-          map.set(canonicalKey, displayTrimmed);
-        }
       }
     };
 
-    owners.forEach((owner) => assign(owner, owner));
-    ownersBase.forEach((owner) => assign(owner, owner));
     Object.entries(ownerDisplayMap).forEach(([key, display]) =>
       assign(key, display)
     );
-
-    const seasonCandidates = new Set();
-    const addSeasonCandidates = (source = {}) => {
-      Object.keys(source || {}).forEach((seasonKey) => {
-        const numeric = Number(seasonKey);
-        if (Number.isFinite(numeric)) seasonCandidates.add(numeric);
-      });
-    };
-
-    addSeasonCandidates(league?.ownerByTeamByYear);
-    addSeasonCandidates(league?.espnOwnerByTeamByYear);
-    addSeasonCandidates(league?.espnOwnerFullByTeamByYear);
-    Object.keys(managerBySeasonTeam || {}).forEach((seasonKey) => {
-      const numeric = Number(seasonKey);
-      if (Number.isFinite(numeric)) seasonCandidates.add(numeric);
-    });
-    seasons.forEach((season) => {
-      const numeric = Number(season);
-      if (Number.isFinite(numeric)) seasonCandidates.add(numeric);
-    });
-
-    const collectTeamIds = (container, seasonNum, target) => {
-      if (!container) return;
-      const direct = container[seasonNum] ?? container[String(seasonNum)];
-      if (!direct) return;
-      if (direct instanceof Map) {
-        direct.forEach((_, teamId) => {
-          const numeric = Number(teamId);
-          if (Number.isFinite(numeric)) target.add(numeric);
-        });
-        return;
-      }
-      Object.keys(direct || {}).forEach((teamKey) => {
-        const numeric = Number(teamKey);
-        if (Number.isFinite(numeric)) target.add(numeric);
-      });
-    };
-
-    const readOwnerValue = (container, seasonNum, teamId) => {
-      if (!container) return null;
-      const seasonBucket = container[seasonNum] ?? container[String(seasonNum)];
-      if (!seasonBucket) return null;
-      if (seasonBucket instanceof Map) {
-        if (seasonBucket.has(teamId)) return seasonBucket.get(teamId);
-        if (seasonBucket.has(String(teamId)))
-          return seasonBucket.get(String(teamId));
-        return null;
-      }
-      if (Object.prototype.hasOwnProperty.call(seasonBucket, teamId))
-        return seasonBucket[teamId];
-      if (Object.prototype.hasOwnProperty.call(seasonBucket, String(teamId)))
-        return seasonBucket[String(teamId)];
-      return null;
-    };
-
-    seasonCandidates.forEach((seasonNum) => {
-      if (!Number.isFinite(seasonNum)) return;
-      const teamIds = new Set();
-      collectTeamIds(league?.ownerByTeamByYear, seasonNum, teamIds);
-      collectTeamIds(league?.espnOwnerByTeamByYear, seasonNum, teamIds);
-      collectTeamIds(league?.espnOwnerFullByTeamByYear, seasonNum, teamIds);
-      collectTeamIds(managerBySeasonTeam, seasonNum, teamIds);
-
-      teamIds.forEach((teamId) => {
-        if (!Number.isFinite(teamId)) return;
-        const display = ownerNameOf(seasonNum, teamId);
-        const rawCandidates = [
-          readOwnerValue(league?.ownerByTeamByYear, seasonNum, teamId),
-          readOwnerValue(league?.espnOwnerByTeamByYear, seasonNum, teamId),
-          readOwnerValue(league?.espnOwnerFullByTeamByYear, seasonNum, teamId),
-          managerBySeasonTeam?.[seasonNum]?.[teamId],
-        ];
-        if (display) {
-          assign(display, display);
-        }
-        rawCandidates.forEach((candidate) => {
-          if (candidate && display) assign(candidate, display);
-        });
-      });
-    });
+    ownersBase.forEach((owner) => assign(owner, owner));
+    owners.forEach((owner) => assign(owner, owner));
 
     return map;
-  }, [
-    canonOwner,
-    league?.espnOwnerByTeamByYear,
-    league?.espnOwnerFullByTeamByYear,
-    league?.ownerByTeamByYear,
-    managerBySeasonTeam,
-    ownerDisplayMap,
-    ownerNameOf,
-    owners,
-    ownersBase,
-    seasons,
-  ]);
+  }, [canonOwner, ownerDisplayMap, owners, ownersBase]);
   const ownerDisplay = React.useCallback(
     (ownerKey) => {
       if (!ownerKey) return "—";
-      const direct = ownerDisplayPreferredMap.get(ownerKey);
-      if (direct) return direct;
-      const canonical = canonOwner(ownerKey);
-      if (canonical) {
-        const fromMap = ownerDisplayPreferredMap.get(canonical);
-        if (fromMap) return fromMap;
-        const fromLegacy = ownerDisplayMap[canonical];
-        if (fromLegacy) return fromLegacy;
+      const canonical = canonOwner(ownerKey) || String(ownerKey ?? "").trim();
+      if (!canonical) return "—";
+      if (ownerDisplayLookup.has(canonical)) {
+        return ownerDisplayLookup.get(canonical);
       }
-      const legacy = ownerDisplayMap[ownerKey];
-      if (legacy) return legacy;
-      return canonical || ownerKey;
+      if (ownerDisplayLookup.has(ownerKey)) {
+        return ownerDisplayLookup.get(ownerKey);
+      }
+      const legacy = ownerDisplayMap[canonical] ?? ownerDisplayMap[ownerKey];
+      if (legacy) return String(legacy).trim() || canonical;
+      return canonical;
     },
-    [canonOwner, ownerDisplayMap, ownerDisplayPreferredMap]
+    [canonOwner, ownerDisplayLookup, ownerDisplayMap]
   );
   const ownersByComponent = React.useMemo(() => {
     const seasonKey = Number.isFinite(selectedLuckSeasonNumber)
