@@ -2279,8 +2279,47 @@ export function MembersTab({ league }) {
 export function CareerTab({ league }) {
   if (!league) return null;
 
-  const hiddenSet = new Set(league.hiddenManagers || []); // will be set from App later
-  const visibleOwners = (league.owners || []).filter((n) => !hiddenSet.has(n));
+  const { normalizeOwnerNameLoose } = useOwnerNameResolver({
+    league,
+    managerNicknames: league?.managerNicknames,
+    rawRows: league?.games || [],
+  });
+
+  const canonicalizeName = React.useCallback(
+    (value) => {
+      if (value == null) return "";
+      const str = String(value).trim();
+      if (!str) return "";
+      if (typeof normalizeOwnerNameLoose === "function") {
+        const normalized = normalizeOwnerNameLoose(str);
+        if (normalized) return normalized;
+      }
+      const canonical = canonicalizeOwner(str);
+      return canonical || str;
+    },
+    [normalizeOwnerNameLoose]
+  );
+
+  const hiddenSet = React.useMemo(() => {
+    const set = new Set();
+    (league.hiddenManagers || []).forEach((name) => {
+      const canonical = canonicalizeName(name);
+      if (canonical) set.add(canonical);
+    });
+    return set;
+  }, [league.hiddenManagers, canonicalizeName]);
+
+  const visibleOwners = React.useMemo(() => {
+    const seen = new Set();
+    const owners = [];
+    (league.owners || []).forEach((name) => {
+      const canonical = canonicalizeName(name);
+      if (!canonical || seen.has(canonical) || hiddenSet.has(canonical)) return;
+      seen.add(canonical);
+      owners.push(canonical);
+    });
+    return owners;
+  }, [league.owners, hiddenSet, canonicalizeName]);
 
   /* --- tiny UI helpers (local-only) --- */
   const Chip = ({ children, className = "" }) => (
@@ -2391,10 +2430,24 @@ export function CareerTab({ league }) {
       return next;
     });
   const selectAllNames = () =>
-    setSelectedNames(new Set((league.owners || []).map(String)));
+    setSelectedNames(new Set(visibleOwners.map(String)));
   const clearNames = () => setSelectedNames(new Set());
   const selectAllYears = () => setSelectedYears(new Set(allSeasons));
   const clearYears = () => setSelectedYears(new Set());
+
+  const placementByOwner = React.useMemo(() => {
+    const out = {};
+    Object.entries(league?.placementMap || {}).forEach(([owner, byYear]) => {
+      const canonical = canonicalizeName(owner);
+      if (!canonical) return;
+      if (!out[canonical]) out[canonical] = {};
+      Object.entries(byYear || {}).forEach(([season, value]) => {
+        if (value == null) return;
+        if (out[canonical][season] == null) out[canonical][season] = value;
+      });
+    });
+    return out;
+  }, [league?.placementMap, canonicalizeName]);
 
   const metrics = [
     {
@@ -2445,10 +2498,22 @@ export function CareerTab({ league }) {
 
   const filteredGames = React.useMemo(() => {
     if (!selectedYears.size) return [];
-    return (league?.games || []).filter(
-      (g) => selectedYears.has(Number(g.season)) && g?.is_playoff !== true
-    );
-  }, [league?.games, selectedYears]);
+    return (league?.games || [])
+      .filter(
+        (g) => selectedYears.has(Number(g.season)) && g?.is_playoff !== true
+      )
+      .map((g) => {
+        const owner = canonicalizeName(g?.owner);
+        const opponent = canonicalizeName(g?.opp ?? g?.opponent ?? "");
+        return {
+          ...g,
+          owner,
+          opp: opponent,
+          opponent,
+        };
+      })
+      .filter((g) => g.owner);
+  }, [league?.games, selectedYears, canonicalizeName]);
 
   const careerStatsFiltered = React.useMemo(() => {
     const base = new Map();
@@ -2546,7 +2611,7 @@ export function CareerTab({ league }) {
     let sum = 0,
       c = 0;
     selectedYears.forEach((yr) => {
-      const p = league?.placementMap?.[name]?.[yr];
+      const p = placementByOwner?.[name]?.[yr];
       if (p) {
         sum += p;
         c++;
