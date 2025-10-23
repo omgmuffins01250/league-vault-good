@@ -24683,37 +24683,97 @@ function isStarterSlot(slotId) {
                 Close
               </button>
             </div>
-            <div className="px-5 py-5 text-sm text-slate-700 dark:text-slate-200 space-y-3 overflow-y-auto">
-              <p>
-                Each component is normalized separately before averaging so every
-                column in the table shares the same 0–100 luck scale.
-              </p>
-              <ul className="list-disc list-inside space-y-2 text-[13px] leading-relaxed">
-                <li>
-                  Align the raw metrics so higher numbers always mean luckier —
-                  opponent scoring, your injury weeks, and bye differentials are
-                  inverted up front.
-                </li>
-                <li>
-                  Smooth week-based counts (your injuries and opponent injuries)
-                  with a log₁₊(x) transform to reduce heavy right skew.
-                </li>
-                <li>
-                  Clip the direction-adjusted values to the season’s 5th–95th
-                  percentile range and store those breakpoints for reference.
-                </li>
-                <li>
-                  Map that clipped band to a 0–100 scale where 100 represents the
-                  luckier end of the realistic range and 0 the unluckier end.
-                </li>
-                <li>
-                  Combine the five component scores with a weighted average —
-                  Opp Scoring Luck 22.5%, Your Injury Luck 22.5%, Opp Injury Luck
-                  22.5%, Teammate Injury Ripple 22.5%, Bye Week Differential 10%
-                  — to create the Luck Index; multi-season views average the
-                  already-normalized season scores.
-                </li>
-              </ul>
+            <div className="px-5 py-5 text-sm text-slate-700 dark:text-slate-200 space-y-4 overflow-y-auto">
+              <div className="space-y-2">
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    Luck Index.
+                  </span>{" "}
+                  Combines schedule swings, injuries, and bye timing into a single
+                  0–100 measure of how favorable a manager’s season has been.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Components &amp; weights
+                </div>
+                <ul className="list-disc space-y-2 pl-5 text-[13px] leading-relaxed">
+                  <li>
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      22.5% — Opp Scoring Luck
+                    </span>{" "}
+                    — Sum of weekly opponent projection minus actual totals to
+                    capture scoreboard variance.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      22.5% — Your Injury Luck
+                    </span>{" "}
+                    — Starter player-weeks with a zero projection (proxy for
+                    time lost), with optional draft-weighted emphasis.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      22.5% — Opp Injury Luck
+                    </span>{" "}
+                    — Weekly opponent injury weeks accumulated across your
+                    schedule to show who faced shorthanded teams.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      22.5% — Teammate Injury Ripple
+                    </span>{" "}
+                    — Credit when same-team players drafted near yours miss time,
+                    reflecting depth chart ripple effects.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      10% — Bye Week Differential
+                    </span>{" "}
+                    — Your bye weeks minus the byes your opponents had when
+                    facing you; draft weighting mirrors the injury component.
+                  </li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Component scaling methodology
+                </div>
+                <ul className="list-disc list-inside space-y-2 text-[13px] leading-relaxed">
+                  <li>
+                    Align every raw metric so higher values always mean luckier —
+                    opponent scoring, your injury totals, and bye gaps are inverted
+                    before processing.
+                  </li>
+                  <li>
+                    Smooth week-based counts (your injuries and opponent injuries)
+                    with a log₁₊(x) transform to reduce heavy right skew.
+                  </li>
+                  <li>
+                    Clip the direction-adjusted values to the season’s 5th–95th
+                    percentile range and store those breakpoints for context.
+                  </li>
+                  <li>
+                    Scale the clipped band to 0–100 so every component shares the
+                    same luck interpretation.
+                  </li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Final score methodology
+                </div>
+                <ul className="list-disc list-inside space-y-2 text-[13px] leading-relaxed">
+                  <li>
+                    Combine the five normalized component scores with the weights
+                    above to create the single-season Luck Index.
+                  </li>
+                  <li>
+                    Multi-season views average those already-normalized season
+                    scores so the 0–100 scale stays consistent.
+                  </li>
+                </ul>
+              </div>
               <p className="text-[12px] text-slate-500 dark:text-slate-400">
                 For debugging we keep every manager’s raw value, transformed
                 value, direction-aligned value, and the p5/p95 boundaries used for
