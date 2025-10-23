@@ -22444,59 +22444,59 @@ export function LuckIndexTab({
       };
     };
 
-    function isStarterSlot(slotId) {
-      return !(slotId === 20 || slotId === 21); // BN=20, IR=21; everything else counts (same as console)
-    }
+  // No starter filtering — count every rostered player (including BN/IR)
+function isStarterSlot(slotId) {
+  return true;
+}
 
-    const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn) => {
-      const entries = getRosterEntries(seasonNum, teamId, weekNum);
-      if (!Array.isArray(entries) || !entries.length) return { raw: 0, w: 0, players: [] };
 
-      const proTeams = league?.espnProTeamsByYear?.[seasonNum] || {};
-      const byeOfTeam = (proTeamId) => {
-        const t = proTeams?.[proTeamId];
-        const bw = Number(t?.byeWeek);
-        return Number.isFinite(bw) ? bw : null;
-      };
+   const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn) => {
+  const entries = getRosterEntries(seasonNum, teamId, weekNum);
+  if (!Array.isArray(entries) || !entries.length) return { raw: 0, w: 0, players: [] };
 
-      let raw = 0;
-      let w = 0;
-      const players = [];
+  const proTeams = league?.espnProTeamsByYear?.[seasonNum] || {};
+  const byeOfTeam = (proTeamId) => {
+    const t = proTeams?.[proTeamId];
+    const bw = Number(t?.byeWeek);
+    return Number.isFinite(bw) ? bw : null;
+  };
 
-      for (const p of entries) {
-        const slotId = Number(p?.lineupSlotId ?? p?.slotId ?? p?.slot ?? 20);
-        if (!isStarterSlot(slotId)) continue;
+  let raw = 0;
+  let w = 0;
+  const players = [];
 
-        const proId = Number(
-          p?.proTeamId ??
-          p?.proTeam ??
-          p?.nflTeamId ??
-          p?.player?.proTeamId ??
-          p?.playerPoolEntry?.player?.proTeamId
-        );
-        if (!Number.isFinite(proId)) continue;
+  for (const p of entries) {
+    // No slot filtering: count every rostered player
+    const proId = Number(
+      p?.proTeamId ??
+      p?.proTeam ??
+      p?.nflTeamId ??
+      p?.player?.proTeamId ??
+      p?.playerPoolEntry?.player?.proTeamId
+    );
+    if (!Number.isFinite(proId)) continue;
 
-        const bw = byeOfTeam(proId);
-        if (!Number.isFinite(bw) || bw !== Number(weekNum)) continue;
+    const bw = byeOfTeam(proId);
+    if (!Number.isFinite(bw) || bw !== Number(weekNum)) continue;
 
-        raw += 1;
+    raw += 1;
 
-        const pid = Number(
-          p?.pid ?? p?.playerId ?? p?.player?.id ?? p?.playerPoolEntry?.player?.id
-        );
-        w += weightFn(pid);
+    const pid = Number(
+      p?.pid ?? p?.playerId ?? p?.player?.id ?? p?.playerPoolEntry?.player?.id
+    );
+    w += weightFn(pid);
 
-        const name =
-          p?.name ||
-          p?.player?.fullName ||
-          p?.playerPoolEntry?.player?.fullName ||
-          [p?.player?.firstName, p?.player?.lastName].filter(Boolean).join(" ").trim() ||
-          null;
-        if (name) players.push(name);
-      }
+    const name =
+      p?.name ||
+      p?.player?.fullName ||
+      p?.playerPoolEntry?.player?.fullName ||
+      [p?.player?.firstName, p?.player?.lastName].filter(Boolean).join(" ").trim() ||
+      null;
+    if (name) players.push(name);
+  }
 
-      return { raw, w: Number(w.toFixed(6)), players };
-    };
+  return { raw, w: Number(w.toFixed(6)), players };
+};
 
     // walk each season in the schedule we built
     scheduleBySeason.forEach((weekMap, seasonNum) => {
