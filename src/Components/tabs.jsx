@@ -21829,6 +21829,7 @@ export function LuckIndexTab({
   const [injuryWeightAlpha, setInjuryWeightAlpha] = React.useState(1);
   const [injuryWaiverRound, setInjuryWaiverRound] = React.useState(12);
   const [byeViewMode, setByeViewMode] = React.useState("raw");
+  const [showLuckMethodology, setShowLuckMethodology] = React.useState(false);
   const isWeightedView = injuryViewMode === "weighted";
   const isByeWeightedView = byeViewMode === "weighted";
   const normalizedWaiverRound = React.useMemo(
@@ -22633,81 +22634,181 @@ function isStarterSlot(slotId) {
     [ownerDisplayMap]
   );
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
-    const { invert = false } = options;
-    const entries = [];
-    let min = Infinity;
-    let max = -Infinity;
+    const { invert = false, transform = null, clampToZero = false } = options;
 
-    for (const [owner, bySeason] of Object.entries(data || {})) {
-      for (const [seasonKey, value] of Object.entries(bySeason || {})) {
+    const applyTransform = (value) => {
+      const baseValue = clampToZero ? Math.max(0, value) : value;
+      let transformedValue;
+      if (transform === "log1p") {
+        transformedValue = Math.log1p(Math.max(0, baseValue));
+      } else if (transform === "sqrt") {
+        const magnitude = Math.sqrt(Math.abs(baseValue));
+        transformedValue = baseValue < 0 ? -magnitude : magnitude;
+      } else if (typeof transform === "function") {
+        transformedValue = transform(baseValue);
+      } else {
+        transformedValue = baseValue;
+      }
+      return Number.isFinite(transformedValue) ? transformedValue : 0;
+    };
+
+    const bySeason = new Map();
+
+    for (const [owner, bySeasonRaw] of Object.entries(data || {})) {
+      if (!bySeasonRaw || typeof bySeasonRaw !== "object") continue;
+      for (const [seasonKeyRaw, value] of Object.entries(bySeasonRaw || {})) {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) continue;
-        entries.push({ owner, seasonKey, value: numeric });
-        if (numeric < min) min = numeric;
-        if (numeric > max) max = numeric;
+        const seasonKey = Number.isFinite(Number(seasonKeyRaw))
+          ? Number(seasonKeyRaw)
+          : seasonKeyRaw;
+        const transformedValue = applyTransform(numeric);
+        const directionValue = invert ? -transformedValue : transformedValue;
+        if (!bySeason.has(seasonKey)) bySeason.set(seasonKey, []);
+        bySeason.get(seasonKey).push({
+          owner,
+          seasonKey,
+          rawValue: numeric,
+          transformedValue,
+          directionValue,
+        });
       }
     }
 
-    if (!entries.length || !Number.isFinite(min) || !Number.isFinite(max)) {
-      return { scaled: {}, min: null, max: null };
-    }
-
-    const range = max - min;
     const scaled = {};
+    const breakdown = {};
+    const seasonStats = {};
 
-    for (const { owner, seasonKey, value } of entries) {
-      let normalized;
-      if (range === 0) {
-        normalized = 100;
-      } else if (invert) {
-        normalized = ((max - value) / range) * 100;
-      } else {
-        normalized = ((value - min) / range) * 100;
+    const percentileOfSorted = (sortedValues, fraction) => {
+      if (!sortedValues.length) return Number.NaN;
+      if (sortedValues.length === 1) return sortedValues[0];
+      const position = (sortedValues.length - 1) * fraction;
+      const lowerIndex = Math.floor(position);
+      const upperIndex = Math.ceil(position);
+      const lower = sortedValues[lowerIndex];
+      const upper = sortedValues[upperIndex];
+      if (!Number.isFinite(lower) || !Number.isFinite(upper)) return Number.NaN;
+      if (lowerIndex === upperIndex) return lower;
+      const weight = position - lowerIndex;
+      return lower + (upper - lower) * weight;
+    };
+
+    for (const [seasonKey, entries] of bySeason.entries()) {
+      if (!Array.isArray(entries) || !entries.length) continue;
+      const sortedValues = entries
+        .map((entry) => entry.directionValue)
+        .filter((value) => Number.isFinite(value))
+        .sort((a, b) => a - b);
+
+      if (!sortedValues.length) continue;
+
+      const p5Raw = percentileOfSorted(sortedValues, 0.05);
+      const p95Raw = percentileOfSorted(sortedValues, 0.95);
+      const p5 = Number.isFinite(p5Raw) ? p5Raw : null;
+      const p95 = Number.isFinite(p95Raw) ? p95Raw : null;
+      const stats = {
+        p5,
+        p95,
+        count: entries.length,
+      };
+      seasonStats[seasonKey] = stats;
+
+      const lowerBound = Number.isFinite(p5) ? p5 : null;
+      const upperBound = Number.isFinite(p95) ? p95 : null;
+      const denom =
+        Number.isFinite(p5) && Number.isFinite(p95) && p95 !== p5
+          ? p95 - p5
+          : null;
+
+      for (const entry of entries) {
+        const { owner, seasonKey: entrySeasonKey, rawValue, transformedValue, directionValue } =
+          entry;
+        let clipped = directionValue;
+        if (Number.isFinite(lowerBound) && clipped < lowerBound) clipped = lowerBound;
+        if (Number.isFinite(upperBound) && clipped > upperBound) clipped = upperBound;
+
+        let score;
+        if (!Number.isFinite(denom) || denom === 0) {
+          score = 50;
+        } else {
+          score = ((clipped - p5) / denom) * 100;
+        }
+        const clampedScore = Math.max(0, Math.min(100, score));
+
+        scaled[owner] ??= {};
+        scaled[owner][entrySeasonKey] = clampedScore;
+
+        breakdown[owner] ??= {};
+        breakdown[owner][entrySeasonKey] = {
+          rawValue,
+          transformedValue,
+          directionValue,
+          clippedValue: clipped,
+          p5,
+          p95,
+          score: clampedScore,
+        };
       }
-      const clamped = Math.max(0, Math.min(100, normalized));
-      scaled[owner] ??= {};
-      scaled[owner][seasonKey] = clamped;
     }
 
-    return { scaled, min, max };
+    return { scaled, seasonStats, breakdown };
   }, []);
 
   const comp1ScaledData = React.useMemo(
-    () => normalizeOwnerYearTotals(comp1ByOwnerYear),
+    () => normalizeOwnerYearTotals(comp1ByOwnerYear, { invert: true }),
     [comp1ByOwnerYear, normalizeOwnerYearTotals]
   );
   const comp1ScaledByOwnerYear = comp1ScaledData.scaled;
-  const comp1Min = comp1ScaledData.min;
-  const comp1Max = comp1ScaledData.max;
 
   const injuryScaledData = React.useMemo(
-    () => normalizeOwnerYearTotals(injuryByOwnerYear, { invert: true }),
+    () =>
+      normalizeOwnerYearTotals(injuryByOwnerYear, {
+        invert: true,
+        transform: "log1p",
+        clampToZero: true,
+      }),
     [injuryByOwnerYear, normalizeOwnerYearTotals]
   );
   const injuryScaledByOwnerYear = injuryScaledData.scaled;
-  const injuryMin = injuryScaledData.min;
-  const injuryMax = injuryScaledData.max;
   const comp3ScaledData = React.useMemo(
-    () => normalizeOwnerYearTotals(comp3Data.totals),
+    () =>
+      normalizeOwnerYearTotals(comp3Data.totals, {
+        transform: "log1p",
+        clampToZero: true,
+      }),
     [comp3Data.totals, normalizeOwnerYearTotals]
   );
   const comp3ScaledByOwnerYear = comp3ScaledData.scaled;
-  const comp3Min = comp3ScaledData.min;
-  const comp3Max = comp3ScaledData.max;
   const comp4ScaledData = React.useMemo(
     () => normalizeOwnerYearTotals(comp4Data.totals),
     [comp4Data.totals, normalizeOwnerYearTotals]
   );
   const comp4ScaledByOwnerYear = comp4ScaledData.scaled;
-  const comp4Min = comp4ScaledData.min;
-  const comp4Max = comp4ScaledData.max;
   const comp5ScaledData = React.useMemo(
-    () => normalizeOwnerYearTotals(comp5TotalsSource),
+    () =>
+      normalizeOwnerYearTotals(comp5TotalsSource, {
+        invert: true,
+      }),
     [comp5TotalsSource, normalizeOwnerYearTotals]
   );
   const comp5ScaledByOwnerYear = comp5ScaledData.scaled;
-  const comp5Min = comp5ScaledData.min;
-  const comp5Max = comp5ScaledData.max;
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.__luckNormalization = {
+      comp1: comp1ScaledData,
+      comp2: injuryScaledData,
+      comp3: comp3ScaledData,
+      comp4: comp4ScaledData,
+      comp5: comp5ScaledData,
+    };
+  }, [
+    comp1ScaledData,
+    injuryScaledData,
+    comp3ScaledData,
+    comp4ScaledData,
+    comp5ScaledData,
+  ]);
 
   const luckByOwnerYear = React.useMemo(() => {
     const out = {};
@@ -23518,29 +23619,40 @@ function isStarterSlot(slotId) {
       <Card
         title="Luck Index (Experimental)"
         right={
-          seasonsDescForLuck.length ? (
-            <label className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                Year
-              </span>
-              <select
-                className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.55)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:border-white/15 dark:bg-zinc-900/70 dark:text-slate-100"
-                value={
-                  selectedLuckSeason != null ? String(selectedLuckSeason) : ""
-                }
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setSelectedLuckSeason(Number.isFinite(value) ? value : null);
-                }}
-              >
-                {seasonsDescForLuck.map((season) => (
-                  <option key={season} value={String(season)}>
-                    {season}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null
+          <>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/60 bg-white/95 text-sky-600 shadow-[0_18px_40px_-28px_rgba(14,165,233,0.55)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_-32px_rgba(14,165,233,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60 dark:border-white/15 dark:bg-zinc-900/80 dark:text-sky-200"
+              title="How the Luck Index is calculated"
+              aria-label="How the Luck Index is calculated"
+              onClick={() => setShowLuckMethodology(true)}
+            >
+              ℹ️
+            </button>
+            {seasonsDescForLuck.length ? (
+              <label className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Year
+                </span>
+                <select
+                  className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.55)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:border-white/15 dark:bg-zinc-900/70 dark:text-slate-100"
+                  value={
+                    selectedLuckSeason != null ? String(selectedLuckSeason) : ""
+                  }
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setSelectedLuckSeason(Number.isFinite(value) ? value : null);
+                  }}
+                >
+                  {seasonsDescForLuck.map((season) => (
+                    <option key={season} value={String(season)}>
+                      {season}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </>
         }
       >
         <div className="overflow-x-auto">
@@ -23617,41 +23729,15 @@ function isStarterSlot(slotId) {
           </div>
         </div>
         <p className="mt-3 text-[11px] text-slate-500/85 dark:text-slate-400">
-          Scores are normalized between 0 (least lucky) and 100 (most lucky) for
-          the selected year by averaging all five components on their respective
-          ranges.
-          {Number.isFinite(comp1Min) && Number.isFinite(comp1Max) && (
-            <>
-              {" "}
-              Opponent luck span: {comp1Min.toFixed(1)} to {comp1Max.toFixed(1)}{" "}
-              pts.
-            </>
-          )}
-          {Number.isFinite(injuryMin) && Number.isFinite(injuryMax) && (
-            <>
-              {" "}
-              Injury weeks span: {injuryMin.toFixed(0)} to{" "}
-              {injuryMax.toFixed(0)}.
-            </>
-          )}
-          {Number.isFinite(comp3Min) && Number.isFinite(comp3Max) && (
-            <>
-              {" "}
-              Opponent injury weeks span: {comp3Min.toFixed(0)} to {comp3Max.toFixed(0)}.
-            </>
-          )}
-          {Number.isFinite(comp4Min) && Number.isFinite(comp4Max) && (
-            <>
-              {" "}
-              Teammate ripple span: {comp4Min.toFixed(1)} to {comp4Max.toFixed(1)}.
-            </>
-          )}
-          {Number.isFinite(comp5Min) && Number.isFinite(comp5Max) && (
-            <>
-              {" "}
-              Bye differential span: {fmtComp5Value(comp5Min)} to {fmtComp5Value(comp5Max)}.
-            </>
-          )}
+          Scores are normalized within each season by aligning every component so
+          higher numbers always mean luckier, smoothing week-based injury counts
+          with log₁₊(x), clipping direction-adjusted values to the season’s 5th–
+          95th percentile band, and scaling that band to 0–100. The Luck Index
+          column averages the five component scores, so every column shares the
+          same 0–100 interpretation (100 = luckier end, 0 = unluckier end, 50 ≈
+          league median). Opponent scoring, your injury totals, and bye week
+          differentials are inverted before scaling so their percentages still
+          increase as luck improves.
         </p>
       </Card>
 
@@ -24264,6 +24350,62 @@ function isStarterSlot(slotId) {
         </div>
       </Card>
 
+      {showLuckMethodology && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setShowLuckMethodology(false)}
+          />
+          <div className="relative z-10 w-full max-w-xl overflow-hidden rounded-3xl border border-white/25 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 shadow-[0_40px_90px_-45px_rgba(15,23,42,0.95)] backdrop-blur-xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/60 dark:border-white/10 bg-white/98 dark:bg-zinc-950/90">
+              <div className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                Luck Index — Methodology
+              </div>
+              <button
+                className={softButtonClass}
+                onClick={() => setShowLuckMethodology(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-5 py-5 text-sm text-slate-700 dark:text-slate-200 space-y-3 overflow-y-auto">
+              <p>
+                Each component is normalized separately before averaging so every
+                column in the table shares the same 0–100 luck scale.
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-[13px] leading-relaxed">
+                <li>
+                  Align the raw metrics so higher numbers always mean luckier —
+                  opponent scoring, your injury weeks, and bye differentials are
+                  inverted up front.
+                </li>
+                <li>
+                  Smooth week-based counts (your injuries and opponent injuries)
+                  with a log₁₊(x) transform to reduce heavy right skew.
+                </li>
+                <li>
+                  Clip the direction-adjusted values to the season’s 5th–95th
+                  percentile range and store those breakpoints for reference.
+                </li>
+                <li>
+                  Map that clipped band to a 0–100 scale where 100 represents the
+                  luckier end of the realistic range and 0 the unluckier end.
+                </li>
+                <li>
+                  Average the five component scores for each season to create the
+                  Luck Index; multi-season views average the already-normalized
+                  season scores.
+                </li>
+              </ul>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                For debugging we keep every manager’s raw value, transformed
+                value, direction-aligned value, and the p5/p95 boundaries used for
+                scaling alongside the final 0–100 score.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {comp1Detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
