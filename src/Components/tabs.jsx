@@ -20491,6 +20491,45 @@ export function LuckIndexTab({
     },
     [hiddenManagersSet]
   );
+
+  const extractOwnerName = React.useCallback((value) => {
+    if (value == null) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "object") {
+      const direct =
+        value?.name ??
+        value?.owner ??
+        value?.ownerName ??
+        value?.fullName ??
+        value?.displayName ??
+        value?.nickname ??
+        value?.teamManager ??
+        value?.teamOwner ??
+        value?.manager ??
+        null;
+      if (direct && String(direct).trim()) return String(direct).trim();
+      const composed = [value?.firstName, value?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      if (composed) return composed;
+    }
+    return String(value ?? "").trim();
+  }, []);
+
+  const canonOwner = React.useCallback(
+    (value) => {
+      const extracted = extractOwnerName(value);
+      if (!extracted) return "";
+      if (typeof normalizeOwnerNameLoose === "function") {
+        const normalized = normalizeOwnerNameLoose(extracted);
+        if (normalized) return normalized;
+      }
+      const canonical = canonicalizeOwner(extracted);
+      return canonical || extracted;
+    },
+    [extractOwnerName, normalizeOwnerNameLoose]
+  );
   if (typeof window !== "undefined") {
     window.__LDEBUG = {
       rostersByYear,
@@ -20806,7 +20845,7 @@ export function LuckIndexTab({
       ownerCandidates.push(...fallbackOwners);
       let ownerName = null;
       for (const cand of ownerCandidates) {
-        const normalized = normalizeOwnerNameLoose(cand);
+        const normalized = canonOwner(cand);
         if (normalized) {
           ownerName = normalized;
           break;
@@ -21326,7 +21365,7 @@ export function LuckIndexTab({
   const ownersBase = React.useMemo(() => {
     const set = new Set();
     const pushOwner = (value) => {
-      const normalized = normalizeOwnerNameLoose(value);
+      const normalized = canonOwner(value);
       if (!normalized) return;
       if (isHiddenManager(normalized)) return;
       set.add(normalized);
@@ -21348,7 +21387,7 @@ export function LuckIndexTab({
   }, [
     league,
     rawRows,
-    normalizeOwnerNameLoose,
+    canonOwner,
     isHiddenManager,
     managerBySeasonTeam,
   ]);
@@ -21357,30 +21396,7 @@ export function LuckIndexTab({
     []
   );
 
-  const readOwnerNameValue = React.useCallback((value) => {
-    if (value == null) return "";
-    if (typeof value === "string") return value.trim();
-    if (typeof value === "object") {
-      const direct =
-        value?.name ??
-        value?.owner ??
-        value?.ownerName ??
-        value?.fullName ??
-        value?.displayName ??
-        value?.nickname ??
-        value?.teamManager ??
-        value?.teamOwner ??
-        value?.manager ??
-        null;
-      if (direct && String(direct).trim()) return String(direct).trim();
-      const composed = [value?.firstName, value?.lastName]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      if (composed) return composed;
-    }
-    return String(value ?? "").trim();
-  }, []);
+  const readOwnerNameValue = extractOwnerName;
 
   const draftIndexByYear = React.useMemo(() => {
     const map = new Map();
@@ -21507,12 +21523,12 @@ export function LuckIndexTab({
     const resolveOwnerName = (seasonNum, teamId) => {
       const resolved = ownerNameOf(seasonNum, teamId);
       if (resolved) {
-        const normalized = normalizeOwnerNameLoose(resolved);
+        const normalized = canonOwner(resolved);
         return normalized || resolved;
       }
       const fallback = managerBySeasonTeam?.[seasonNum]?.[teamId];
       if (fallback) {
-        const normalized = normalizeOwnerNameLoose(fallback);
+        const normalized = canonOwner(fallback);
         return normalized || fallback;
       }
       return `Team ${teamId}`;
@@ -21531,8 +21547,7 @@ export function LuckIndexTab({
         const teamId = Number(teamKey);
         if (!Number.isFinite(teamId)) continue;
         const ownerName = resolveOwnerName(seasonNum, teamId);
-        const ownerKey =
-          normalizeOwnerNameLoose(ownerName) || ownerName || `Team ${teamId}`;
+        const ownerKey = canonOwner(ownerName) || ownerName || `Team ${teamId}`;
 
         luck1[seasonNum][teamId] = {};
 
@@ -21600,7 +21615,7 @@ export function LuckIndexTab({
     league,
     rostersByYear,
     ownerNameOf,
-    normalizeOwnerNameLoose,
+    canonOwner,
     managerBySeasonTeam,
     currentWeekByYearOverride,
   ]);
@@ -21701,8 +21716,7 @@ export function LuckIndexTab({
       for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
         const teamId = Number(teamKey);
         const ownerRaw = ownerNameOf(seasonNum, teamId) || `Team ${teamId}`;
-        const ownerKey =
-          normalizeOwnerNameLoose(ownerRaw) || ownerRaw || `Team ${teamId}`;
+        const ownerKey = canonOwner(ownerRaw) || ownerRaw || `Team ${teamId}`;
         if (!ownerKey || isHiddenManager(ownerKey)) continue;
 
         for (const [weekKey, entries] of Object.entries(byWeek || {})) {
@@ -21798,7 +21812,7 @@ export function LuckIndexTab({
     ownerNameOf,
     nameIndex,
     START_SLOTS,
-    normalizeOwnerNameLoose,
+    canonOwner,
     isHiddenManager,
     getProTeamLookup,
     league?.proTeamsByYear,
@@ -21901,7 +21915,7 @@ export function LuckIndexTab({
     for (const [owner, seasons] of Object.entries(
       injuryDetailByOwnerYear || {}
     )) {
-      const ownerKey = normalizeOwnerNameLoose(owner) || owner;
+      const ownerKey = canonOwner(owner) || owner;
       if (!ownerKey || isHiddenManager(ownerKey)) continue;
       map[ownerKey] ??= {};
       for (const [seasonKey, rows] of Object.entries(seasons || {})) {
@@ -21917,7 +21931,7 @@ export function LuckIndexTab({
       }
     }
     return map;
-  }, [injuryDetailByOwnerYear, normalizeOwnerNameLoose, isHiddenManager]);
+  }, [injuryDetailByOwnerYear, canonOwner, isHiddenManager]);
   const scheduleByOwnerSeason = React.useMemo(() => {
     const out = {};
     const seasonCandidates = new Set();
@@ -21959,10 +21973,8 @@ export function LuckIndexTab({
         const week = Number(game?.week);
         if (!Number.isFinite(week) || week <= 0) return;
         if (cutoff > 0 && week >= cutoff) return;
-        const ownerA =
-          normalizeOwnerNameLoose(game?.owner1) || game?.owner1 || "";
-        const ownerB =
-          normalizeOwnerNameLoose(game?.owner2) || game?.owner2 || "";
+        const ownerA = canonOwner(game?.owner1) || game?.owner1 || "";
+        const ownerB = canonOwner(game?.owner2) || game?.owner2 || "";
         if (!ownerA || !ownerB) return;
         if (isHiddenManager(ownerA) || isHiddenManager(ownerB)) return;
 
@@ -21997,7 +22009,7 @@ export function LuckIndexTab({
   }, [
     league,
     seasons,
-    normalizeOwnerNameLoose,
+    canonOwner,
     isHiddenManager,
     resolveCurrentWeekExclusive,
   ]);
@@ -22059,7 +22071,7 @@ export function LuckIndexTab({
     for (const [owner, seasonsMap] of Object.entries(
       injuryDetailByOwnerYear || {}
     )) {
-      const ownerKey = normalizeOwnerNameLoose(owner) || owner;
+      const ownerKey = canonOwner(owner) || owner;
       for (const [seasonKey, rows] of Object.entries(seasonsMap || {})) {
         const seasonNum = Number(seasonKey);
         if (!Number.isFinite(seasonNum)) continue;
@@ -22089,7 +22101,7 @@ export function LuckIndexTab({
       }
     }
     return out;
-  }, [injuryDetailByOwnerYear, normalizeOwnerNameLoose]);
+  }, [injuryDetailByOwnerYear, canonOwner]);
   const rosterIndexBySeasonWeek = React.useMemo(() => {
     const out = {};
     for (const [owner, bySeason] of Object.entries(
@@ -22341,7 +22353,7 @@ export function LuckIndexTab({
       const teamId = Number(teamRaw);
       if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
       const ownerName = readOwnerNameValue(ownerValue);
-      const normalized = normalizeOwnerNameLoose(ownerName);
+      const normalized = canonOwner(ownerName);
       if (!normalized || isHiddenManager(normalized)) return;
       const ownerMap = ensureOwnerMapSeason(seasonNum);
       const displayName = resolveOwnerDisplayName(
@@ -22377,7 +22389,7 @@ export function LuckIndexTab({
         if (lower && !ownerMap.has(lower)) {
           ownerMap.set(lower, info);
         }
-        const normalizedKey = normalizeOwnerNameLoose(trimmed);
+        const normalizedKey = canonOwner(trimmed);
         if (normalizedKey && !ownerMap.has(normalizedKey)) {
           ownerMap.set(normalizedKey, info);
         }
@@ -22421,8 +22433,8 @@ export function LuckIndexTab({
       if (!ownerMap) return null;
       const candidates = [];
       const rawName = readOwnerNameValue(ownerValue);
-      const normalizedDirect = normalizeOwnerNameLoose(ownerValue);
-      const normalizedRaw = normalizeOwnerNameLoose(rawName);
+      const normalizedDirect = canonOwner(ownerValue);
+      const normalizedRaw = canonOwner(rawName);
       if (normalizedDirect) candidates.push(normalizedDirect);
       if (normalizedRaw && normalizedRaw !== normalizedDirect)
         candidates.push(normalizedRaw);
@@ -23056,7 +23068,13 @@ export function LuckIndexTab({
       });
     });
 
-    return { rawTotals, weightedTotals, details, summary };
+    const displayByOwner = {};
+    ownerSeasonData.forEach((entry, ownerKey) => {
+      const display = entry?.displayName;
+      if (display) displayByOwner[ownerKey] = display;
+    });
+
+    return { rawTotals, weightedTotals, details, summary, displayByOwner };
   }, [
     rawRows,
     league,
@@ -23065,7 +23083,7 @@ export function LuckIndexTab({
     league?.espnOwnerByTeamByYear,
     league?.espnOwnerFullByTeamByYear,
     league?.espnTeamNamesByOwner,
-    normalizeOwnerNameLoose,
+    canonOwner,
     canonicalizeOwner,
     isHiddenManager,
     ownerNameOf,
@@ -23083,6 +23101,14 @@ export function LuckIndexTab({
     ? comp5Data.weightedTotals
     : comp5Data.rawTotals;
   const comp5SummaryByOwnerYear = comp5Data.summary || {};
+  const ownerDisplayMap = comp5Data.displayByOwner || {};
+  const ownerDisplay = React.useCallback(
+    (ownerKey) => {
+      if (!ownerKey) return "—";
+      return ownerDisplayMap[ownerKey] || ownerKey;
+    },
+    [ownerDisplayMap]
+  );
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false } = options;
     const entries = [];
@@ -23212,7 +23238,7 @@ export function LuckIndexTab({
   const owners = React.useMemo(() => {
     const s = new Set();
     const pushOwner = (value) => {
-      const normalized = normalizeOwnerNameLoose(value);
+      const normalized = canonOwner(value);
       if (!normalized) return;
       if (isHiddenManager(normalized)) return;
       s.add(normalized);
@@ -23233,7 +23259,7 @@ export function LuckIndexTab({
     comp3Data.totals,
     comp4Data.totals,
     comp5TotalsSource,
-    normalizeOwnerNameLoose,
+    canonOwner,
     isHiddenManager,
   ]);
   const ownersKey = React.useMemo(() => owners.join("|"), [owners]);
@@ -24030,7 +24056,9 @@ export function LuckIndexTab({
                         <td className={placeCellClass}>
                           {renderLuckPlace(rank)}
                         </td>
-                        <td className={managerCellClass}>{owner}</td>
+                        <td className={managerCellClass}>
+                          {ownerDisplay(owner)}
+                        </td>
                         <td className={valueCellClass}>
                           {renderLuckMetricCell(comp1)}
                         </td>
@@ -24726,7 +24754,7 @@ export function LuckIndexTab({
                   Opp Scoring Luck Breakdown
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                  {comp1Detail.owner} — {comp1Detail.season}
+                  {ownerDisplay(comp1Detail.owner)} — {comp1Detail.season}
                 </div>
               </div>
               <button
@@ -24824,7 +24852,7 @@ export function LuckIndexTab({
                     : "Injury Luck Detail"}
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                  {comp2Detail.owner} — {comp2Detail.season}
+                  {ownerDisplay(comp2Detail.owner)} — {comp2Detail.season}
                 </div>
               </div>
               <button
@@ -24953,7 +24981,7 @@ export function LuckIndexTab({
                   Opp Injury Luck Detail
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                  {comp3Detail.owner} —{" "}
+                  {ownerDisplay(comp3Detail.owner)} —{" "}
                   {Number.isFinite(comp3Detail.season)
                     ? comp3Detail.season
                     : "—"}
@@ -25063,7 +25091,7 @@ export function LuckIndexTab({
                   Teammate Ripple Detail
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                  {comp4Detail.owner} —{" "}
+                  {ownerDisplay(comp4Detail.owner)} —{" "}
                   {Number.isFinite(comp4Detail.season)
                     ? comp4Detail.season
                     : "—"}
@@ -25177,7 +25205,7 @@ export function LuckIndexTab({
                   Bye Week Differential Detail
                 </span>
                 <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                  {comp5Detail.owner} —{" "}
+                  {ownerDisplay(comp5Detail.owner)} —{" "}
                   {Number.isFinite(comp5Detail.season)
                     ? comp5Detail.season
                     : "—"}
