@@ -21536,12 +21536,16 @@ export function LuckIndexTab({
 
     const luck1 = {};
     const aggTotals = {};
+    const ownerTeamsBySeason = {};
+    const seasonCandidates = new Set();
 
     for (const [seasonKey, byTeam] of Object.entries(rostersSource || {})) {
       const seasonNum = Number(seasonKey);
       if (!Number.isFinite(seasonNum)) continue;
       const lastWeek = resolveLastWeek(seasonKey);
       luck1[seasonNum] = {};
+      ownerTeamsBySeason[seasonNum] ??= {};
+      seasonCandidates.add(seasonNum);
 
       for (const [teamKey, byWeek] of Object.entries(byTeam || {})) {
         const teamId = Number(teamKey);
@@ -21550,6 +21554,8 @@ export function LuckIndexTab({
         const ownerKey = canonOwner(ownerName) || ownerName || `Team ${teamId}`;
 
         luck1[seasonNum][teamId] = {};
+        ownerTeamsBySeason[seasonNum][ownerKey] ??= new Set();
+        ownerTeamsBySeason[seasonNum][ownerKey].add(teamId);
 
         for (let wk = 1; wk <= lastWeek; wk += 1) {
           const roster =
@@ -21573,8 +21579,134 @@ export function LuckIndexTab({
             proj: projected,
             diff,
           };
+        }
+      }
+    }
 
-          if (!ownerKey) continue;
+    const addSeasonCandidate = (value) => {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        seasonCandidates.add(numeric);
+      }
+    };
+
+    if (Array.isArray(league?.games)) {
+      league.games.forEach((game) => addSeasonCandidate(game?.season ?? game?.year));
+    }
+    Object.keys(league?.scheduleByYear || {}).forEach(addSeasonCandidate);
+    Object.keys(league?.espnScheduleByYear || {}).forEach(addSeasonCandidate);
+    Object.keys(league?.seasonsByYear || {}).forEach(addSeasonCandidate);
+
+    const ownerByTeamByYear = league?.ownerByTeamByYear || {};
+    const matchupsByOwnerSeason = {};
+
+    const pushMatchup = ({
+      owner,
+      opponent,
+      opponentDisplay,
+      seasonNum,
+      week,
+      ownerTeamId,
+      opponentTeamId,
+    }) => {
+      const ownerKey = canonOwner(owner) || owner;
+      const opponentKey = canonOwner(opponent) || opponent;
+      if (!ownerKey || !opponentKey) return;
+      matchupsByOwnerSeason[ownerKey] ??= {};
+      matchupsByOwnerSeason[ownerKey][seasonNum] ??= [];
+      matchupsByOwnerSeason[ownerKey][seasonNum].push({
+        week,
+        opponentKey,
+        opponentDisplay,
+        ownerTeamId: Number.isFinite(ownerTeamId) ? ownerTeamId : null,
+        opponentTeamId: Number.isFinite(opponentTeamId) ? opponentTeamId : null,
+      });
+    };
+
+    for (const seasonNum of seasonCandidates) {
+      if (!Number.isFinite(seasonNum)) continue;
+      const games = __collectGamesForSeason(
+        league,
+        seasonNum,
+        ownerByTeamByYear
+      );
+      if (!Array.isArray(games) || !games.length) continue;
+      const cutoff = resolveCurrentWeekExclusive(seasonNum);
+
+      games.forEach((game) => {
+        const weekNum = Number(game?.week);
+        if (!Number.isFinite(weekNum) || weekNum <= 0) return;
+        if (cutoff > 0 && weekNum >= cutoff) return;
+
+        pushMatchup({
+          owner: game?.owner1,
+          opponent: game?.owner2,
+          opponentDisplay: game?.owner2,
+          seasonNum,
+          week: weekNum,
+          ownerTeamId: game?.team1Id,
+          opponentTeamId: game?.team2Id,
+        });
+        pushMatchup({
+          owner: game?.owner2,
+          opponent: game?.owner1,
+          opponentDisplay: game?.owner1,
+          seasonNum,
+          week: weekNum,
+          ownerTeamId: game?.team2Id,
+          opponentTeamId: game?.team1Id,
+        });
+      });
+    }
+
+    const getTeamStats = (seasonNum, opponentKey, opponentTeamId, weekNum) => {
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) return null;
+      const seasonStats = luck1?.[seasonNum];
+      if (!seasonStats) return null;
+
+      if (Number.isFinite(opponentTeamId)) {
+        const byTeam = seasonStats[opponentTeamId];
+        if (byTeam && byTeam[weekNum]) {
+          return { ...byTeam[weekNum], teamId: opponentTeamId };
+        }
+      }
+
+      const candidates = ownerTeamsBySeason?.[seasonNum]?.[opponentKey];
+      if (candidates) {
+        const list = Array.isArray(candidates)
+          ? candidates
+          : Array.from(candidates);
+        for (const candidateId of list) {
+          const byTeam = seasonStats?.[candidateId];
+          if (byTeam && byTeam[weekNum]) {
+            return { ...byTeam[weekNum], teamId: candidateId };
+          }
+        }
+      }
+
+      return null;
+    };
+
+    for (const [ownerKey, seasonsMap] of Object.entries(matchupsByOwnerSeason)) {
+      if (!ownerKey) continue;
+      for (const [seasonKey, rows] of Object.entries(seasonsMap || {})) {
+        const seasonNum = Number(seasonKey);
+        if (!Number.isFinite(seasonNum)) continue;
+        for (const row of rows || []) {
+          const weekNum = Number(row?.week);
+          if (!Number.isFinite(weekNum)) continue;
+          const stats = getTeamStats(
+            seasonNum,
+            row.opponentKey,
+            row.opponentTeamId,
+            weekNum
+          );
+          if (!stats) continue;
+
+          const projected = Number.isFinite(stats?.proj) ? stats.proj : 0;
+          const actual = Number.isFinite(stats?.actual) ? stats.actual : 0;
+          const diff = projected - actual;
+
           totals[ownerKey] ??= {};
           totals[ownerKey][seasonNum] =
             (totals[ownerKey][seasonNum] || 0) + diff;
@@ -21582,11 +21714,12 @@ export function LuckIndexTab({
           details[ownerKey] ??= {};
           details[ownerKey][seasonNum] ??= [];
           details[ownerKey][seasonNum].push({
-            week: wk,
+            week: weekNum,
             projected,
             actual,
             diff,
-            teamId,
+            teamId: stats?.teamId ?? row.opponentTeamId ?? null,
+            opponent: row.opponentDisplay ?? row.opponentKey ?? null,
           });
         }
       }
@@ -21614,6 +21747,7 @@ export function LuckIndexTab({
     canonOwner,
     managerBySeasonTeam,
     currentWeekByYearOverride,
+    resolveCurrentWeekExclusive,
   ]);
   const comp2Data = React.useMemo(() => {
     const totals = {};
@@ -22751,7 +22885,7 @@ function isStarterSlot(slotId) {
   }, []);
 
   const comp1ScaledData = React.useMemo(
-    () => normalizeOwnerYearTotals(comp1ByOwnerYear, { invert: true }),
+    () => normalizeOwnerYearTotals(comp1ByOwnerYear),
     [comp1ByOwnerYear, normalizeOwnerYearTotals]
   );
   const comp1ScaledByOwnerYear = comp1ScaledData.scaled;
