@@ -589,8 +589,6 @@ const TABLE_MANAGER_CELL_CLASS =
   "px-4 py-3 text-left font-semibold text-slate-800 dark:text-slate-100";
 const TABLE_VALUE_CELL_CLASS =
   "px-4 py-3 text-center tabular-nums text-slate-800 dark:text-slate-100";
-const TABLE_LUCK_METRIC_CELL_CLASS =
-  `${TABLE_VALUE_CELL_CLASS} font-semibold text-emerald-800 dark:text-emerald-200`;
 const TABLE_VALUE_BUTTON_CLASS =
   "inline-flex w-full justify-center rounded-md px-2 py-1 text-[13px] tabular-nums font-normal text-slate-800 transition-colors duration-150 hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 dark:text-slate-100 dark:hover:bg-white/[0.12] bg-transparent appearance-none";
 const TOGGLE_BUTTON_BASE_CLASS =
@@ -22842,6 +22840,13 @@ function isStarterSlot(slotId) {
     : comp5Data.rawTotals;
   const comp5SummaryByOwnerYear = comp5Data.summary || {};
   const ownerDisplayMap = comp5Data.displayByOwner || {};
+    const ownerDisplay = React.useCallback(
+    (ownerKey) => {
+      if (!ownerKey) return "—";
+      return ownerDisplayMap[ownerKey] || ownerKey;
+    },
+    [ownerDisplayMap]
+  );
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false, transform = null, clampToZero = false } = options;
 
@@ -23112,86 +23117,7 @@ function isStarterSlot(slotId) {
     canonOwner,
     isHiddenManager,
   ]);
-  const ownerDisplayLookup = React.useMemo(() => {
-    const map = new Map();
-    const assign = (keyRaw, displayRaw) => {
-      const canonicalKey = canonOwner(keyRaw) || String(keyRaw ?? "").trim();
-      if (!canonicalKey) return;
-      const displayTrimmed = String(displayRaw ?? keyRaw ?? "").trim();
-      if (!displayTrimmed) return;
-      if (!map.has(canonicalKey)) {
-        map.set(canonicalKey, displayTrimmed);
-        return;
-      }
-      const existing = map.get(canonicalKey);
-      if (!existing && displayTrimmed) {
-        map.set(canonicalKey, displayTrimmed);
-      }
-    };
 
-    Object.entries(ownerDisplayMap).forEach(([key, display]) =>
-      assign(key, display)
-    );
-    ownersBase.forEach((owner) => assign(owner, owner));
-    owners.forEach((owner) => assign(owner, owner));
-
-    return map;
-  }, [canonOwner, ownerDisplayMap, owners, ownersBase]);
-  const ownerDisplay = React.useCallback(
-    (ownerKey) => {
-      if (!ownerKey) return "—";
-      const canonical = canonOwner(ownerKey) || String(ownerKey ?? "").trim();
-      if (!canonical) return "—";
-      if (ownerDisplayLookup.has(canonical)) {
-        return ownerDisplayLookup.get(canonical);
-      }
-      if (ownerDisplayLookup.has(ownerKey)) {
-        return ownerDisplayLookup.get(ownerKey);
-      }
-      const legacy = ownerDisplayMap[canonical] ?? ownerDisplayMap[ownerKey];
-      if (legacy) return String(legacy).trim() || canonical;
-      return canonical;
-    },
-    [canonOwner, ownerDisplayLookup, ownerDisplayMap]
-  );
-  const ownersByComponent = React.useMemo(() => {
-    const seasonKey = Number.isFinite(selectedLuckSeasonNumber)
-      ? selectedLuckSeasonNumber
-      : null;
-    const sortOwnersBySource = (source) => {
-      if (seasonKey == null) return owners;
-      return owners.slice().sort((a, b) => {
-        const va = getSeasonValue(source, a, seasonKey);
-        const vb = getSeasonValue(source, b, seasonKey);
-        const aHas = Number.isFinite(va);
-        const bHas = Number.isFinite(vb);
-        if (aHas && bHas) {
-          if (vb !== va) return vb - va;
-          return String(a ?? "").localeCompare(String(b ?? ""));
-        }
-        if (aHas) return -1;
-        if (bHas) return 1;
-        return String(a ?? "").localeCompare(String(b ?? ""));
-      });
-    };
-
-    return {
-      comp1: sortOwnersBySource(comp1ScaledByOwnerYear),
-      comp2: sortOwnersBySource(injuryScaledByOwnerYear),
-      comp3: sortOwnersBySource(comp3ScaledByOwnerYear),
-      comp4: sortOwnersBySource(comp4ScaledByOwnerYear),
-      comp5: sortOwnersBySource(comp5ScaledByOwnerYear),
-    };
-  }, [
-    owners,
-    comp1ScaledByOwnerYear,
-    injuryScaledByOwnerYear,
-    comp3ScaledByOwnerYear,
-    comp4ScaledByOwnerYear,
-    comp5ScaledByOwnerYear,
-    selectedLuckSeasonNumber,
-    getSeasonValue,
-  ]);
   const ownersKey = React.useMemo(() => owners.join("|"), [owners]);
   const seasonsKeyForLuck = React.useMemo(
     () => seasons.join("|"),
@@ -23641,28 +23567,6 @@ function isStarterSlot(slotId) {
 
   // --- Table helper ---
   const fmt = (n) => (Number.isFinite(n) ? `${n.toFixed(0)}%` : "—");
-  const getSeasonValue = React.useCallback((source, owner, seasonKey) => {
-    if (!source || !owner || seasonKey == null) return null;
-    const byOwner = source[owner];
-    if (!byOwner || typeof byOwner !== "object") return null;
-    const tryKey = (key) => {
-      if (key == null) return null;
-      const value = byOwner?.[key];
-      return Number.isFinite(value) ? Number(value) : null;
-    };
-    const direct = tryKey(seasonKey);
-    if (direct != null) return direct;
-    const numericKey = Number(seasonKey);
-    if (Number.isFinite(numericKey)) {
-      const numericValue = tryKey(numericKey);
-      if (numericValue != null) return numericValue;
-      const fromStringNumeric = tryKey(String(numericKey));
-      if (fromStringNumeric != null) return fromStringNumeric;
-    }
-    const fromString = tryKey(String(seasonKey));
-    if (fromString != null) return fromString;
-    return null;
-  }, []);
   const ordinal = React.useCallback((value) => {
     if (!Number.isFinite(value)) return "—";
     const n = Math.round(value);
@@ -23677,15 +23581,24 @@ function isStarterSlot(slotId) {
     return `${n}${suffix}`;
   }, []);
   const luckRows = React.useMemo(() => {
-    if (!Number.isFinite(selectedLuckSeasonNumber)) return [];
-    const seasonKey = selectedLuckSeasonNumber;
+    if (!Number.isFinite(selectedLuckSeason)) return [];
+    const seasonKey = selectedLuckSeason;
+    const getSeasonValue = (source, owner) => {
+      if (!source || !owner) return null;
+      const byOwner = source[owner];
+      if (!byOwner || typeof byOwner !== "object") return null;
+      const direct = byOwner?.[seasonKey];
+      if (Number.isFinite(direct)) return Number(direct);
+      const fallback = byOwner?.[String(seasonKey)];
+      return Number.isFinite(fallback) ? Number(fallback) : null;
+    };
     const rows = owners.map((owner) => {
-      const value = getSeasonValue(luckByOwnerYear, owner, seasonKey);
-      const comp1 = getSeasonValue(comp1ScaledByOwnerYear, owner, seasonKey);
-      const comp2 = getSeasonValue(injuryScaledByOwnerYear, owner, seasonKey);
-      const comp3 = getSeasonValue(comp3ScaledByOwnerYear, owner, seasonKey);
-      const comp4 = getSeasonValue(comp4ScaledByOwnerYear, owner, seasonKey);
-      const comp5 = getSeasonValue(comp5ScaledByOwnerYear, owner, seasonKey);
+     const value = getSeasonValue(luckByOwnerYear, owner);
+      const comp1 = getSeasonValue(comp1ScaledByOwnerYear, owner);
+      const comp2 = getSeasonValue(injuryScaledByOwnerYear, owner);
+      const comp3 = getSeasonValue(comp3ScaledByOwnerYear, owner);
+      const comp4 = getSeasonValue(comp4ScaledByOwnerYear, owner);
+      const comp5 = getSeasonValue(comp5ScaledByOwnerYear, owner);
       return { owner, value, comp1, comp2, comp3, comp4, comp5 };
     });
     return rows
@@ -23708,13 +23621,12 @@ function isStarterSlot(slotId) {
   }, [
     owners,
     luckByOwnerYear,
-    selectedLuckSeasonNumber,
+   selectedLuckSeason,
     comp1ScaledByOwnerYear,
     injuryScaledByOwnerYear,
     comp3ScaledByOwnerYear,
     comp4ScaledByOwnerYear,
     comp5ScaledByOwnerYear,
-    getSeasonValue,
   ]);
   const totalLuckRows = luckRows.length;
   const renderLuckPlace = React.useCallback(
@@ -23748,38 +23660,11 @@ function isStarterSlot(slotId) {
         });
       }
       if (rank === 2) {
-        return (
-          <div className="relative flex h-12 w-12 items-center justify-center">
-            <svg
-              viewBox="0 0 64 64"
-              className="h-11 w-11 text-amber-500 drop-shadow-[0_10px_24px_rgba(245,158,11,0.45)] dark:text-amber-300"
-              role="img"
-              aria-label="Second place horseshoe"
-            >
-              <path
-                d="M18 52V24c0-7.732 6.268-14 14-14s14 6.268 14 14v28"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M26 24v18c0 4.418 3.582 8 8 8"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                opacity="0.55"
-              />
-              <circle cx="18" cy="44" r="3" fill="white" fillOpacity="0.9" />
-              <circle cx="46" cy="44" r="3" fill="white" fillOpacity="0.9" />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black uppercase tracking-[0.18em] text-white drop-shadow-[0_1px_2px_rgba(15,23,42,0.85)]">
-              {label}
-            </span>
-          </div>
-        );
+            return makeIcon({
+          emoji: "🧲",
+          aria: "Second place horseshoe",
+        });
+
       }
       if (rank === 3) {
         return makeIcon({
@@ -23817,17 +23702,7 @@ function isStarterSlot(slotId) {
   );
   const renderLuckMetricCell = (value) =>
     Number.isFinite(value) ? fmt(Number(value)) : "—";
-  const renderLuckIndexCell = React.useCallback(
-    (value) => {
-      if (!Number.isFinite(value)) return "—";
-      return (
-        <span className="inline-flex min-w-[3.25rem] items-center justify-center rounded-full bg-gradient-to-r from-emerald-200/80 via-teal-200/70 to-sky-200/80 px-3 py-1 text-[13px] font-semibold text-emerald-900 shadow-[0_18px_38px_-24px_rgba(16,185,129,0.65)] dark:from-emerald-500/25 dark:via-teal-500/20 dark:to-sky-500/20 dark:text-emerald-200">
-          {fmt(Number(value))}
-        </span>
-      );
-    },
-    [fmt]
-  );
+
   const fmtInjuryValue = React.useCallback(
     (v) => {
       if (!Number.isFinite(v)) return "—";
@@ -24052,9 +23927,8 @@ function isStarterSlot(slotId) {
                   <th className="px-4 py-3 text-center">Opp Injury Luck</th>
                   <th className="px-4 py-3 text-center">Teammate Injury Ripple</th>
                   <th className="px-4 py-3 text-center">Bye Week Differential</th>
-                  <th className="px-4 py-3 text-center text-emerald-700 dark:text-emerald-200">
-                    Luck Metric
-                  </th>
+                  <th className="px-4 py-3 text-center">Luck Metric</th>
+
                 </tr>
               </thead>
               <tbody className={tableBodyClass}>
@@ -24092,8 +23966,8 @@ function isStarterSlot(slotId) {
                         <td className={valueCellClass}>
                           {renderLuckMetricCell(comp5)}
                         </td>
-                        <td className={TABLE_LUCK_METRIC_CELL_CLASS}>
-                          {renderLuckIndexCell(value)}
+   <td className={valueCellClass}>
+                          {renderLuckMetricCell(value)}
                         </td>
                       </tr>
                     )
@@ -24175,9 +24049,9 @@ function isStarterSlot(slotId) {
                       </tr>
                     </thead>
                     <tbody className={tableBodyClass}>
-                      {ownersByComponent.comp1.map((o) => (
+                      {owners.map((o) => (
                         <tr key={o}>
-                          <td className={managerCellClass}>{ownerDisplay(o)}</td>
+                          <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
                             const v = comp1ByOwnerYear?.[o]?.[y];
                             const detailRows =
@@ -24307,9 +24181,9 @@ function isStarterSlot(slotId) {
                       </tr>
                     </thead>
                     <tbody className={tableBodyClass}>
-                      {ownersByComponent.comp2.map((o) => (
+                                          {owners.map((o) => (
                         <tr key={`${o}-injury`}>
-                          <td className={managerCellClass}>{ownerDisplay(o)}</td>
+<td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
                             const v = injuryTotalsSource?.[o]?.[y];
                             const detailRows = injuryDetailSource?.[o]?.[y] || [];
@@ -24397,9 +24271,9 @@ function isStarterSlot(slotId) {
                       </tr>
                     </thead>
                     <tbody className={tableBodyClass}>
-                      {ownersByComponent.comp3.map((o) => (
+                      {owners.map((o) => (
                         <tr key={`${o}-opp-injury`}>
-                          <td className={managerCellClass}>{ownerDisplay(o)}</td>
+                          <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
                             const totalsByOwner = comp3TotalsSource?.[o] || {};
                             const value =
@@ -24450,8 +24324,10 @@ function isStarterSlot(slotId) {
           </div>
         </Card>
 
-        <Card title="Teammate Injury Ripple" allowOverflow>
-          <div className="relative">
+        <Card
+          title="Teammate Injury Ripple — Draft Equity Credit"
+          allowOverflow
+        >          <div className="relative">
             {comp4ScrollState.canScroll && !comp4ScrollState.atStart ? (
               <div
                 aria-hidden
@@ -24496,9 +24372,9 @@ function isStarterSlot(slotId) {
                       </tr>
                     </thead>
                     <tbody className={tableBodyClass}>
-                      {ownersByComponent.comp4.map((o) => (
+                      {owners.map((o) => (
                         <tr key={`${o}-ripple`}>
-                          <td className={managerCellClass}>{ownerDisplay(o)}</td>
+                          <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
                             const totalsByOwner = comp4TotalsSource?.[o] || {};
                             const value =
@@ -24627,9 +24503,9 @@ function isStarterSlot(slotId) {
                       </tr>
                     </thead>
                     <tbody className={tableBodyClass}>
-                      {ownersByComponent.comp5.map((o) => (
+                      {owners.map((o) => (
                         <tr key={`${o}-bye`}>
-                          <td className={managerCellClass}>{ownerDisplay(o)}</td>
+                          <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
                             const totalsByOwner = comp5TotalsSource?.[o] || {};
                             const rawValue =
