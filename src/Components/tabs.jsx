@@ -22289,435 +22289,128 @@ export function LuckIndexTab({
     }
     return map;
   }, [draftByYear]);
-  const comp5Data = React.useMemo(() => {
+   const comp5Data = React.useMemo(() => {
+    // ===== outputs expected by the UI =====
     const rawTotals = {};
     const weightedTotals = {};
     const details = {};
     const summary = {};
+    const displayByOwner = {};
 
-    const scheduleRows = [];
-    if (Array.isArray(rawRows)) scheduleRows.push(...rawRows);
-    const leagueRows = league?.rows;
-    if (Array.isArray(leagueRows)) scheduleRows.push(...leagueRows);
+    // Pull rows the same way the console snippet did
+    const allRows = Array.isArray(league?.rows) ? league.rows.slice() : [];
+    if (Array.isArray(rawRows) && rawRows.length) {
+      allRows.push(...rawRows);
+    }
 
-    const ownerMapsBySeason = new Map();
-    const ensureOwnerMapSeason = (seasonNum) => {
-      if (!ownerMapsBySeason.has(seasonNum)) {
-        ownerMapsBySeason.set(seasonNum, new Map());
-      }
-      return ownerMapsBySeason.get(seasonNum);
+    // Helper: strict canonical owner key (this is what worked on the other tabs)
+    const ownerKeyOf = (seasonNum, teamId) => {
+      const name = ownerNameOf(seasonNum, teamId);
+      const key = name ? canonOwner(name) : null;
+      return key || null;
     };
-    const TEAM_ID_LABEL_RE = /^team\s*\d+$/i;
-    const resolveOwnerDisplayName = (
-      seasonNum,
-      teamIdRaw,
-      ownerKey,
-      ...rawCandidates
-    ) => {
-      const candidates = [];
-      const seen = new Set();
-      const numericTeamId = Number(teamIdRaw);
-      if (Number.isFinite(numericTeamId)) {
-        const mapped = ownerNameOf(seasonNum, numericTeamId);
-        if (mapped != null) candidates.push(mapped);
-      }
-      rawCandidates.forEach((cand) => {
-        const parsed = readOwnerNameValue(cand);
-        if (parsed != null && parsed !== "") {
-          candidates.push(parsed);
-        }
+
+    // Helper: display name for a given owner key
+    const ownerDisplayOf = (seasonNum, teamId, ownerKey) => {
+      const fromOwnerNameOf = ownerNameOf(seasonNum, teamId);
+      const disp = fromOwnerNameOf ? String(fromOwnerNameOf).trim() : (ownerKey || "");
+      return disp || ownerKey || "";
+    };
+
+    // Build: for each season, map canonical owner name -> teamId
+    const ownerMapBySeason = new Map();
+    Object.entries(league?.ownerByTeamByYear || {}).forEach(([y, byTeam]) => {
+      const seasonNum = Number(y);
+      if (!Number.isFinite(seasonNum)) return;
+      const map = new Map();
+      Object.entries(byTeam || {}).forEach(([tid, val]) => {
+        const key = canonOwner(val);
+        if (!key || isHiddenManager(key)) return;
+        map.set(key, Number(tid));
       });
-      if (ownerKey != null && ownerKey !== "") {
-        candidates.push(ownerKey);
-      }
-      let numericFallback = null;
-      for (const candidate of candidates) {
-        const value = readOwnerNameValue(candidate);
-        const trimmed = typeof value === "string" ? value.trim() : "";
-        if (!trimmed) continue;
-        const key = trimmed.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (TEAM_ID_LABEL_RE.test(trimmed)) {
-          if (!numericFallback) numericFallback = trimmed;
-          continue;
-        }
-        return trimmed;
-      }
-      if (numericFallback) return numericFallback;
-      const fallback = readOwnerNameValue(ownerKey);
-      return fallback || "";
-    };
-    const addOwnerMapping = (seasonRaw, teamRaw, ownerValue) => {
-      const seasonNum = Number(seasonRaw);
-      const teamId = Number(teamRaw);
-      if (!Number.isFinite(seasonNum) || !Number.isFinite(teamId)) return;
-      const ownerName = readOwnerNameValue(ownerValue);
-      const normalized = canonOwner(ownerName);
-      if (!normalized || isHiddenManager(normalized)) return;
-      const ownerMap = ensureOwnerMapSeason(seasonNum);
-      const displayName = resolveOwnerDisplayName(
-        seasonNum,
-        teamId,
-        normalized,
-        ownerName
-      );
-      const info = {
-        ownerKey: normalized,
-        teamId,
-        ownerDisplay: displayName,
-      };
-      const keys = new Set([
-        normalized,
-        canonicalizeOwner(ownerName) || null,
-        ownerName,
-        ownerName ? ownerName.toLowerCase() : null,
-        `Team ${teamId}`,
-        `team ${teamId}`,
-        `Team${teamId}`,
-        `team${teamId}`,
-        String(teamId),
-        `team:${teamId}`,
-      ]);
-      keys.forEach((key) => {
-        const trimmed = typeof key === "string" ? key.trim() : "";
-        if (!trimmed) return;
-        if (!ownerMap.has(trimmed)) {
-          ownerMap.set(trimmed, info);
-        }
-        const lower = trimmed.toLowerCase();
-        if (lower && !ownerMap.has(lower)) {
-          ownerMap.set(lower, info);
-        }
-        const normalizedKey = canonOwner(trimmed);
-        if (normalizedKey && !ownerMap.has(normalizedKey)) {
-          ownerMap.set(normalizedKey, info);
-        }
+      ownerMapBySeason.set(seasonNum, map);
+    });
+    Object.entries(league?.espnOwnerFullByTeamByYear || {}).forEach(([y, byTeam]) => {
+      const seasonNum = Number(y);
+      if (!Number.isFinite(seasonNum)) return;
+      const map = ownerMapBySeason.get(seasonNum) || new Map();
+      Object.entries(byTeam || {}).forEach(([tid, val]) => {
+        const key = canonOwner(val);
+        if (!key || isHiddenManager(key)) return;
+        if (!map.has(key)) map.set(key, Number(tid));
       });
-    };
-
-    const addOwnerMappingsFromSource = (source) => {
-      Object.entries(source || {}).forEach(([seasonKey, ownerMap]) => {
-        Object.entries(ownerMap || {}).forEach(([teamKey, ownerName]) => {
-          addOwnerMapping(seasonKey, teamKey, ownerName);
-        });
-      });
-    };
-
-    addOwnerMappingsFromSource(league?.ownerByTeamByYear);
-    addOwnerMappingsFromSource(league?.ownersByTeamByYear);
-    addOwnerMappingsFromSource(league?.espnOwnerByTeamByYear);
-    addOwnerMappingsFromSource(league?.espnOwnerFullByTeamByYear);
-    Object.entries(managerBySeasonTeam || {}).forEach(
-      ([seasonKey, teamMap]) => {
-        Object.entries(teamMap || {}).forEach(([teamKey, ownerName]) => {
-          addOwnerMapping(seasonKey, teamKey, ownerName);
-        });
-      }
-    );
-
-    const scheduleBySeason = new Map();
-    const ensureWeekBucket = (seasonNum, weekNum) => {
-      if (!scheduleBySeason.has(seasonNum)) {
-        scheduleBySeason.set(seasonNum, new Map());
-      }
-      const weekMap = scheduleBySeason.get(seasonNum);
-      if (!weekMap.has(weekNum)) {
-        weekMap.set(weekNum, []);
-      }
-      return weekMap.get(weekNum);
-    };
-
-    const resolveTeamInfo = (seasonNum, ownerValue, teamHint) => {
-      const ownerMap = ownerMapsBySeason.get(seasonNum);
-      if (!ownerMap) return null;
-      const candidates = [];
-      const rawName = readOwnerNameValue(ownerValue);
-      const normalizedDirect = canonOwner(ownerValue);
-      const normalizedRaw = canonOwner(rawName);
-      if (normalizedDirect) candidates.push(normalizedDirect);
-      if (normalizedRaw && normalizedRaw !== normalizedDirect)
-        candidates.push(normalizedRaw);
-      if (typeof ownerValue === "string") {
-        const trimmed = ownerValue.trim();
-        if (trimmed) {
-          candidates.push(trimmed, trimmed.toLowerCase());
-        }
-      }
-      if (rawName) {
-        candidates.push(rawName, rawName.toLowerCase());
-      }
-      const teamIdCandidate = Number(teamHint);
-      if (Number.isFinite(teamIdCandidate)) {
-        const tidStr = String(teamIdCandidate);
-        candidates.push(
-          tidStr,
-          `team:${tidStr}`,
-          `Team ${tidStr}`,
-          `team ${tidStr}`,
-          `Team${tidStr}`,
-          `team${tidStr}`
-        );
-      }
-      for (const key of candidates) {
-        if (!key) continue;
-        const info = ownerMap.get(key);
-        if (info) return info;
-      }
-      return null;
-    };
-
-    const seenPairs = new Set();
-    scheduleRows.forEach((row) => {
-      const seasonNum = Number(
-        row?.season ??
-          row?.year ??
-          row?.seasonId ??
-          row?.season_id ??
-          row?.seasonYear
-      );
-      const weekNum = Number(
-        row?.week ??
-          row?.wk ??
-          row?.matchupPeriod ??
-          row?.matchupPeriodId ??
-          row?.scoringPeriod ??
-          row?.scoringPeriodId
-      );
-      if (!Number.isFinite(seasonNum) || !Number.isFinite(weekNum)) return;
-      if (weekNum <= 0) return;
-      const managerTeamId =
-        row?.teamId ??
-        row?.team_id ??
-        row?.team ??
-        row?.teamID ??
-        row?.managerTeamId ??
-        row?.manager_team_id ??
-        row?.homeTeamId ??
-        row?.home_team_id;
-      const opponentTeamId =
-        row?.opponentTeamId ??
-        row?.opponent_team_id ??
-        row?.oppTeamId ??
-        row?.opp_team_id ??
-        row?.opponentTeamID ??
-        row?.opponent_teamID ??
-        row?.awayTeamId ??
-        row?.away_team_id;
-      const managerInfo = resolveTeamInfo(
-        seasonNum,
-        row?.manager,
-        managerTeamId
-      );
-      const opponentInfo = resolveTeamInfo(
-        seasonNum,
-        row?.opponent,
-        opponentTeamId
-      );
-      if (!managerInfo || !opponentInfo) return;
-      const { teamId: teamAId, ownerKey: ownerAKey } = managerInfo;
-      const { teamId: teamBId, ownerKey: ownerBKey } = opponentInfo;
-      if (
-        !Number.isFinite(teamAId) ||
-        !Number.isFinite(teamBId) ||
-        teamAId === teamBId
-      ) {
-        return;
-      }
-      if (isHiddenManager(ownerAKey) || isHiddenManager(ownerBKey)) return;
-      const pairKey = `${seasonNum}|${weekNum}|${Math.min(teamAId, teamBId)}-${Math.max(
-        teamAId,
-        teamBId
-      )}`;
-      if (seenPairs.has(pairKey)) return;
-      seenPairs.add(pairKey);
-
-      const weekBucket = ensureWeekBucket(seasonNum, weekNum);
-      const ownerADisplay = resolveOwnerDisplayName(
-        seasonNum,
-        teamAId,
-        ownerAKey,
-        managerInfo.ownerDisplay,
-        row?.managerDisplay,
-        row?.manager_display,
-        row?.manager
-      );
-      const ownerBDisplay = resolveOwnerDisplayName(
-        seasonNum,
-        teamBId,
-        ownerBKey,
-        opponentInfo.ownerDisplay,
-        row?.opponentDisplay,
-        row?.opponent_display,
-        row?.opponent
-      );
-      weekBucket.push({
-        teamA: teamAId,
-        teamB: teamBId,
-        ownerAKey,
-        ownerBKey,
-        ownerADisplay,
-        ownerBDisplay,
-      });
+      ownerMapBySeason.set(seasonNum, map);
     });
 
-    const ownerSeasonData = new Map();
-    const resolveTeamNameFor = (ownerKey, seasonNum, teamId) => {
-      const sources = [];
-      if (league?.teamNamesByOwner) sources.push(league.teamNamesByOwner);
-      if (league?.espnTeamNamesByOwner)
-        sources.push(league.espnTeamNamesByOwner);
-      if (typeof window !== "undefined") {
-        const winSources = window.__sources || {};
-        if (winSources.teamNamesByOwner)
-          sources.push(winSources.teamNamesByOwner);
-        if (winSources.espnTeamNamesByOwner)
-          sources.push(winSources.espnTeamNamesByOwner);
-      }
-      const variants = new Set([
-        ownerKey,
-        canonicalizeOwner(ownerKey),
-        typeof ownerKey === "string" ? ownerKey.trim() : null,
-      ]);
-      for (const variant of variants) {
-        if (!variant) continue;
-        for (const source of sources) {
-          const bucket = source?.[variant];
-          if (!bucket) continue;
-          const value = bucket?.[seasonNum] ?? bucket?.[String(seasonNum)];
-          if (value != null && String(value).trim()) {
-            return String(value).trim();
-          }
-        }
-      }
-      const seasonObj =
-        get(league, "seasonsByYear", seasonNum) ??
-        get(league, "seasonsByYear", String(seasonNum));
-      if (seasonObj && Number.isFinite(teamId)) {
-        const teams = Array.isArray(seasonObj?.teams) ? seasonObj.teams : [];
-        const match = teams.find((team) => {
-          const ids = [team?.id, team?.teamId, team?.teamID, team?.team?.id];
-          return ids.some((cand) => Number(cand) === Number(teamId));
-        });
-        if (match) {
-          const candidates = [
-            match?.teamName,
-            match?.name,
-            match?.nickname,
-            match?.location && match?.nickname
-              ? `${match.location} ${match.nickname}`
-              : null,
-          ];
-          for (const cand of candidates) {
-            if (cand != null && String(cand).trim()) {
-              return String(cand).trim();
-            }
-          }
-        }
-      }
-      if (Number.isFinite(teamId)) {
-        return `Team ${teamId}`;
-      }
-      return null;
-    };
+    // Build schedule from rows using only canonical manager/opponent names (exactly like your console)
+    const scheduleBySeason = new Map();              // season -> week -> [{home, away}]
+    const seenPairKeys = new Set();
+    const norm = (s) => String(s || "").trim().toLowerCase();
 
-    const ensureOwnerSeason = (ownerKey, seasonNum, meta = {}) => {
-      if (!ownerSeasonData.has(ownerKey)) {
-        ownerSeasonData.set(ownerKey, {
-          displayName: meta.ownerDisplay || ownerKey,
-          seasons: new Map(),
-        });
-      }
-      const entry = ownerSeasonData.get(ownerKey);
-      if (!entry.displayName && meta.ownerDisplay) {
-        entry.displayName = meta.ownerDisplay;
-      }
-      if (!entry.seasons.has(seasonNum)) {
-        entry.seasons.set(seasonNum, {
-          teamId: Number.isFinite(meta.teamId) ? Number(meta.teamId) : null,
-          teamName: meta.teamName || null,
-          ownerDisplay: meta.ownerDisplay || entry.displayName || ownerKey,
-          ownRaw: 0,
-          oppRaw: 0,
-          ownWeighted: 0,
-          oppWeighted: 0,
-          detail: [],
-          weeks: new Set(),
-        });
-      } else {
-        const seasonEntry = entry.seasons.get(seasonNum);
-        if (seasonEntry.teamId == null && Number.isFinite(meta.teamId)) {
-          seasonEntry.teamId = Number(meta.teamId);
-        }
-        if (!seasonEntry.teamName && meta.teamName) {
-          seasonEntry.teamName = meta.teamName;
-        }
-      }
-      return entry.seasons.get(seasonNum);
-    };
+    for (const r of allRows) {
+      const seasonVal = Number(r?.season ?? r?.year);
+      if (!Number.isFinite(seasonVal)) continue;
 
+      const weekVal = Number(
+        r?.week ?? r?.wk ?? r?.scoringPeriodId ?? r?.scoringPeriod
+      );
+      if (!Number.isFinite(weekVal) || weekVal <= 0) continue;
+
+      const mName = norm(r?.manager);
+      const oName = norm(r?.opponent);
+      if (!mName || !oName) continue;
+
+      const ownerMap = ownerMapBySeason.get(seasonVal);
+      if (!ownerMap) continue;
+
+      const t1 = ownerMap.get(canonOwner(mName));
+      const t2 = ownerMap.get(canonOwner(oName));
+      if (!Number.isFinite(t1) || !Number.isFinite(t2) || t1 === t2) continue;
+
+      const a = Math.min(t1, t2);
+      const b = Math.max(t1, t2);
+      const key = `${seasonVal}|${weekVal}|${a}-${b}`;
+      if (seenPairKeys.has(key)) continue;
+      seenPairKeys.add(key);
+
+      if (!scheduleBySeason.has(seasonVal)) scheduleBySeason.set(seasonVal, new Map());
+      const byWeek = scheduleBySeason.get(seasonVal);
+      if (!byWeek.has(weekVal)) byWeek.set(weekVal, []);
+      byWeek.get(weekVal).push({ home: a, away: b });
+    }
+
+    // Get roster source & pro team lookup accessors
     const rosterSources = [];
-    if (rostersByYear && typeof rostersByYear === "object") {
-      rosterSources.push(rostersByYear);
-    }
-    if (
-      league?.espnRostersByYear &&
-      league.espnRostersByYear !== rostersByYear &&
-      typeof league.espnRostersByYear === "object"
-    ) {
-      rosterSources.push(league.espnRostersByYear);
-    }
-    if (
-      league?.rostersByYear &&
-      league.rostersByYear !== rostersByYear &&
-      typeof league.rostersByYear === "object"
-    ) {
-      rosterSources.push(league.rostersByYear);
-    }
-    if (typeof window !== "undefined") {
-      const winSources = window.__FL_SOURCES || window.__sources || {};
-      if (winSources?.rostersByYear && typeof winSources.rostersByYear === "object") {
-        rosterSources.push(winSources.rostersByYear);
-      }
-      if (
-        winSources?.espnRostersByYear &&
-        typeof winSources.espnRostersByYear === "object"
-      ) {
-        rosterSources.push(winSources.espnRostersByYear);
-      }
-    }
+    if (league?.espnRostersByYear) rosterSources.push(league.espnRostersByYear);
+    if (league?.rostersByYear) rosterSources.push(league.rostersByYear);
+    if (rostersByYear && rostersByYear !== league?.rostersByYear) rosterSources.push(rostersByYear);
 
     const readNested = (container, key) => {
       if (!container) return undefined;
-      const candidates = [];
-      candidates.push(key);
-      const keyStr = String(key);
-      if (!candidates.includes(keyStr)) candidates.push(keyStr);
-      const keyNum = Number(key);
-      if (Number.isFinite(keyNum) && !candidates.includes(keyNum)) {
-        candidates.push(keyNum);
-      }
-      for (const token of candidates) {
-        if (container instanceof Map) {
-          if (container.has(token)) return container.get(token);
-        } else if (typeof container === "object" && container !== null) {
-          if (Object.prototype.hasOwnProperty.call(container, token)) {
-            return container[token];
-          }
-        }
+      const kStr = String(key);
+      const kNum = Number(key);
+      if (container instanceof Map) {
+        if (container.has(key)) return container.get(key);
+        if (container.has(kStr)) return container.get(kStr);
+        if (Number.isFinite(kNum) && container.has(kNum)) return container.get(kNum);
+      } else {
+        if (Object.prototype.hasOwnProperty.call(container, key)) return container[key];
+        if (Object.prototype.hasOwnProperty.call(container, kStr)) return container[kStr];
+        if (Number.isFinite(kNum) && Object.prototype.hasOwnProperty.call(container, kNum))
+          return container[kNum];
       }
       return undefined;
     };
 
     const getRosterEntries = (seasonNum, teamId, weekNum) => {
-      for (const source of rosterSources) {
-        const seasonBucket = readNested(source, seasonNum);
+      for (const src of rosterSources) {
+        const seasonBucket = readNested(src, seasonNum);
         if (!seasonBucket) continue;
         const teamBucket = readNested(seasonBucket, teamId);
         if (!teamBucket) continue;
+        // arrays indexed by week or object keyed by week
         if (Array.isArray(teamBucket)) {
-          const wkIdx = Number(weekNum);
-          const arr = teamBucket?.[wkIdx] ?? teamBucket?.[String(wkIdx)];
+          const arr = teamBucket?.[weekNum] ?? teamBucket?.[String(weekNum)];
           if (Array.isArray(arr)) return arr;
         }
         const entries = readNested(teamBucket, weekNum);
@@ -22726,360 +22419,211 @@ export function LuckIndexTab({
       return [];
     };
 
-    const resolveRosterPlayerName = (entry) => {
-      const candidates = [
-        entry?.player?.fullName,
-        entry?.player?.displayName,
-        entry?.player?.name,
-        entry?.name,
-        entry?.fullName,
-        entry?.playerPoolEntry?.player?.fullName,
-        entry?.playerPoolEntry?.player?.displayName,
-        entry?.playerPoolEntry?.player?.name,
-        [entry?.player?.firstName, entry?.player?.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim() || null,
-        [
-          entry?.playerPoolEntry?.player?.firstName,
-          entry?.playerPoolEntry?.player?.lastName,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .trim() || null,
-      ];
-      for (const cand of candidates) {
-        const trimmed = typeof cand === "string" ? cand.trim() : "";
-        if (trimmed) return trimmed;
-      }
-      return null;
+    // weighting (same as console: 1.0–2.0 based on overall pick for that season)
+    const weightOfForSeason = (seasonNum) => {
+      const meta = draftOverallBySeason.get(seasonNum) || { maxOverall: null, pickByPid: new Map() };
+      return (pidRaw) => {
+        const pid = Number(pidRaw);
+        if (!Number.isFinite(pid)) return 1;
+        const overall = meta.pickByPid.get(pid);
+        if (!Number.isFinite(overall)) return 1;
+        const M = meta.maxOverall;
+        if (!Number.isFinite(M) || M <= 0) return 1;
+        const w = ((M + 1 - overall) / M) * 2;
+        return Math.max(1, Math.min(2, w));
+      };
     };
 
-    const resolveByeWeekFromTeam = (team) => {
-      const candidates = [];
-      if (team?.byeWeek != null) candidates.push(team.byeWeek);
-      if (Array.isArray(team?.byeWeeks)) candidates.push(...team.byeWeeks);
-      if (Array.isArray(team?.byeWeekSchedule))
-        candidates.push(...team.byeWeekSchedule);
-      for (const cand of candidates) {
-        const val = Number(cand);
-        if (Number.isFinite(val) && val > 0) {
-          return Math.floor(val);
-        }
-      }
-      return null;
-    };
+    const START_SLOTS = new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]); // same starters used elsewhere
 
-    const resolveEntryProTeamId = (entry, proTeamLookup) => {
-      const abbrevToId = proTeamLookup?.abbrevToId;
-      const candidates = [
-        entry?.proTeamId,
-        entry?.proTeam,
-        entry?.proTeamAbbrev,
-        entry?.nflTeamId,
-        entry?.nflTeam,
-        entry?.player?.proTeamId,
-        entry?.player?.proTeam,
-        entry?.player?.proTeamAbbrev,
-        entry?.player?.nflTeamId,
-        entry?.player?.nflTeam,
-        entry?.playerPoolEntry?.proTeamId,
-        entry?.playerPoolEntry?.proTeam,
-        entry?.playerPoolEntry?.player?.proTeamId,
-        entry?.playerPoolEntry?.player?.proTeam,
-        entry?.playerPoolEntry?.player?.proTeamAbbrev,
-        entry?.playerPoolEntry?.player?.nflTeamId,
-        entry?.playerPoolEntry?.player?.nflTeam,
-      ];
-      for (const cand of candidates) {
-        if (cand == null) continue;
-        const num = Number(cand);
-        if (Number.isFinite(num)) return num;
-        if (typeof cand === "string") {
-          const trimmed = cand.trim();
-          if (!trimmed) continue;
-          const upper = trimmed.toUpperCase();
-          if (abbrevToId && abbrevToId.has(upper)) {
-            return abbrevToId.get(upper);
+    const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn, proLookup) => {
+      const entries = getRosterEntries(seasonNum, teamId, weekNum);
+      if (!Array.isArray(entries) || !entries.length) return { raw: 0, w: 0, players: [] };
+
+      const idToTeam = proLookup?.idToTeam;
+      const abbrevToId = proLookup?.abbrevToId;
+      const byeOfTeam = (proTeamId) => {
+        const t = idToTeam?.get ? (idToTeam.get(proTeamId) || idToTeam.get(String(proTeamId))) :
+                 idToTeam && typeof idToTeam === "object" ? (idToTeam[proTeamId] || idToTeam[String(proTeamId)]) :
+                 null;
+        if (!t) return null;
+        const arr = [];
+        if (t?.byeWeek != null) arr.push(t.byeWeek);
+        if (Array.isArray(t?.byeWeeks)) arr.push(...t.byeWeeks);
+        const bw = arr.map(Number).find((x) => Number.isFinite(x) && x > 0);
+        return Number.isFinite(bw) ? bw : null;
+      };
+
+      let raw = 0;
+      let w = 0;
+      const players = [];
+
+      for (const p of entries) {
+        // starters only
+        const slotId = Number(
+          p?.lineupSlotId ?? p?.slotId ?? p?.slot ?? p?.slotCategoryId ?? 20
+        );
+        if (!START_SLOTS.has(slotId)) continue;
+
+        // pro team id from various fields or abbrev → id
+        const candTeam = [
+          p?.proTeamId, p?.proTeam, p?.nflTeamId, p?.player?.proTeamId, p?.player?.teamId,
+          p?.playerPoolEntry?.player?.proTeamId, p?.playerPoolEntry?.player?.teamId,
+          p?.player?.proTeamAbbrev, p?.playerPoolEntry?.player?.proTeamAbbrev, p?.proTeamAbbrev
+        ];
+        let proId = null;
+        for (const c of candTeam) {
+          const asNum = Number(c);
+          if (Number.isFinite(asNum)) { proId = asNum; break; }
+          if (typeof c === "string" && abbrevToId && abbrevToId.has(c.toUpperCase())) {
+            proId = abbrevToId.get(c.toUpperCase());
+            break;
           }
         }
-      }
-      return null;
-    };
+        if (!Number.isFinite(proId)) continue;
 
-    const countByesForTeamWeek = (
-      seasonNum,
-      teamId,
-      weekNum,
-      weightFn,
-      proTeamLookup,
-      resolveByeWeek
-    ) => {
-      const entries = getRosterEntries(seasonNum, teamId, weekNum);
-      if (!Array.isArray(entries) || !entries.length) {
-        return { count: 0, weighted: 0, players: [] };
-      }
-      const numericWeek = Number(weekNum);
-      if (!Number.isFinite(numericWeek)) {
-        return { count: 0, weighted: 0, players: [] };
-      }
-      let count = 0;
-      let weightedSum = 0;
-      const players = [];
-      for (const entry of entries) {
-        const slotId = Number(
-          entry?.lineupSlotId ??
-            entry?.slotId ??
-            entry?.slot ??
-            entry?.lineupSlot ??
-            entry?.slotCategoryId ??
-            entry?.positionId ??
-            20
-        );
-        if (slotId === 20 || slotId === 21) continue;
-        const proTeamId = resolveEntryProTeamId(entry, proTeamLookup);
-        if (!Number.isFinite(proTeamId)) continue;
-        const byeWeek = resolveByeWeek(proTeamId);
-        if (!Number.isFinite(byeWeek) || Number(byeWeek) !== numericWeek) continue;
-        count += 1;
+        const bw = byeOfTeam(proId);
+        if (!Number.isFinite(bw) || Number(bw) !== Number(weekNum)) continue;
+
+        raw += 1;
         const pid = Number(
-          entry?.pid ??
-            entry?.playerId ??
-            entry?.player?.id ??
-            entry?.player?.playerId ??
-            entry?.playerPoolEntry?.player?.id ??
-            entry?.playerPoolEntry?.player?.playerId
+          p?.pid ?? p?.playerId ?? p?.player?.id ?? p?.playerPoolEntry?.player?.id
         );
-        const weight = weightFn(pid);
-        weightedSum += weight;
-        const name = resolveRosterPlayerName(entry);
+        w += weightFn(pid);
+        const name =
+          p?.player?.fullName ||
+          p?.name ||
+          p?.playerPoolEntry?.player?.fullName ||
+          [p?.player?.firstName, p?.player?.lastName].filter(Boolean).join(" ").trim() ||
+          null;
         if (name) players.push(name);
       }
-      return {
-        count,
-        weighted: Number(weightedSum.toFixed(6)),
-        players,
-      };
+
+      return { raw, w: Number(w.toFixed(6)), players };
     };
 
-    ownerMapsBySeason.forEach((ownerMap, seasonNum) => {
-      const weekMap = scheduleBySeason.get(seasonNum);
-      if (!weekMap || !weekMap.size) return;
-      const weekNums = Array.from(weekMap.keys())
-        .map((w) => Number(w))
-        .filter((w) => Number.isFinite(w) && w > 0)
-        .sort((a, b) => a - b);
+    // walk each season in the schedule we built
+    scheduleBySeason.forEach((weekMap, seasonNum) => {
+      const weekNums = Array.from(weekMap.keys()).map(Number).filter((n) => n > 0).sort((a,b)=>a-b);
       if (!weekNums.length) return;
 
-      let maxWeekLimit = weekNums[weekNums.length - 1];
-      const currentWeekCandidates = [
-        get(league, "espnCurrentWeekBySeason", seasonNum),
-        get(league, "espnCurrentWeekBySeason", String(seasonNum)),
-        get(league, "currentWeekBySeason", seasonNum),
-        get(league, "currentWeekBySeason", String(seasonNum)),
-        get(league, "currentWeekByYear", seasonNum),
-        get(league, "currentWeekByYear", String(seasonNum)),
-      ];
-      let explicitCurrentWeek = null;
-      currentWeekCandidates.forEach((cand) => {
-        const val = Number(cand);
-        if (!Number.isFinite(val) || val <= 0) return;
-        const floored = Math.floor(val);
-        if (!Number.isFinite(explicitCurrentWeek)) {
-          explicitCurrentWeek = floored;
-        } else {
-          explicitCurrentWeek = Math.min(explicitCurrentWeek, floored);
-        }
-      });
-      if (Number.isFinite(explicitCurrentWeek) && explicitCurrentWeek > 0) {
-        maxWeekLimit = Math.min(maxWeekLimit, explicitCurrentWeek);
-      } else {
-        const exclusive = resolveCurrentWeekExclusive(seasonNum);
-        if (Number.isFinite(exclusive) && exclusive > 0) {
-          maxWeekLimit = Math.min(maxWeekLimit, exclusive - 1);
-        }
-      }
-      if (!Number.isFinite(maxWeekLimit) || maxWeekLimit <= 0) return;
-      const activeWeeks = weekNums.filter((wk) => wk <= maxWeekLimit);
+      // use same cutoff rule as console (completed weeks only)
+      let exclusive = resolveCurrentWeekExclusive(seasonNum);
+      // resolveCurrentWeekExclusive returns the first *future* week; treat active weeks as < exclusive
+      const activeWeeks = weekNums.filter((w) => !Number.isFinite(exclusive) || exclusive <= 0 ? true : w < exclusive);
       if (!activeWeeks.length) return;
 
-      const draftMeta = draftOverallBySeason.get(seasonNum) || {
-        maxOverall: null,
-        pickByPid: new Map(),
-      };
-      const weightFn = (pid) => {
-        if (!Number.isFinite(pid)) return 1;
-        const overall = draftMeta.pickByPid.get(Number(pid));
-        if (!Number.isFinite(overall)) return 1;
-        if (!Number.isFinite(draftMeta.maxOverall) || draftMeta.maxOverall <= 0)
-          return 1;
-        const weight =
-          ((draftMeta.maxOverall + 1 - overall) / draftMeta.maxOverall) * 2;
-        return Math.max(1, Math.min(2, weight));
-      };
+      const weightFn = weightOfForSeason(seasonNum);
+      const proLookup = getProTeamLookup(seasonNum) || {};
 
-      const proTeamLookup = getProTeamLookup(seasonNum) || {};
-      const resolveByeWeek = (proTeamId) => {
-        const pid = Number(proTeamId);
-        if (!Number.isFinite(pid)) return null;
-        const idToTeam = proTeamLookup?.idToTeam;
-        let team = null;
-        if (idToTeam && typeof idToTeam.get === "function") {
-          team = idToTeam.get(pid);
-          if (!team) team = idToTeam.get(String(proTeamId));
-        } else if (idToTeam && typeof idToTeam === "object") {
-          team = idToTeam?.[pid] ?? idToTeam?.[String(proTeamId)];
+      // aggregate buckets ownerKey → seasonNum
+      const seasonTotals = new Map();   // ownerKey -> { ownRaw, oppRaw, ownW, oppW, detail[], weeks:Set }
+      const ensureOwnerSeason = (teamId) => {
+        const key = ownerKeyOf(seasonNum, teamId);
+        if (!key || isHiddenManager(key)) return null;
+        if (!seasonTotals.has(key)) {
+          const disp = ownerDisplayOf(seasonNum, teamId, key);
+          displayByOwner[key] = disp; // remember pretty name
+          seasonTotals.set(key, {
+            ownerKey: key,
+            teamId,
+            teamName: null,
+            ownRaw: 0,
+            oppRaw: 0,
+            ownW: 0,
+            oppW: 0,
+            weeks: new Set(),
+            detail: [],
+          });
         }
-        if (!team) return null;
-        return resolveByeWeekFromTeam(team);
+        return seasonTotals.get(key);
       };
 
-      activeWeeks.forEach((weekNum) => {
-        const matches = weekMap.get(weekNum) || [];
-        matches.forEach((match) => {
-          const ownerAKey = match?.ownerAKey;
-          const ownerBKey = match?.ownerBKey;
-          if (!ownerAKey || !ownerBKey) return;
-          if (isHiddenManager(ownerAKey) || isHiddenManager(ownerBKey)) return;
+      activeWeeks.forEach((wk) => {
+        const games = weekMap.get(wk) || [];
+        for (const g of games) {
+          const A = ensureOwnerSeason(g.home);
+          const B = ensureOwnerSeason(g.away);
+          if (!A || !B) continue;
 
-          const teamNameA = resolveTeamNameFor(
-            ownerAKey,
-            seasonNum,
-            match?.teamA
-          );
-          const teamNameB = resolveTeamNameFor(
-            ownerBKey,
-            seasonNum,
-            match?.teamB
-          );
-          const seasonA = ensureOwnerSeason(ownerAKey, seasonNum, {
-            teamId: match?.teamA,
-            ownerDisplay: match?.ownerADisplay,
-            teamName: teamNameA,
-          });
-          const seasonB = ensureOwnerSeason(ownerBKey, seasonNum, {
-            teamId: match?.teamB,
-            ownerDisplay: match?.ownerBDisplay,
-            teamName: teamNameB,
-          });
+          const aC = countByesForTeamWeek(seasonNum, g.home, wk, weightFn, proLookup);
+          const bC = countByesForTeamWeek(seasonNum, g.away, wk, weightFn, proLookup);
 
-          const countsA = countByesForTeamWeek(
-            seasonNum,
-            match?.teamA,
-            weekNum,
-            weightFn,
-            proTeamLookup,
-            resolveByeWeek
-          );
-          const countsB = countByesForTeamWeek(
-            seasonNum,
-            match?.teamB,
-            weekNum,
-            weightFn,
-            proTeamLookup,
-            resolveByeWeek
-          );
+          A.ownRaw += aC.raw; A.ownW += aC.w; A.oppRaw += bC.raw; A.oppW += bC.w; A.weeks.add(wk);
+          B.ownRaw += bC.raw; B.ownW += bC.w; B.oppRaw += aC.raw; B.oppW += aC.w; B.weeks.add(wk);
 
-          seasonA.ownRaw += countsA.count;
-          seasonA.oppRaw += countsB.count;
-          seasonA.ownWeighted += countsA.weighted;
-          seasonA.oppWeighted += countsB.weighted;
-          seasonA.weeks.add(weekNum);
-          seasonA.detail.push({
-            week: weekNum,
-            opponent: match?.ownerBDisplay || ownerBKey,
-            opponentKey: ownerBKey,
-            ownCount: countsA.count,
-            oppCount: countsB.count,
-            ownPlayers: countsA.players,
-            oppPlayers: countsB.players,
-            ownWeighted: countsA.weighted,
-            oppWeighted: countsB.weighted,
-            diff: countsA.count - countsB.count,
-            diffWeighted: countsA.weighted - countsB.weighted,
-          });
+          const oppDispA = displayByOwner[B.ownerKey] || B.ownerKey;
+          const oppDispB = displayByOwner[A.ownerKey] || A.ownerKey;
 
-          seasonB.ownRaw += countsB.count;
-          seasonB.oppRaw += countsA.count;
-          seasonB.ownWeighted += countsB.weighted;
-          seasonB.oppWeighted += countsA.weighted;
-          seasonB.weeks.add(weekNum);
-          seasonB.detail.push({
-            week: weekNum,
-            opponent: match?.ownerADisplay || ownerAKey,
-            opponentKey: ownerAKey,
-            ownCount: countsB.count,
-            oppCount: countsA.count,
-            ownPlayers: countsB.players,
-            oppPlayers: countsA.players,
-            ownWeighted: countsB.weighted,
-            oppWeighted: countsA.weighted,
-            diff: countsB.count - countsA.count,
-            diffWeighted: countsB.weighted - countsA.weighted,
+          A.detail.push({
+            week: wk,
+            opponent: oppDispA,
+            opponentKey: B.ownerKey,
+            ownCount: aC.raw,
+            oppCount: bC.raw,
+            ownWeighted: aC.w,
+            oppWeighted: bC.w,
+            ownPlayers: aC.players,
+            oppPlayers: bC.players,
+            diff: aC.raw - bC.raw,
+            diffWeighted: aC.w - bC.w,
           });
-        });
+          B.detail.push({
+            week: wk,
+            opponent: oppDispB,
+            opponentKey: A.ownerKey,
+            ownCount: bC.raw,
+            oppCount: aC.raw,
+            ownWeighted: bC.w,
+            oppWeighted: aC.w,
+            ownPlayers: bC.players,
+            oppPlayers: aC.players,
+            diff: bC.raw - aC.raw,
+            diffWeighted: bC.w - aC.w,
+          });
+        }
       });
-    });
 
-    ownerSeasonData.forEach((ownerEntry, ownerKey) => {
-      const { displayName, seasons } = ownerEntry;
-      seasons.forEach((seasonEntry, seasonNum) => {
-        const weeksCounted = seasonEntry.weeks.size;
-        const netRaw = seasonEntry.ownRaw - seasonEntry.oppRaw;
-        const netWeighted =
-          Number((seasonEntry.ownWeighted - seasonEntry.oppWeighted).toFixed(6));
+      // write out totals/summary by owner for this season
+      seasonTotals.forEach((entry, ownerKey) => {
+        const net = entry.ownRaw - entry.oppRaw;
+        const netW = Number((entry.ownW - entry.oppW).toFixed(6));
         rawTotals[ownerKey] ??= {};
-        rawTotals[ownerKey][seasonNum] = netRaw;
         weightedTotals[ownerKey] ??= {};
-        weightedTotals[ownerKey][seasonNum] = netWeighted;
-        if (seasonEntry.detail.length) {
-          details[ownerKey] ??= {};
-          details[ownerKey][seasonNum] = seasonEntry.detail;
-        }
+        details[ownerKey] ??= {};
         summary[ownerKey] ??= {};
+
+        rawTotals[ownerKey][seasonNum] = net;
+        weightedTotals[ownerKey][seasonNum] = netW;
+        details[ownerKey][seasonNum] = entry.detail;
         summary[ownerKey][seasonNum] = {
-          owner: displayName,
-          teamId: seasonEntry.teamId,
-          teamName:
-            seasonEntry.teamName ||
-            resolveTeamNameFor(ownerKey, seasonNum, seasonEntry.teamId),
-          weeksCounted,
-          yourByes: seasonEntry.ownRaw,
-          oppByes: seasonEntry.oppRaw,
-          net: netRaw,
-          yourByesWeighted: Number(seasonEntry.ownWeighted.toFixed(6)),
-          oppByesWeighted: Number(seasonEntry.oppWeighted.toFixed(6)),
-          netWeighted,
+          owner: displayByOwner[ownerKey] || ownerKey,
+          teamId: entry.teamId,
+          teamName: entry.teamName || null,
+          weeksCounted: entry.weeks.size,
+          yourByes: entry.ownRaw,
+          oppByes: entry.oppRaw,
+          net,
+          yourByesWeighted: Number(entry.ownW.toFixed(6)),
+          oppByesWeighted: Number(entry.oppW.toFixed(6)),
+          netWeighted: netW,
         };
       });
     });
 
-    const displayByOwner = {};
-    ownerSeasonData.forEach((entry, ownerKey) => {
-      const display = entry?.displayName;
-      if (display) displayByOwner[ownerKey] = display;
-    });
-
     return { rawTotals, weightedTotals, details, summary, displayByOwner };
   }, [
-    rawRows,
     league,
-    league?.rows,
-    league?.ownersByTeamByYear,
-    league?.espnOwnerByTeamByYear,
-    league?.espnOwnerFullByTeamByYear,
-    league?.espnTeamNamesByOwner,
-    canonOwner,
-    canonicalizeOwner,
+    rawRows,
+    rostersByYear,
     isHiddenManager,
     ownerNameOf,
+    canonOwner,
+    getProTeamLookup,
     resolveCurrentWeekExclusive,
     draftOverallBySeason,
-    managerBySeasonTeam,
-    readOwnerNameValue,
-    rostersByYear,
-    getProTeamLookup,
   ]);
+
   const comp5TotalsSource = isByeWeightedView
     ? comp5Data.weightedTotals
     : comp5Data.rawTotals;
