@@ -11711,7 +11711,8 @@ export function TradesTab({
         const normalized = normalizeOwnerNameLoose(str);
         if (normalized) return normalized;
       }
-      return str;
+      const canonical = canonicalizeOwner(str);
+      return canonical || str;
     },
     [normalizeOwnerNameLoose]
   );
@@ -22840,12 +22841,15 @@ function isStarterSlot(slotId) {
     : comp5Data.rawTotals;
   const comp5SummaryByOwnerYear = comp5Data.summary || {};
   const ownerDisplayMap = comp5Data.displayByOwner || {};
-    const ownerDisplay = React.useCallback(
+  const ownerDisplay = React.useCallback(
     (ownerKey) => {
       if (!ownerKey) return "—";
-      return ownerDisplayMap[ownerKey] || ownerKey;
+      const canonicalKey = canonOwner(ownerKey) || ownerKey;
+      const pretty = ownerDisplayMap[canonicalKey];
+      if (pretty && String(pretty).trim()) return String(pretty).trim();
+      return canonicalizeOwner(canonicalKey) || canonicalKey;
     },
-    [ownerDisplayMap]
+    [canonOwner, ownerDisplayMap]
   );
   const normalizeOwnerYearTotals = React.useCallback((data, options = {}) => {
     const { invert = false, transform = null, clampToZero = false } = options;
