@@ -22420,37 +22420,42 @@ export function LuckIndexTab({
     };
 
     // weighting (same as console: 1.0–2.0 based on overall pick for that season)
-    const weightOfForSeason = (seasonNum) => {
-      const meta = draftOverallBySeason.get(seasonNum) || { maxOverall: null, pickByPid: new Map() };
+       const weightOfForSeason = (seasonNum) => {
+      const draftRows = Array.isArray(league?.draftByYear?.[seasonNum]) ? league.draftByYear[seasonNum] : [];
+      const pickByPid = new Map();
+      let maxOverall = 0;
+
+      for (const r of draftRows) {
+        const pid = Number(r?.pid ?? r?.playerId ?? r?.player?.id);
+        const overall = Number(r?.overallPick ?? r?.pickOverall ?? r?.pick ?? r?.selection ?? r?.slot);
+        if (Number.isFinite(pid) && Number.isFinite(overall) && overall > 0) {
+          if (!pickByPid.has(pid) || overall < pickByPid.get(pid)) pickByPid.set(pid, overall);
+          if (overall > maxOverall) maxOverall = overall;
+        }
+      }
+
       return (pidRaw) => {
         const pid = Number(pidRaw);
         if (!Number.isFinite(pid)) return 1;
-        const overall = meta.pickByPid.get(pid);
-        if (!Number.isFinite(overall)) return 1;
-        const M = meta.maxOverall;
-        if (!Number.isFinite(M) || M <= 0) return 1;
-        const w = ((M + 1 - overall) / M) * 2;
+        const ov = pickByPid.get(pid);
+        if (!Number.isFinite(ov) || !maxOverall) return 1;
+        const w = ((maxOverall + 1 - ov) / maxOverall) * 2; // 1.0–2.0
         return Math.max(1, Math.min(2, w));
       };
     };
 
-    const START_SLOTS = new Set([0, 2, 3, 4, 5, 6, 7, 16, 17, 23]); // same starters used elsewhere
+    function isStarterSlot(slotId) {
+      return !(slotId === 20 || slotId === 21); // BN=20, IR=21; everything else counts (same as console)
+    }
 
-    const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn, proLookup) => {
+    const countByesForTeamWeek = (seasonNum, teamId, weekNum, weightFn) => {
       const entries = getRosterEntries(seasonNum, teamId, weekNum);
       if (!Array.isArray(entries) || !entries.length) return { raw: 0, w: 0, players: [] };
 
-      const idToTeam = proLookup?.idToTeam;
-      const abbrevToId = proLookup?.abbrevToId;
+      const proTeams = league?.espnProTeamsByYear?.[seasonNum] || {};
       const byeOfTeam = (proTeamId) => {
-        const t = idToTeam?.get ? (idToTeam.get(proTeamId) || idToTeam.get(String(proTeamId))) :
-                 idToTeam && typeof idToTeam === "object" ? (idToTeam[proTeamId] || idToTeam[String(proTeamId)]) :
-                 null;
-        if (!t) return null;
-        const arr = [];
-        if (t?.byeWeek != null) arr.push(t.byeWeek);
-        if (Array.isArray(t?.byeWeeks)) arr.push(...t.byeWeeks);
-        const bw = arr.map(Number).find((x) => Number.isFinite(x) && x > 0);
+        const t = proTeams?.[proTeamId];
+        const bw = Number(t?.byeWeek);
         return Number.isFinite(bw) ? bw : null;
       };
 
@@ -22459,40 +22464,31 @@ export function LuckIndexTab({
       const players = [];
 
       for (const p of entries) {
-        // starters only
-        const slotId = Number(
-          p?.lineupSlotId ?? p?.slotId ?? p?.slot ?? p?.slotCategoryId ?? 20
-        );
-        if (!START_SLOTS.has(slotId)) continue;
+        const slotId = Number(p?.lineupSlotId ?? p?.slotId ?? p?.slot ?? 20);
+        if (!isStarterSlot(slotId)) continue;
 
-        // pro team id from various fields or abbrev → id
-        const candTeam = [
-          p?.proTeamId, p?.proTeam, p?.nflTeamId, p?.player?.proTeamId, p?.player?.teamId,
-          p?.playerPoolEntry?.player?.proTeamId, p?.playerPoolEntry?.player?.teamId,
-          p?.player?.proTeamAbbrev, p?.playerPoolEntry?.player?.proTeamAbbrev, p?.proTeamAbbrev
-        ];
-        let proId = null;
-        for (const c of candTeam) {
-          const asNum = Number(c);
-          if (Number.isFinite(asNum)) { proId = asNum; break; }
-          if (typeof c === "string" && abbrevToId && abbrevToId.has(c.toUpperCase())) {
-            proId = abbrevToId.get(c.toUpperCase());
-            break;
-          }
-        }
+        const proId = Number(
+          p?.proTeamId ??
+          p?.proTeam ??
+          p?.nflTeamId ??
+          p?.player?.proTeamId ??
+          p?.playerPoolEntry?.player?.proTeamId
+        );
         if (!Number.isFinite(proId)) continue;
 
         const bw = byeOfTeam(proId);
-        if (!Number.isFinite(bw) || Number(bw) !== Number(weekNum)) continue;
+        if (!Number.isFinite(bw) || bw !== Number(weekNum)) continue;
 
         raw += 1;
+
         const pid = Number(
           p?.pid ?? p?.playerId ?? p?.player?.id ?? p?.playerPoolEntry?.player?.id
         );
         w += weightFn(pid);
+
         const name =
-          p?.player?.fullName ||
           p?.name ||
+          p?.player?.fullName ||
           p?.playerPoolEntry?.player?.fullName ||
           [p?.player?.firstName, p?.player?.lastName].filter(Boolean).join(" ").trim() ||
           null;
