@@ -21478,6 +21478,137 @@ export function LuckIndexTab({
 
     return map;
   }, [draftByYear]);
+  const draftOverallBySeason = React.useMemo(() => {
+    const map = new Map();
+    for (const [seasonKey, picks] of Object.entries(draftByYear || {})) {
+      const seasonNum = Number(seasonKey);
+      if (!Number.isFinite(seasonNum)) continue;
+      let maxOverall = 0;
+      const pickByPid = new Map();
+      for (const pick of picks || []) {
+        const pid = Number(
+          pick?.playerId ??
+            pick?.pid ??
+            pick?.player?.id ??
+            pick?.player?.playerId
+        );
+        const overall = Number(
+          pick?.overall ??
+            pick?.overallPick ??
+            pick?.pick ??
+            pick?.pickNumber ??
+            pick?.overallSelection ??
+            pick?.overall_index ??
+            pick?.slot ??
+            pick?.selection
+        );
+        if (!Number.isFinite(pid) || !Number.isFinite(overall) || overall <= 0)
+          continue;
+        if (!pickByPid.has(pid) || overall < pickByPid.get(pid)) {
+          pickByPid.set(pid, overall);
+        }
+        if (overall > maxOverall) maxOverall = overall;
+      }
+      map.set(seasonNum, {
+        maxOverall: maxOverall > 0 ? maxOverall : null,
+        pickByPid,
+      });
+    }
+    return map;
+  }, [draftByYear]);
+  const DRAFT_WEIGHT_MAX = 1;
+  const DRAFT_WEIGHT_MIN = 0.1;
+  const getDraftWeightInfo = React.useCallback(
+    (season, pid) => {
+      const seasonNum = Number(season);
+      const pidNum = Number(pid);
+      const fallback = {
+        round: null,
+        overall: null,
+        weight: DRAFT_WEIGHT_MIN,
+        weightSource: "undrafted",
+      };
+      if (!Number.isFinite(seasonNum)) {
+        return fallback;
+      }
+      const meta = draftIndexByYear.get(seasonNum);
+      const overallMeta = draftOverallBySeason.get(seasonNum);
+      const pidMap = meta?.pidMap;
+      const pickByPid = overallMeta?.pickByPid;
+      const info =
+        Number.isFinite(pidNum) && pidMap instanceof Map
+          ? pidMap.get(pidNum)
+          : null;
+      const round =
+        info && Number.isFinite(info.round) && info.round > 0
+          ? Number(info.round)
+          : null;
+      let storedOverall =
+        info && Number.isFinite(info.overall) && info.overall > 0
+          ? Number(info.overall)
+          : null;
+      if (storedOverall == null && Number.isFinite(pidNum) && pickByPid) {
+        const lookup = pickByPid.get(pidNum);
+        if (Number.isFinite(lookup) && lookup > 0) {
+          storedOverall = Number(lookup);
+        }
+      }
+      const maxRound =
+        meta && Number.isFinite(meta.maxRound) && meta.maxRound > 0
+          ? Number(meta.maxRound)
+          : null;
+      const maxOverall =
+        overallMeta && Number.isFinite(overallMeta.maxOverall)
+          ? Number(overallMeta.maxOverall)
+          : null;
+      const picksPerRound =
+        maxRound && maxOverall
+          ? Math.max(1, Math.round(maxOverall / maxRound))
+          : null;
+      let effectiveOverall = storedOverall;
+      if (effectiveOverall == null && round != null && picksPerRound != null) {
+        effectiveOverall =
+          (round - 1) * picksPerRound + Math.ceil(picksPerRound / 2);
+      }
+      if (effectiveOverall == null && maxOverall != null) {
+        effectiveOverall = maxOverall;
+      }
+      let effectiveMax = maxOverall;
+      if (effectiveMax == null && effectiveOverall != null) {
+        effectiveMax = effectiveOverall;
+      }
+      let weight = DRAFT_WEIGHT_MAX;
+      if (
+        effectiveOverall != null &&
+        effectiveMax != null &&
+        effectiveMax > 0
+      ) {
+        const clampedOverall = Math.max(
+          1,
+          Math.min(effectiveOverall, effectiveMax)
+        );
+        const denom = Math.max(1, effectiveMax - 1);
+        const ratio = denom === 0 ? 0 : (clampedOverall - 1) / denom;
+        weight =
+          DRAFT_WEIGHT_MAX -
+          ratio * (DRAFT_WEIGHT_MAX - DRAFT_WEIGHT_MIN);
+      }
+      weight = Math.max(DRAFT_WEIGHT_MIN, Math.min(DRAFT_WEIGHT_MAX, weight));
+      const source =
+        storedOverall != null
+          ? "draft-overall"
+          : round != null
+          ? "draft-round"
+          : "undrafted";
+      return {
+        round,
+        overall: storedOverall != null ? Math.round(storedOverall) : null,
+        weight,
+        weightSource: source,
+      };
+    },
+    [draftIndexByYear, draftOverallBySeason]
+  );
 
   const comp1Data = React.useMemo(() => {
     const totals = {};
@@ -21956,32 +22087,10 @@ export function LuckIndexTab({
   const injuryDetailByOwnerYear = comp2Data.details;
   const rosterMetaByOwnerSeasonWeek = comp2Data.rosterMeta || {};
   const [injuryViewMode, setInjuryViewMode] = React.useState("raw");
-  const [injuryWeightAlpha, setInjuryWeightAlpha] = React.useState(1);
-  const [injuryWaiverRound, setInjuryWaiverRound] = React.useState(12);
   const [byeViewMode, setByeViewMode] = React.useState("raw");
   const [showLuckMethodology, setShowLuckMethodology] = React.useState(false);
   const isWeightedView = injuryViewMode === "weighted";
   const isByeWeightedView = byeViewMode === "weighted";
-  const normalizedWaiverRound = React.useMemo(
-    () =>
-      Math.max(
-        1,
-        Math.round(Number.isFinite(injuryWaiverRound) ? injuryWaiverRound : 12)
-      ),
-    [injuryWaiverRound]
-  );
-  const getBaseRoundForSeason = React.useCallback(
-    (season) => {
-      const seasonNum = Number(season);
-      const meta = draftIndexByYear.get(seasonNum);
-      const maxRound =
-        meta && Number.isFinite(meta.maxRound) && meta.maxRound > 0
-          ? Math.round(meta.maxRound)
-          : null;
-      return Math.max(1, normalizedWaiverRound, maxRound ?? 0);
-    },
-    [draftIndexByYear, normalizedWaiverRound]
-  );
   const injuryWeightedByOwnerYear = React.useMemo(() => {
     const totals = {};
     const details = {};
@@ -21991,38 +22100,19 @@ export function LuckIndexTab({
     )) {
       for (const [seasonKey, rows] of Object.entries(seasons || {})) {
         const seasonNum = Number(seasonKey);
-        const meta = draftIndexByYear.get(seasonNum);
-        const baseRound = getBaseRoundForSeason(seasonNum);
+        if (!Number.isFinite(seasonNum)) continue;
         let sum = 0;
         const detailRows = (rows || []).map((row) => {
-          const pid = Number(row?.pid);
-          const info =
-            Number.isFinite(pid) && meta?.pidMap ? meta.pidMap.get(pid) : null;
-          const draftedRound =
-            info && Number.isFinite(info.round) && info.round > 0
-              ? Number(info.round)
-              : null;
-          const draftedOverall =
-            info && Number.isFinite(info.overall) && info.overall > 0
-              ? Number(info.overall)
-              : null;
-          const fallbackRound =
-            draftedRound != null ? draftedRound : normalizedWaiverRound;
-          const roundClamped = Math.min(
-            Math.max(1, Math.round(fallbackRound)),
-            baseRound
-          );
-          const base = baseRound + 1 - roundClamped;
-          const weight = Math.pow(base, injuryWeightAlpha);
+          const weightInfo = getDraftWeightInfo(seasonNum, row?.pid);
+          const weight = weightInfo.weight;
           sum += weight;
           return {
             ...row,
-            draftRound: draftedRound,
-            draftOverall: draftedOverall,
+            draftRound: weightInfo.round,
+            draftOverall: weightInfo.overall,
             weight,
-            weightRound: roundClamped,
-            weightBaseRound: baseRound,
-            weightSource: draftedRound != null ? "draft" : "waiver",
+            rawValue: 1,
+            weightSource: weightInfo.weightSource,
           };
         });
 
@@ -22034,13 +22124,7 @@ export function LuckIndexTab({
     }
 
     return { totals, details };
-  }, [
-    injuryDetailByOwnerYear,
-    draftIndexByYear,
-    getBaseRoundForSeason,
-    injuryWeightAlpha,
-    normalizedWaiverRound,
-  ]);
+  }, [injuryDetailByOwnerYear, getDraftWeightInfo]);
   const injuryDetailByOwnerSeasonWeek = React.useMemo(() => {
     const map = {};
     for (const [owner, seasons] of Object.entries(
@@ -22146,12 +22230,14 @@ export function LuckIndexTab({
   ]);
   const comp3Data = React.useMemo(() => {
     const totals = {};
+    const weightedTotals = {};
     const details = {};
 
     for (const [owner, seasonsMap] of Object.entries(
       scheduleByOwnerSeason || {}
     )) {
       const ownerTotals = {};
+      const ownerWeightedTotals = {};
       const ownerDetails = {};
 
       for (const [seasonKey, scheduleRows] of Object.entries(
@@ -22159,7 +22245,8 @@ export function LuckIndexTab({
       )) {
         const seasonNum = Number(seasonKey);
         if (!Number.isFinite(seasonNum)) continue;
-        let sum = 0;
+        let sumRaw = 0;
+        let sumWeighted = 0;
         const rows = [];
 
         for (const entry of scheduleRows || []) {
@@ -22171,32 +22258,50 @@ export function LuckIndexTab({
             injuryDetailByOwnerSeasonWeek?.[opponentKey]?.[seasonNum]?.[
               weekNum
             ] || [];
-          const count = injuries.length;
-          if (count > 0) {
-            sum += count;
-            rows.push({
-              week: weekNum,
-              opponent: entry?.opponentDisplay || opponentKey,
-              opponentKey,
-              count,
-              players: injuries.map((row) => ({
-                player: row?.player,
-                slot: row?.slot,
-              })),
+          if (!injuries.length) continue;
+          const players = [];
+          let weightedCount = 0;
+          injuries.forEach((row) => {
+            const weightInfo = getDraftWeightInfo(seasonNum, row?.pid);
+            weightedCount += weightInfo.weight;
+            players.push({
+              player: row?.player,
+              slot: row?.slot,
+              weight: weightInfo.weight,
+              draftRound: weightInfo.round,
+              draftOverall: weightInfo.overall,
             });
-          }
+          });
+          const count = injuries.length;
+          sumRaw += count;
+          sumWeighted += weightedCount;
+          rows.push({
+            week: weekNum,
+            opponent: entry?.opponentDisplay || opponentKey,
+            opponentKey,
+            count,
+            weightedCount,
+            players,
+          });
         }
 
-        ownerTotals[seasonNum] = sum;
+        ownerTotals[seasonNum] = sumRaw;
+        ownerWeightedTotals[seasonNum] = sumWeighted;
         ownerDetails[seasonNum] = rows;
       }
 
       if (Object.keys(ownerTotals).length) totals[owner] = ownerTotals;
+      if (Object.keys(ownerWeightedTotals).length)
+        weightedTotals[owner] = ownerWeightedTotals;
       if (Object.keys(ownerDetails).length) details[owner] = ownerDetails;
     }
 
-    return { totals, details };
-  }, [scheduleByOwnerSeason, injuryDetailByOwnerSeasonWeek]);
+    return { totals, weightedTotals, details };
+  }, [
+    scheduleByOwnerSeason,
+    injuryDetailByOwnerSeasonWeek,
+    getDraftWeightInfo,
+  ]);
   const injuriesBySeasonWeekTeamPos = React.useMemo(() => {
     const out = {};
     for (const [owner, seasonsMap] of Object.entries(
@@ -22274,6 +22379,7 @@ export function LuckIndexTab({
   }, [rosterMetaByOwnerSeasonWeek, isHiddenManager]);
   const comp4Data = React.useMemo(() => {
     const totals = {};
+    const weightedTotals = {};
     const details = {};
     const seenPairs = new Set();
 
@@ -22340,12 +22446,18 @@ export function LuckIndexTab({
                 const cmp = compareDraft(injuredDraft, draftInfo);
                 if (cmp == null) return;
 
-                let credit;
-                if (cmp < 0) credit = 1;
-                else if (cmp > 0) credit = 0.5;
-                else credit = 0.5;
-
-                if (!credit) return;
+                const injuredWeightInfo = getDraftWeightInfo(
+                  seasonNum,
+                  injury.pid
+                );
+                const benefitingWeightInfo = getDraftWeightInfo(
+                  seasonNum,
+                  candidate.pid
+                );
+                const rawCredit = cmp < 0 ? 1 : 0.5;
+                const weightedCredit =
+                  injuredWeightInfo.weight * (cmp < 0 ? 1 : 0.5);
+                if (!(rawCredit > 0)) return;
                 const owner = candidate.owner;
                 if (!owner || isHiddenManager(owner)) return;
 
@@ -22355,7 +22467,11 @@ export function LuckIndexTab({
 
                 totals[owner] ??= {};
                 totals[owner][seasonNum] =
-                  (totals[owner][seasonNum] || 0) + credit;
+                  (totals[owner][seasonNum] || 0) + rawCredit;
+
+                weightedTotals[owner] ??= {};
+                weightedTotals[owner][seasonNum] =
+                  (weightedTotals[owner][seasonNum] || 0) + weightedCredit;
 
                 details[owner] ??= {};
                 details[owner][seasonNum] ??= [];
@@ -22364,9 +22480,14 @@ export function LuckIndexTab({
                   player: candidate.player,
                   injuredPlayer: injury.player,
                   injuredOwner: injury.owner,
-                  credit,
+                  credit: rawCredit,
+                  weightedCredit,
                   injuredDraftRound: injuredDraft.round,
                   benefitingDraftRound: draftInfo.round,
+                  injuredDraftOverall: injuredDraft.overall,
+                  benefitingDraftOverall: draftInfo.overall,
+                  injuredWeight: injuredWeightInfo.weight,
+                  benefitingWeight: benefitingWeightInfo.weight,
                 });
               });
             });
@@ -22375,51 +22496,14 @@ export function LuckIndexTab({
       }
     }
 
-    return { totals, details };
+    return { totals, weightedTotals, details };
   }, [
     injuriesBySeasonWeekTeamPos,
     rosterIndexBySeasonWeek,
     draftIndexByYear,
+    getDraftWeightInfo,
     isHiddenManager,
   ]);
-  const draftOverallBySeason = React.useMemo(() => {
-    const map = new Map();
-    for (const [seasonKey, picks] of Object.entries(draftByYear || {})) {
-      const seasonNum = Number(seasonKey);
-      if (!Number.isFinite(seasonNum)) continue;
-      let maxOverall = 0;
-      const pickByPid = new Map();
-      for (const pick of picks || []) {
-        const pid = Number(
-          pick?.playerId ??
-            pick?.pid ??
-            pick?.player?.id ??
-            pick?.player?.playerId
-        );
-        const overall = Number(
-          pick?.overall ??
-            pick?.overallPick ??
-            pick?.pick ??
-            pick?.pickNumber ??
-            pick?.overallSelection ??
-            pick?.overall_index ??
-            pick?.slot ??
-            pick?.selection
-        );
-        if (!Number.isFinite(pid) || !Number.isFinite(overall) || overall <= 0)
-          continue;
-        if (!pickByPid.has(pid) || overall < pickByPid.get(pid)) {
-          pickByPid.set(pid, overall);
-        }
-        if (overall > maxOverall) maxOverall = overall;
-      }
-      map.set(seasonNum, {
-        maxOverall: maxOverall > 0 ? maxOverall : null,
-        pickByPid,
-      });
-    }
-    return map;
-  }, [draftByYear]);
    const comp5Data = React.useMemo(() => {
     // ===== outputs expected by the UI =====
     const rawTotals = {};
@@ -23646,6 +23730,12 @@ function isStarterSlot(slotId) {
   const injuryDetailSource = isWeightedView
     ? injuryWeightedByOwnerYear.details
     : injuryDetailByOwnerYear;
+  const comp3TotalsSource = isWeightedView
+    ? comp3Data.weightedTotals
+    : comp3Data.totals;
+  const comp4TotalsSource = isWeightedView
+    ? comp4Data.weightedTotals
+    : comp4Data.totals;
   const comp2RawRowsForDetail =
     comp2Detail?.owner != null && comp2Detail?.season != null
       ? injuryDetailByOwnerYear?.[comp2Detail.owner]?.[comp2Detail.season] || []
@@ -23656,9 +23746,13 @@ function isStarterSlot(slotId) {
           comp2Detail.season
         ] || []
       : [];
-  const comp2DetailRows = isWeightedView
-    ? comp2WeightedRowsForDetail
-    : comp2RawRowsForDetail;
+  const comp2DetailRows =
+    comp2WeightedRowsForDetail.length > 0
+      ? comp2WeightedRowsForDetail
+      : comp2RawRowsForDetail.map((row) => ({
+          ...row,
+          rawValue: 1,
+        }));
   const comp2RawCount = comp2RawRowsForDetail.length;
   const comp2WeightedTotal =
     comp2Detail?.owner != null && comp2Detail?.season != null
@@ -23666,10 +23760,6 @@ function isStarterSlot(slotId) {
           comp2Detail.season
         ] ?? 0
       : 0;
-  const comp2BaseRoundForDetail =
-    comp2Detail?.season != null
-      ? getBaseRoundForSeason(comp2Detail.season)
-      : normalizedWaiverRound;
   const comp3DetailRows = React.useMemo(() => {
     if (!comp3Detail?.owner) return [];
     const seasonKey =
@@ -23678,8 +23768,16 @@ function isStarterSlot(slotId) {
         : comp3Detail.season;
     return getDetailRows(comp3Data.details, comp3Detail.owner, seasonKey);
   }, [comp3Detail, comp3Data.details, getDetailRows]);
-  const comp3TotalCount = comp3DetailRows.reduce(
+  const comp3RawTotal = comp3DetailRows.reduce(
     (sum, row) => sum + (Number.isFinite(row?.count) ? Number(row.count) : 0),
+    0
+  );
+  const comp3WeightedTotal = comp3DetailRows.reduce(
+    (sum, row) =>
+      sum +
+      (Number.isFinite(row?.weightedCount)
+        ? Number(row.weightedCount)
+        : 0),
     0
   );
   const comp4DetailRows = React.useMemo(() => {
@@ -23690,8 +23788,16 @@ function isStarterSlot(slotId) {
         : comp4Detail.season;
     return getDetailRows(comp4Data.details, comp4Detail.owner, seasonKey);
   }, [comp4Detail, comp4Data.details, getDetailRows]);
-  const comp4TotalCredit = comp4DetailRows.reduce(
+  const comp4RawTotalCredit = comp4DetailRows.reduce(
     (sum, row) => sum + (Number.isFinite(row?.credit) ? Number(row.credit) : 0),
+    0
+  );
+  const comp4WeightedTotalCredit = comp4DetailRows.reduce(
+    (sum, row) =>
+      sum +
+      (Number.isFinite(row?.weightedCredit)
+        ? Number(row.weightedCredit)
+        : 0),
     0
   );
   const comp5DetailRows = React.useMemo(() => {
@@ -24009,63 +24115,21 @@ function isStarterSlot(slotId) {
               </button>
             </div>
             {isWeightedView && (
-              <>
-                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                    Waiver round
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    step={1}
-                    value={injuryWaiverRound}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === "") {
-                        setInjuryWaiverRound(1);
-                        return;
-                      }
-                      const next = Number(raw);
-                      if (Number.isFinite(next)) {
-                        const clamped = Math.min(
-                          30,
-                          Math.max(1, Math.round(next))
-                        );
-                        setInjuryWaiverRound(clamped);
-                      }
-                    }}
-                    className="w-20 rounded-lg border border-white/50 dark:border-white/10 bg-white/90 dark:bg-white/[0.08] px-2.5 py-1 text-[12px] text-slate-700 dark:text-slate-100 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 dark:focus-visible:ring-sky-400/60"
-                  />
-                </label>
-                <label className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                    α
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={3}
-                    step={0.1}
-                    value={injuryWeightAlpha}
-                    onChange={(e) =>
-                      setInjuryWeightAlpha(Number(e.target.value))
-                    }
-                    className="w-36 accent-amber-400"
-                  />
-                  <span className="tabular-nums w-12 text-right text-[12px] text-slate-700 dark:text-slate-200">
-                    {injuryWeightAlpha.toFixed(2)}
-                  </span>
-                </label>
-              </>
+              <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-white/70 dark:bg-white/[0.08] border border-white/60 dark:border-white/10 shadow-[0_24px_55px_-32px_rgba(15,23,42,0.85)]">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
+                  Weighted scale
+                </span>
+                <span className="text-[12px] text-slate-700 dark:text-slate-200">
+                  Pick 1.01 = 1.0, final drafted pick ≈ 0.10, undrafted = 0.10
+                </span>
+              </div>
             )}
           </div>
           {isWeightedView && (
             <div className="px-5 pb-4 text-[11px] text-slate-500/85 dark:text-slate-400">
-              Weight = (baseRound + 1 {"\u2212"} round)^α; baseRound is the
-              larger of a season’s max draft round and the waiver round
-              (currently treated as R{normalizedWaiverRound}). Players without
-              draft data use the waiver round.
+              Injuries scale linearly from 1.0 for the first overall pick to
+              0.10 for the last drafted slot; players without draft data are
+              treated as undrafted and receive the minimum weight.
             </div>
           )}
           <div className="relative">
@@ -24207,10 +24271,10 @@ function isStarterSlot(slotId) {
                         <tr key={`${o}-opp-injury`}>
                           <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
-                            const totalsByOwner = comp3Data.totals?.[o] || {};
-                            const rawValue =
+                            const totalsByOwner = comp3TotalsSource?.[o] || {};
+                            const value =
                               totalsByOwner?.[y] ?? totalsByOwner?.[String(y)];
-                            const numeric = Number(rawValue);
+                            const numeric = Number(value);
                             const hasValue = Number.isFinite(numeric);
                             const detailRows = getDetailRows(
                               comp3Data.details,
@@ -24230,10 +24294,16 @@ function isStarterSlot(slotId) {
                                     className={valueButtonClass}
                                     onClick={() => openComp3Detail(o, y)}
                                   >
-                                    {hasValue ? numeric.toFixed(0) : "View"}
+                                    {hasValue
+                                      ? isWeightedView
+                                        ? fmtInjuryValue(numeric)
+                                        : numeric.toFixed(0)
+                                      : "View"}
                                   </button>
                                 ) : hasValue ? (
-                                  numeric.toFixed(0)
+                                  isWeightedView
+                                    ? fmtInjuryValue(numeric)
+                                    : numeric.toFixed(0)
                                 ) : (
                                   "—"
                                 )}
@@ -24303,10 +24373,10 @@ function isStarterSlot(slotId) {
                         <tr key={`${o}-ripple`}>
                           <td className={managerCellClass}>{o}</td>
                           {seasons.map((y) => {
-                            const totalsByOwner = comp4Data.totals?.[o] || {};
-                            const rawValue =
+                            const totalsByOwner = comp4TotalsSource?.[o] || {};
+                            const value =
                               totalsByOwner?.[y] ?? totalsByOwner?.[String(y)];
-                            const numeric = Number(rawValue);
+                            const numeric = Number(value);
                             const hasValue = Number.isFinite(numeric);
                             const detailRows = getDetailRows(
                               comp4Data.details,
@@ -24323,10 +24393,16 @@ function isStarterSlot(slotId) {
                                     className={valueButtonClass}
                                     onClick={() => openComp4Detail(o, y)}
                                   >
-                                    {hasValue ? numeric.toFixed(1) : "View"}
+                                    {hasValue
+                                      ? isWeightedView
+                                        ? fmtInjuryValue(numeric)
+                                        : numeric.toFixed(1)
+                                      : "View"}
                                   </button>
                                 ) : hasValue ? (
-                                  numeric.toFixed(1)
+                                  isWeightedView
+                                    ? fmtInjuryValue(numeric)
+                                    : numeric.toFixed(1)
                                 ) : (
                                   "—"
                                 )}
@@ -24680,21 +24756,21 @@ function isStarterSlot(slotId) {
             </div>
 
             <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
-              {isWeightedView ? (
-                <div className="space-y-1">
-                  <div>Raw injury weeks flagged: {comp2RawCount}</div>
-                  <div>
-                    Weighted injury luck:{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-100">
-                      {fmtInjuryValue(comp2WeightedTotal)}
-                    </span>{" "}
-                    (α = {injuryWeightAlpha.toFixed(2)}, waiver R
-                    {normalizedWaiverRound}, base R{comp2BaseRoundForDetail})
-                  </div>
+              <div className="space-y-1">
+                <div>
+                  Raw injury weeks flagged:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {comp2RawCount}
+                  </span>
                 </div>
-              ) : (
-                <>Total injury weeks flagged: {comp2RawCount}</>
-              )}
+                <div>
+                  Weighted injury impact:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {fmtInjuryValue(comp2WeightedTotal)}
+                  </span>{" "}
+                  (linear draft weighting 1.0 → 0.10)
+                </div>
+              </div>
             </div>
 
             <div className="px-6 py-5 overflow-auto">
@@ -24712,9 +24788,8 @@ function isStarterSlot(slotId) {
                       {isWeightedView && (
                         <th className="px-4 py-3 text-left">Draft</th>
                       )}
-                      {isWeightedView && (
-                        <th className="px-4 py-3 text-right">Weight</th>
-                      )}
+                      <th className="px-4 py-3 text-right">Raw</th>
+                      <th className="px-4 py-3 text-right">Weighted</th>
                     </tr>
                   </thead>
                   <tbody className={tableBodyClass}>
@@ -24735,16 +24810,26 @@ function isStarterSlot(slotId) {
                                     ? ` (#${row.draftOverall})`
                                     : ""
                                 }`
-                              : row.weightRound != null
-                              ? `Waiver (R${row.weightRound})`
+                              : row.weightSource === "undrafted"
+                              ? "Undrafted / Waivers"
                               : "—"
                             : null;
+                        const rawValue = Number.isFinite(row?.rawValue)
+                          ? Number(row.rawValue)
+                          : 1;
                         return (
                           <tr
                             key={`${row.week}-${row.pid ?? row.player}-${idx}`}
                           >
                             <td className="px-4 py-3 tabular-nums text-slate-800 dark:text-slate-100">
-                              W{row.week}
+                              <div className="flex flex-col">
+                                <span>W{row.week}</span>
+                                {row.opponent ? (
+                                  <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                                    vs {row.opponent}
+                                  </span>
+                                ) : null}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
                               {row.player}
@@ -24757,20 +24842,21 @@ function isStarterSlot(slotId) {
                                 {draftLabel}
                               </td>
                             )}
-                            {isWeightedView && (
-                              <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
-                                {Number.isFinite(row?.weight)
-                                  ? row.weight.toFixed(2)
-                                  : "—"}
-                              </td>
-                            )}
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {rawValue.toFixed(0)}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.weight)
+                                ? fmtInjuryValue(row.weight)
+                                : "—"}
+                            </td>
                           </tr>
                         );
                       })}
                     {comp2DetailRows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={isWeightedView ? 5 : 3}
+                          colSpan={isWeightedView ? 6 : 5}
                           className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
                         >
                           No injury rows recorded.
@@ -24812,12 +24898,24 @@ function isStarterSlot(slotId) {
             </div>
 
             <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
-              Total opponent injury weeks:{" "}
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
-                {Number.isFinite(comp3TotalCount)
-                  ? Math.round(comp3TotalCount)
-                  : "—"}
-              </span>
+              <div className="space-y-1">
+                <div>
+                  Raw opponent injury weeks:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {Number.isFinite(comp3RawTotal)
+                      ? Math.round(comp3RawTotal)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  Weighted opponent injury impact:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {Number.isFinite(comp3WeightedTotal)
+                      ? fmtInjuryValue(comp3WeightedTotal)
+                      : "—"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="px-6 py-5 overflow-auto">
@@ -24832,6 +24930,7 @@ function isStarterSlot(slotId) {
                       <th className="px-4 py-3 text-left">Week</th>
                       <th className="px-4 py-3 text-left">Opponent</th>
                       <th className="px-4 py-3 text-right">Injury weeks</th>
+                      <th className="px-4 py-3 text-right">Weighted weeks</th>
                       <th className="px-4 py-3 text-left">Players</th>
                     </tr>
                   </thead>
@@ -24849,11 +24948,23 @@ function isStarterSlot(slotId) {
                       .map((row, idx) => {
                         const playersList = Array.isArray(row?.players)
                           ? row.players
-                              .map((p) =>
-                                p?.slot
-                                  ? `${p.player || "Player"} (${p.slot})`
-                                  : p?.player || "Player"
-                              )
+                              .map((p) => {
+                                const name = p?.player || "Player";
+                                const slotLabel = p?.slot || null;
+                                const weightLabel = Number.isFinite(p?.weight)
+                                  ? fmtInjuryValue(p.weight)
+                                  : null;
+                                if (slotLabel && weightLabel) {
+                                  return `${name} (${slotLabel}, w=${weightLabel})`;
+                                }
+                                if (slotLabel) {
+                                  return `${name} (${slotLabel})`;
+                                }
+                                if (weightLabel) {
+                                  return `${name} (w=${weightLabel})`;
+                                }
+                                return name;
+                              })
                               .join(", ")
                           : "";
                         return (
@@ -24871,6 +24982,11 @@ function isStarterSlot(slotId) {
                                 ? Number(row.count).toFixed(0)
                                 : "—"}
                             </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.weightedCount)
+                                ? fmtInjuryValue(row.weightedCount)
+                                : "—"}
+                            </td>
                             <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
                               {playersList || "—"}
                             </td>
@@ -24880,7 +24996,7 @@ function isStarterSlot(slotId) {
                     {comp3DetailRows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={4}
+                          colSpan={5}
                           className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
                         >
                           No opponent injury weeks recorded.
@@ -24922,12 +25038,24 @@ function isStarterSlot(slotId) {
             </div>
 
             <div className="px-6 py-4 text-[12px] text-slate-600/90 dark:text-slate-300 border-b border-white/45 dark:border-white/10 bg-white/75 dark:bg-white/[0.05]">
-              Total ripple credit:{" "}
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
-                {Number.isFinite(comp4TotalCredit)
-                  ? comp4TotalCredit.toFixed(1)
-                  : "—"}
-              </span>
+              <div className="space-y-1">
+                <div>
+                  Raw ripple credit:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {Number.isFinite(comp4RawTotalCredit)
+                      ? comp4RawTotalCredit.toFixed(1)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  Weighted ripple credit:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {Number.isFinite(comp4WeightedTotalCredit)
+                      ? fmtInjuryValue(comp4WeightedTotalCredit)
+                      : "—"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="px-6 py-5 overflow-auto">
@@ -24942,7 +25070,8 @@ function isStarterSlot(slotId) {
                       <th className="px-4 py-3 text-left">Week</th>
                       <th className="px-4 py-3 text-left">Benefiting player</th>
                       <th className="px-4 py-3 text-left">Injured teammate</th>
-                      <th className="px-4 py-3 text-right">Credit</th>
+                      <th className="px-4 py-3 text-right">Raw credit</th>
+                      <th className="px-4 py-3 text-right">Weighted credit</th>
                       <th className="px-4 py-3 text-left">Draft context</th>
                     </tr>
                   </thead>
@@ -24956,13 +25085,37 @@ function isStarterSlot(slotId) {
                         return (a?.player || "").localeCompare(b?.player || "");
                       })
                       .map((row, idx) => {
+                        const formatDraft = (
+                          round,
+                          overall,
+                          weight,
+                          prefix
+                        ) => {
+                          const base = round != null
+                            ? `R${round}${
+                                overall != null
+                                  ? ` (#${overall})`
+                                  : ""
+                              }`
+                            : "—";
+                          const weightLabel = Number.isFinite(weight)
+                            ? `, w=${fmtInjuryValue(weight)}`
+                            : "";
+                          return `${prefix}: ${base}${weightLabel}`;
+                        };
                         const draftLabel = [
-                          row?.benefitingDraftRound
-                            ? `You: R${row.benefitingDraftRound}`
-                            : "You: —",
-                          row?.injuredDraftRound
-                            ? `Injured: R${row.injuredDraftRound}`
-                            : "Injured: —",
+                          formatDraft(
+                            row?.benefitingDraftRound,
+                            row?.benefitingDraftOverall,
+                            row?.benefitingWeight,
+                            "You"
+                          ),
+                          formatDraft(
+                            row?.injuredDraftRound,
+                            row?.injuredDraftOverall,
+                            row?.injuredWeight,
+                            "Injured"
+                          ),
                         ].join(" • ");
                         return (
                           <tr key={`${row.week}-${row.player || idx}-${idx}`}>
@@ -24985,6 +25138,11 @@ function isStarterSlot(slotId) {
                                 ? Number(row.credit).toFixed(1)
                                 : "—"}
                             </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
+                              {Number.isFinite(row?.weightedCredit)
+                                ? fmtInjuryValue(row.weightedCredit)
+                                : "—"}
+                            </td>
                             <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                               {draftLabel}
                             </td>
@@ -24994,7 +25152,7 @@ function isStarterSlot(slotId) {
                     {comp4DetailRows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="px-4 py-5 text-center text-slate-500/75 dark:text-slate-400/80"
                         >
                           No ripple credit recorded.
