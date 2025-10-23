@@ -21502,6 +21502,263 @@ export function LuckIndexTab({
     []
   );
 
+  const rosterSourcesForPts = React.useMemo(() => {
+    const sources = [];
+    if (league?.espnRostersByYear) sources.push(league.espnRostersByYear);
+    if (league?.rostersByYear) sources.push(league.rostersByYear);
+    if (rostersByYear) sources.push(rostersByYear);
+    return sources;
+  }, [league, rostersByYear]);
+
+  const weeklyPtsByYear = React.useMemo(() => {
+    const candidates = [
+      league?.espnWeeklyPtsByYear,
+      league?.weeklyPointsByPlayer,
+      league?.weeklyPointsByYear,
+      league?.weeklyPoints,
+    ];
+    for (const candidate of candidates) {
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        Object.keys(candidate).length > 0
+      ) {
+        return candidate;
+      }
+    }
+    return {};
+  }, [league]);
+
+  const getSeasonRosters = React.useCallback(
+    (seasonKey) => {
+      const possibleKeys = (() => {
+        const list = [];
+        const num = Number(seasonKey);
+        if (seasonKey != null) list.push(seasonKey);
+        if (Number.isFinite(num)) {
+          list.push(num);
+          const str = String(num);
+          if (str !== seasonKey) list.push(str);
+        }
+        const strKey = String(seasonKey);
+        if (strKey !== seasonKey) list.push(strKey);
+        return Array.from(new Set(list.filter((v) => v != null)));
+      })();
+
+      for (const source of rosterSourcesForPts) {
+        if (!source || typeof source !== "object") continue;
+        for (const key of possibleKeys) {
+          const seasonData = source[key];
+          if (seasonData) return seasonData;
+        }
+      }
+      return {};
+    },
+    [rosterSourcesForPts]
+  );
+
+  const ptsFromRosterWeek = React.useCallback(
+    (seasonKey, playerId, week) => {
+      const seasonRosters = getSeasonRosters(seasonKey);
+      if (!seasonRosters) return null;
+      const pidNumeric = Number(playerId);
+      const pidString = String(playerId ?? "");
+
+      const normalizeEntries = (value) => {
+        if (Array.isArray(value)) return value;
+        if (Array.isArray(value?.entries)) return value.entries;
+        return [];
+      };
+
+      for (const teamWeeks of Object.values(seasonRosters || {})) {
+        if (!teamWeeks || typeof teamWeeks !== "object") continue;
+        const entries =
+          normalizeEntries(teamWeeks?.[week]) ||
+          normalizeEntries(teamWeeks?.[String(week)]);
+        if (!entries.length) continue;
+
+        for (const entry of entries) {
+          const entryPid = Number(
+            entry?.pid ??
+              entry?.playerId ??
+              entry?.player?.id ??
+              entry?.playerPoolEntry?.player?.id
+          );
+          const entryPidStr = String(
+            entry?.pid ??
+              entry?.playerId ??
+              entry?.player?.id ??
+              entry?.playerPoolEntry?.player?.id ??
+              ""
+          );
+          if (
+            (Number.isFinite(pidNumeric) && entryPid === pidNumeric) ||
+            (pidString && entryPidStr === pidString)
+          ) {
+            const tries = [
+              "pts",
+              "points",
+              "totalPoints",
+              "appliedTotal",
+              "fantasy",
+              "ppr",
+              "pprPts",
+            ];
+            for (const key of tries) {
+              const cand = Number(entry?.[key]);
+              if (Number.isFinite(cand)) return cand;
+            }
+            const alt = entry?.totals || entry?.stats || entry?.points;
+            if (alt && typeof alt === "object") {
+              for (const value of Object.values(alt)) {
+                const cand = Number(value);
+                if (Number.isFinite(cand)) return cand;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    },
+    [getSeasonRosters]
+  );
+
+  const ptsForWeek = React.useCallback(
+    (seasonKey, playerId, week) => {
+      if (!playerId && playerId !== 0) return null;
+
+      const yearCandidates = (() => {
+        const list = [];
+        if (seasonKey != null) list.push(seasonKey);
+        const num = Number(seasonKey);
+        if (Number.isFinite(num)) {
+          list.push(num);
+          const str = String(num);
+          if (str !== seasonKey) list.push(str);
+        }
+        const strKey = String(seasonKey);
+        if (strKey !== seasonKey) list.push(strKey);
+        return Array.from(new Set(list));
+      })();
+
+      let map = null;
+      for (const key of yearCandidates) {
+        const candidate = weeklyPtsByYear?.[key];
+        if (candidate != null) {
+          map = candidate;
+          break;
+        }
+      }
+
+      const coerce = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      if (map != null) {
+        const pidCandidates = (() => {
+          const set = new Set();
+          const num = Number(playerId);
+          if (Number.isFinite(num)) set.add(num);
+          const str = String(playerId);
+          if (str) set.add(str);
+          return Array.from(set);
+        })();
+
+        let row = null;
+        for (const pidKey of pidCandidates) {
+          if (map?.[pidKey] != null) {
+            row = map[pidKey];
+            break;
+          }
+        }
+
+        if (row != null) {
+          if (Array.isArray(row)) {
+            const ix = Number(week) - 1;
+            if (ix >= 0 && ix < row.length) {
+              const value = coerce(row[ix]);
+              if (value != null) return value;
+            }
+          }
+
+          const base =
+            row && typeof row === "object" && row.weeks ? row.weeks : row;
+
+          if (base && typeof base === "object") {
+            const direct =
+              base?.[week] ?? base?.[String(week)] ?? base?.[`W${week}`];
+            if (direct != null) {
+              if (typeof direct === "object") {
+                const tries = [
+                  "pts",
+                  "points",
+                  "total",
+                  "appliedTotal",
+                  "ppr",
+                  "value",
+                ];
+                for (const key of tries) {
+                  const value = coerce(direct?.[key]);
+                  if (value != null) return value;
+                }
+              } else {
+                const value = coerce(direct);
+                if (value != null) return value;
+              }
+            }
+
+            if (Array.isArray(base)) {
+              for (const node of base) {
+                if (
+                  node &&
+                  (node.week === week || node.scoringPeriodId === week)
+                ) {
+                  const tries = [
+                    "pts",
+                    "points",
+                    "total",
+                    "appliedTotal",
+                    "ppr",
+                    "value",
+                  ];
+                  for (const key of tries) {
+                    const value = coerce(node?.[key]);
+                    if (value != null) return value;
+                  }
+                }
+              }
+            }
+
+            for (const node of Object.values(base)) {
+              if (
+                node &&
+                typeof node === "object" &&
+                (node.week === week || node.scoringPeriodId === week)
+              ) {
+                const tries = [
+                  "pts",
+                  "points",
+                  "total",
+                  "appliedTotal",
+                  "ppr",
+                  "value",
+                ];
+                for (const key of tries) {
+                  const value = coerce(node?.[key]);
+                  if (value != null) return value;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return ptsFromRosterWeek(seasonKey, playerId, week);
+    },
+    [ptsFromRosterWeek, weeklyPtsByYear]
+  );
+
   const readOwnerNameValue = extractOwnerName;
 
   const draftIndexByYear = React.useMemo(() => {
@@ -21987,9 +22244,8 @@ export function LuckIndexTab({
     resolveCurrentWeekExclusive,
   ]);
   const comp2Data = React.useMemo(() => {
-    const totals = {};
-    const details = {};
     const rosterMeta = {};
+    const injuryEvents = [];
 
     const resolvePlayerId = (entry) => {
       const cand =
@@ -22036,12 +22292,6 @@ export function LuckIndexTab({
         if (nameIndex.has(keyB)) return nameIndex.get(keyB);
       }
       return "Unknown Player";
-    };
-
-    const pushDetail = (owner, season, row) => {
-      details[owner] ??= {};
-      details[owner][season] ??= [];
-      details[owner][season].push(row);
     };
 
     const pushRosterMeta = (owner, season, week, pid, meta) => {
@@ -22128,15 +22378,13 @@ export function LuckIndexTab({
             if (seen.has(seenKey)) continue;
             seen.add(seenKey);
 
-            totals[ownerKey] ??= {};
-            totals[ownerKey][seasonNum] =
-              (totals[ownerKey][seasonNum] || 0) + 1;
-
-            pushDetail(ownerKey, seasonNum, {
+            injuryEvents.push({
+              owner: ownerKey,
+              season: seasonNum,
               week: weekNum,
+              pid,
               player: playerName,
               slot: __SLOT_LABEL[slotId] || `Slot ${slotId}`,
-              pid,
               projection: proj,
               posId,
               proTeams,
@@ -22146,9 +22394,308 @@ export function LuckIndexTab({
       }
     }
 
+    const eventsWithoutId = [];
+    const eventsByPlayer = new Map();
+
+    injuryEvents.forEach((event) => {
+      if (!event || !event.owner) return;
+      if (event.pid == null) {
+        eventsWithoutId.push(event);
+        return;
+      }
+      const key = `${event.season}|${event.pid}`;
+      if (!eventsByPlayer.has(key)) eventsByPlayer.set(key, []);
+      eventsByPlayer.get(key).push(event);
+    });
+
+    const finalTotals = {};
+    const finalDetails = {};
+
+    const addDetail = (owner, season, row) => {
+      if (!owner || isHiddenManager(owner)) return;
+      finalTotals[owner] ??= {};
+      finalTotals[owner][season] = (finalTotals[owner][season] || 0) + 1;
+      finalDetails[owner] ??= {};
+      finalDetails[owner][season] ??= [];
+      finalDetails[owner][season].push(row);
+    };
+
+    eventsWithoutId.forEach((event) => {
+      const weekNum = Number(event?.week);
+      if (!Number.isFinite(weekNum)) return;
+      addDetail(event.owner, event.season, {
+        week: weekNum,
+        player: event.player,
+        slot: event.slot,
+        pid: null,
+        projection: Number.isFinite(Number(event?.projection))
+          ? Number(event.projection)
+          : 0,
+        posId: Number.isFinite(Number(event?.posId))
+          ? Number(event.posId)
+          : null,
+        proTeams: Array.isArray(event?.proTeams) ? event.proTeams : [],
+      });
+    });
+
+    eventsByPlayer.forEach((events, key) => {
+      if (!Array.isArray(events) || !events.length) return;
+      const [seasonPart, pidPart] = String(key).split("|");
+      const seasonNum = Number(seasonPart);
+      const pidNum = Number(pidPart);
+      if (!Number.isFinite(seasonNum) || !Number.isFinite(pidNum)) return;
+
+      const normalizedEvents = events
+        .map((ev) => ({
+          ...ev,
+          week: Number(ev.week),
+        }))
+        .filter((ev) => Number.isFinite(ev.week))
+        .sort((a, b) => {
+          if (a.week !== b.week) return a.week - b.week;
+          return (a.owner || "").localeCompare(b.owner || "");
+        });
+
+      if (!normalizedEvents.length) return;
+
+      const proTeamIds = new Set();
+      const resolvedTeamId = resolveProTeamId(seasonNum, pidNum);
+      if (Number.isFinite(resolvedTeamId)) proTeamIds.add(resolvedTeamId);
+      normalizedEvents.forEach((ev) => {
+        if (Array.isArray(ev.proTeams)) {
+          ev.proTeams.forEach((teamId) => {
+            const numeric = Number(teamId);
+            if (Number.isFinite(numeric)) proTeamIds.add(numeric);
+          });
+        }
+      });
+
+      const byeWeeks = new Set();
+      proTeamIds.forEach((teamId) => {
+        getTeamByeWeeks(seasonNum, teamId).forEach((wk) => {
+          const num = Number(wk);
+          if (Number.isFinite(num)) byeWeeks.add(num);
+        });
+      });
+
+      const sequences = [];
+
+      const startSequence = (event) => {
+        const baseProjection = Number(event.projection);
+        const seq = {
+          owner: event.owner,
+          season: seasonNum,
+          pid: pidNum,
+          player: event.player || null,
+          posId: Number.isFinite(Number(event.posId))
+            ? Number(event.posId)
+            : null,
+          baseSlot: event.slot || null,
+          baseProjection: Number.isFinite(baseProjection) ? baseProjection : null,
+          proTeamSet: new Set(),
+          weekSet: new Set(),
+          carryWeeks: new Set(),
+          eventByWeek: new Map(),
+          baseEvent: event,
+          latestWeek: Number(event.week),
+          lastRosterWeek:
+            event.owner && Number.isFinite(event.week) ? Number(event.week) : null,
+        };
+        if (Array.isArray(event.proTeams)) {
+          event.proTeams.forEach((teamId) => {
+            const numeric = Number(teamId);
+            if (Number.isFinite(numeric)) seq.proTeamSet.add(numeric);
+          });
+        }
+        if (Number.isFinite(event.week)) {
+          seq.weekSet.add(event.week);
+          seq.eventByWeek.set(event.week, event);
+        }
+        return seq;
+      };
+
+      const mergeEventIntoSequence = (seq, event, { markCarry = false } = {}) => {
+        if (!seq || !event) return;
+        if (event.player && !seq.player) seq.player = event.player;
+        const posNum = Number(event.posId);
+        if (Number.isFinite(posNum) && seq.posId == null) seq.posId = posNum;
+        if (event.slot && !seq.baseSlot) seq.baseSlot = event.slot;
+        const projNum = Number(event.projection);
+        if (Number.isFinite(projNum) && seq.baseProjection == null) {
+          seq.baseProjection = projNum;
+        }
+        if (Array.isArray(event.proTeams)) {
+          event.proTeams.forEach((teamId) => {
+            const numeric = Number(teamId);
+            if (Number.isFinite(numeric)) seq.proTeamSet.add(numeric);
+          });
+        }
+        if (Number.isFinite(event.week)) {
+          seq.weekSet.add(event.week);
+          seq.eventByWeek.set(event.week, event);
+          seq.latestWeek =
+            Number.isFinite(seq.latestWeek) && seq.latestWeek > event.week
+              ? seq.latestWeek
+              : event.week;
+          if (markCarry || event.owner !== seq.owner) {
+            seq.carryWeeks.add(event.week);
+          } else {
+            seq.lastRosterWeek =
+              seq.lastRosterWeek != null && Number.isFinite(seq.lastRosterWeek)
+                ? Math.max(seq.lastRosterWeek, event.week)
+                : event.week;
+          }
+        }
+      };
+
+      const addCarryWeek = (seq, week) => {
+        if (!seq || !Number.isFinite(week)) return;
+        if (seq.weekSet.has(week)) return;
+        seq.weekSet.add(week);
+        seq.carryWeeks.add(week);
+        seq.latestWeek =
+          Number.isFinite(seq.latestWeek) && seq.latestWeek > week
+            ? seq.latestWeek
+            : week;
+      };
+
+      let currentSeq = null;
+      const pushCurrentSequence = () => {
+        if (currentSeq) sequences.push(currentSeq);
+        currentSeq = null;
+      };
+
+      normalizedEvents.forEach((event) => {
+        if (!currentSeq) {
+          currentSeq = startSequence(event);
+          return;
+        }
+
+        const eventWeek = Number(event.week);
+        if (!Number.isFinite(eventWeek)) return;
+
+        const prevWeek = Number(currentSeq.latestWeek);
+        if (!Number.isFinite(prevWeek) || eventWeek <= prevWeek) {
+          mergeEventIntoSequence(currentSeq, event, {
+            markCarry: event.owner !== currentSeq.owner,
+          });
+          return;
+        }
+
+        let continueSequence = true;
+        const gapWeeks = [];
+        for (let wk = prevWeek + 1; wk < eventWeek; wk += 1) {
+          if (byeWeeks.has(wk)) continue;
+          const actual = ptsForWeek(seasonNum, pidNum, wk);
+          if (!Number.isFinite(actual)) {
+            continueSequence = false;
+            break;
+          }
+          if (Math.abs(actual) > 0.0001) {
+            continueSequence = false;
+            break;
+          }
+          gapWeeks.push(wk);
+        }
+
+        if (continueSequence) {
+          gapWeeks.forEach((wk) => addCarryWeek(currentSeq, wk));
+          mergeEventIntoSequence(currentSeq, event, {
+            markCarry: event.owner !== currentSeq.owner,
+          });
+        } else {
+          pushCurrentSequence();
+          currentSeq = startSequence(event);
+        }
+      });
+
+      pushCurrentSequence();
+
+      const capExclusive = resolveCurrentWeekExclusive(seasonNum);
+      let capWeek = Number(capExclusive);
+      if (!Number.isFinite(capWeek) || capWeek <= 0) {
+        capWeek = 17;
+      } else {
+        capWeek = Math.min(Math.floor(capWeek) - 1, 17);
+      }
+
+      sequences.forEach((seq) => {
+        if (!seq || !seq.owner || isHiddenManager(seq.owner)) return;
+
+        let sortedWeeks = Array.from(seq.weekSet || [])
+          .filter((wk) => Number.isFinite(wk) && !byeWeeks.has(wk))
+          .sort((a, b) => a - b);
+
+        const lastWeek = sortedWeeks.length
+          ? sortedWeeks[sortedWeeks.length - 1]
+          : null;
+
+        if (Number.isFinite(lastWeek) && Number.isFinite(capWeek)) {
+          for (let wk = lastWeek + 1; wk <= capWeek; wk += 1) {
+            if (byeWeeks.has(wk)) continue;
+            const actual = ptsForWeek(seasonNum, pidNum, wk);
+            if (!Number.isFinite(actual)) break;
+            if (Math.abs(actual) > 0.0001) break;
+            seq.weekSet.add(wk);
+            seq.carryWeeks.add(wk);
+            seq.latestWeek =
+              Number.isFinite(seq.latestWeek) && seq.latestWeek > wk
+                ? seq.latestWeek
+                : wk;
+            sortedWeeks.push(wk);
+          }
+        }
+
+        sortedWeeks = sortedWeeks
+          .filter((wk) => Number.isFinite(wk) && !byeWeeks.has(wk))
+          .sort((a, b) => a - b);
+
+        const proTeamsList = (() => {
+          const merged = new Set();
+          (seq.proTeamSet || []).forEach((teamId) => {
+            const numeric = Number(teamId);
+            if (Number.isFinite(numeric)) merged.add(numeric);
+          });
+          proTeamIds.forEach((teamId) => merged.add(teamId));
+          return Array.from(merged);
+        })();
+
+        sortedWeeks.forEach((week) => {
+          const event = seq.eventByWeek.get(week) || seq.baseEvent;
+          const playerName = event?.player || seq.player || "Unknown Player";
+          const slotLabel = seq.carryWeeks.has(week)
+            ? "Carryover"
+            : event?.slot || seq.baseSlot || "—";
+          const projectionValue = Number(event?.projection);
+          const row = {
+            week,
+            player: playerName,
+            slot: slotLabel,
+            pid: seq.pid,
+            projection: Number.isFinite(projectionValue)
+              ? projectionValue
+              : Number.isFinite(seq.baseProjection)
+              ? seq.baseProjection
+              : 0,
+            posId: Number.isFinite(Number(event?.posId))
+              ? Number(event.posId)
+              : Number.isFinite(seq.posId)
+              ? seq.posId
+              : null,
+            proTeams:
+              Array.isArray(event?.proTeams) && event.proTeams.length
+                ? event.proTeams
+                : proTeamsList,
+          };
+          if (seq.carryWeeks.has(week)) row.carry = true;
+          addDetail(seq.owner, seq.season, row);
+        });
+      });
+    });
+
     console.log(
       "[Luck] comp2 (injury weeks via proj=0) by owner/year:",
-      totals
+      finalTotals
     );
     const rosterMetaPlain = {};
     Object.entries(rosterMeta).forEach(([owner, bySeason]) => {
@@ -22171,7 +22718,7 @@ export function LuckIndexTab({
       });
     });
 
-    return { totals, details, rosterMeta: rosterMetaPlain };
+    return { totals: finalTotals, details: finalDetails, rosterMeta: rosterMetaPlain };
   }, [
     rostersByYear,
     league?.currentWeekByYear,
@@ -22185,6 +22732,9 @@ export function LuckIndexTab({
     league?.proTeamsByYear,
     league?.seasonsByYear,
     league?.proTeams,
+    ptsForWeek,
+    resolveProTeamId,
+    getTeamByeWeeks,
   ]);
   // This IS the Luck Index for now
   const comp1ByOwnerYear = comp1Data.totals;
