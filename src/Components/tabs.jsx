@@ -21555,19 +21555,15 @@ export function LuckIndexTab({
           const roster =
             (byWeek && (byWeek[wk] ?? byWeek[String(wk)])) || [];
           const entries = Array.isArray(roster) ? roster : [];
-          const actual = entries.reduce(
-            (sum, player) => sum + toNumberSafe(player?.pts ?? 0),
+          const starters = entries.filter((player) =>
+            START_SLOTS.has(Number(__entrySlotId(player)))
+          );
+          const actual = starters.reduce(
+            (sum, player) => sum + __entryPts(player),
             0
           );
-          const projected = entries.reduce(
-            (sum, player) =>
-              sum +
-              toNumberSafe(
-                player?.projStart ??
-                  player?.proj ??
-                  player?.projected ??
-                  0
-              ),
+          const projected = starters.reduce(
+            (sum, player) => sum + __entryProj(player),
             0
           );
           const diff = actual - projected;
@@ -22810,6 +22806,17 @@ function isStarterSlot(slotId) {
     comp5ScaledData,
   ]);
 
+  const luckComponentWeights = React.useMemo(
+    () => ({
+      comp1: 0.225,
+      comp2: 0.225,
+      comp3: 0.225,
+      comp4: 0.225,
+      comp5: 0.1,
+    }),
+    []
+  );
+
   const luckByOwnerYear = React.useMemo(() => {
     const out = {};
     const ownersSet = new Set([
@@ -22830,21 +22837,26 @@ function isStarterSlot(slotId) {
       ]);
 
       for (const seasonKey of seasonsSet) {
-        const values = [];
-        const c1 = comp1ScaledByOwnerYear?.[owner]?.[seasonKey];
-        const c2 = injuryScaledByOwnerYear?.[owner]?.[seasonKey];
-        const c3 = comp3ScaledByOwnerYear?.[owner]?.[seasonKey];
-        const c4 = comp4ScaledByOwnerYear?.[owner]?.[seasonKey];
-        const c5 = comp5ScaledByOwnerYear?.[owner]?.[seasonKey];
-        if (Number.isFinite(c1)) values.push(c1);
-        if (Number.isFinite(c2)) values.push(c2);
-        if (Number.isFinite(c3)) values.push(c3);
-        if (Number.isFinite(c4)) values.push(c4);
-        if (Number.isFinite(c5)) values.push(c5);
-        if (values.length) {
+        const components = [
+          ["comp1", comp1ScaledByOwnerYear?.[owner]?.[seasonKey]],
+          ["comp2", injuryScaledByOwnerYear?.[owner]?.[seasonKey]],
+          ["comp3", comp3ScaledByOwnerYear?.[owner]?.[seasonKey]],
+          ["comp4", comp4ScaledByOwnerYear?.[owner]?.[seasonKey]],
+          ["comp5", comp5ScaledByOwnerYear?.[owner]?.[seasonKey]],
+        ];
+        let weightedSum = 0;
+        let totalWeight = 0;
+        for (const [key, value] of components) {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) continue;
+          const weight = luckComponentWeights[key] ?? 0;
+          if (!(weight > 0)) continue;
+          weightedSum += numeric * weight;
+          totalWeight += weight;
+        }
+        if (totalWeight > 0) {
           out[owner] ??= {};
-          out[owner][seasonKey] =
-            values.reduce((sum, v) => sum + v, 0) / values.length;
+          out[owner][seasonKey] = weightedSum / totalWeight;
         }
       }
     }
@@ -22856,6 +22868,7 @@ function isStarterSlot(slotId) {
     comp3ScaledByOwnerYear,
     comp4ScaledByOwnerYear,
     comp5ScaledByOwnerYear,
+    luckComponentWeights,
   ]);
   // Now that comp1 exists, build the owners list (base + any seen in results)
   // Now that comp1 exists, build the owners list (base + any seen in results), sorted
@@ -24197,7 +24210,7 @@ function isStarterSlot(slotId) {
         </Card>
 
         <Card
-          title="Bye Week Differential — Your Starters vs Opponents"
+          title="Bye Week Differential"
           allowOverflow
         >
           <div className="px-5 pt-5 pb-4 flex flex-wrap items-center gap-3 text-[12px] text-slate-600 dark:text-slate-300">
@@ -24323,28 +24336,30 @@ function isStarterSlot(slotId) {
 
         <div className="text-[12px] leading-relaxed text-slate-500/90 dark:text-slate-400 space-y-2">
           <p>
-            Opp Scoring Luck: Actual vs Projection — how much each manager’s
-            teams outperformed or fell short of their projected totals.
+            Opp Scoring Luck (22.5% weight): Actual vs Projection — how much
+            each manager’s teams outperformed or fell short of their projected
+            totals.
           </p>
           <p>
-            Injury Luck: Injury Index — total starter player-weeks with a zero
-            projection (proxy for weeks lost to injury). Weighted view applies a
-            draft-round multiplier to emphasize early picks.
+            Injury Luck (22.5% weight): Injury Index — total starter
+            player-weeks with a zero projection (proxy for weeks lost to
+            injury). Weighted view applies a draft-round multiplier to emphasize
+            early picks.
           </p>
           <p>
-            Opp Injury Luck: Weekly opponent injury weeks accumulated across
-            your schedule — higher totals mean you caught opponents at less
-            than full strength.
+            Opp Injury Luck (22.5% weight): Weekly opponent injury weeks
+            accumulated across your schedule — higher totals mean you caught
+            opponents at less than full strength.
           </p>
           <p>
-            Component 4: Teammate Injury Ripple — credit when a same-team,
-            same-position player drafted ahead of your player misses time (full
-            week) or when one drafted after misses time (half week).
+            Component 4 (22.5% weight): Teammate Injury Ripple — credit when a
+            same-team, same-position player drafted ahead of your player misses
+            time (full week) or when one drafted after misses time (half week).
           </p>
           <p>
-            Component 5: Bye Week Differential — your starters on bye minus the
-            byes your opponents had when facing you. Weighted view uses the same
-            draft weighting controls as the injury component.
+            Component 5 (10% weight): Bye Week Differential — your starters on
+            bye minus the byes your opponents had when facing you. Weighted view
+            uses the same draft weighting controls as the injury component.
           </p>
           <p>Additional ideas below.</p>
         </div>
@@ -24392,9 +24407,11 @@ function isStarterSlot(slotId) {
                   luckier end of the realistic range and 0 the unluckier end.
                 </li>
                 <li>
-                  Average the five component scores for each season to create the
-                  Luck Index; multi-season views average the already-normalized
-                  season scores.
+                  Combine the five component scores with a weighted average —
+                  Opp Scoring Luck 22.5%, Your Injury Luck 22.5%, Opp Injury Luck
+                  22.5%, Teammate Injury Ripple 22.5%, Bye Week Differential 10%
+                  — to create the Luck Index; multi-season views average the
+                  already-normalized season scores.
                 </li>
               </ul>
               <p className="text-[12px] text-slate-500 dark:text-slate-400">
