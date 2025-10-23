@@ -634,13 +634,32 @@ function HideManagerControl({
   hidden = new Set(),
   onChangeHidden, // (nextSet: Set<string>) => void
 }) {
+  const [manualName, setManualName] = useState("");
+  const displayOwners = useMemo(() => {
+    const base = Array.isArray(owners) ? owners : [];
+    const extras = Array.from(hidden || new Set()).filter(
+      (name) => name && !base.includes(name)
+    );
+    return [...base, ...extras]
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b)));
+  }, [owners, hidden]);
   const toggle = (name) => {
     const next = new Set(hidden);
     next.has(name) ? next.delete(name) : next.add(name);
     onChangeHidden?.(next);
   };
   const clearAll = () => onChangeHidden?.(new Set());
-  const selectAll = () => onChangeHidden?.(new Set(owners));
+  const selectAll = () => onChangeHidden?.(new Set(displayOwners));
+  const handleManualSubmit = (event) => {
+    event.preventDefault();
+    const value = manualName.trim();
+    if (!value) return;
+    const next = new Set(hidden);
+    next.add(value);
+    onChangeHidden?.(next);
+    setManualName("");
+  };
 
   return (
     <Card title="Hide managers (global)">
@@ -648,6 +667,27 @@ function HideManagerControl({
         Hidden managers won’t appear in charts/tables. Other managers’ stats
         still include games played against them.
       </div>
+      <form
+        className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center"
+        onSubmit={handleManualSubmit}
+      >
+        <label className="flex-1">
+          <span className="sr-only">Add manager or handle to hide</span>
+          <input
+            type="text"
+            value={manualName}
+            onChange={(event) => setManualName(event.target.value)}
+            placeholder="Add manager or handle to hide"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm transition focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400/70 dark:border-zinc-700 dark:bg-zinc-950"
+          />
+        </label>
+        <button
+          type="submit"
+          className="px-3 py-2 rounded-full text-xs font-semibold uppercase tracking-[0.22em] text-indigo-600 transition hover:text-indigo-500 dark:text-indigo-300"
+        >
+          Hide
+        </button>
+      </form>
       <div className="flex items-center gap-2 mb-2">
         <button
           className="px-2 py-1 rounded-full text-xs border border-zinc-300 dark:border-zinc-700"
@@ -662,11 +702,11 @@ function HideManagerControl({
           Show all
         </button>
         <span className="text-xs text-zinc-500">
-          Hidden: {hidden.size}/{owners.length}
+          Hidden: {hidden.size}/{displayOwners.length}
         </span>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-64 overflow-auto pr-1">
-        {owners.map((name) => (
+        {displayOwners.map((name) => (
           <label
             key={name}
             className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
