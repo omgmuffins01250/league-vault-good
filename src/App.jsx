@@ -269,11 +269,11 @@ function makeDefaultLeagueIcon() {
         rows, draftByYear, adpSourceByYear, moneyInputs,
         activityBySeason,
         espnTransactionsByYear,
-        espnWeeklyPtsByYear,
         espnOwnerByTeamByYear,   // { [year]: { [teamId]: "Owner Name" } }
         espnOwnerMapByYear,      // alias kept for back-compat
         espnRostersByYear        // { [year]: { [teamId]: { [week]: [{pid,name,posId,slotId,pts,projStart?}] } } }
         espnPlayoffTeamsBySeason // { [year]: number }
+        espnInjuriesByYear,
         hiddenManagers            // [ "Name A", "Name B", ... ] — globally hidden in UI
         managerNicknames          // { [ownerName]: ["Nickname", ...] }
         leagueIcon                // { type: 'preset' | 'upload', value, previousPreset?, name? }
@@ -487,7 +487,6 @@ function upsertLeague({
   moneyInputs,
   activityBySeason,
   espnTransactionsByYear,
-  espnWeeklyPtsByYear,
   espnOwnerByTeamByYear,
   espnOwnerFullByTeamByYear,
   espnTeamNamesByOwner,
@@ -505,6 +504,7 @@ function upsertLeague({
   leagueIcon,
   espnTradesDetailedBySeason,
   espnProTeamsByYear,
+  espnInjuriesByYear,
 }) {
   const store = readStore();
   const prev = store.leaguesById[leagueId] || {};
@@ -531,7 +531,6 @@ function upsertLeague({
     activityBySeason: activityBySeason || prev.activityBySeason || {},
     espnTransactionsByYear:
       espnTransactionsByYear || prev.espnTransactionsByYear || {},
-    espnWeeklyPtsByYear: espnWeeklyPtsByYear || prev.espnWeeklyPtsByYear || {},
     espnOwnerByTeamByYear:
       espnOwnerByTeamByYear ||
       prev.espnOwnerByTeamByYear ||
@@ -551,6 +550,7 @@ function upsertLeague({
     espnTradesDetailedBySeason:
       espnTradesDetailedBySeason || prev.espnTradesDetailedBySeason || {},
     espnProTeamsByYear: espnProTeamsByYear || prev.espnProTeamsByYear || {},
+    espnInjuriesByYear: espnInjuriesByYear || prev.espnInjuriesByYear || {},
 
 
     hiddenManagers: Array.isArray(hiddenManagers)
@@ -1850,6 +1850,7 @@ export default function App() {
   const [hiddenManagers, setHiddenManagers] = useState(new Set());
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
+  const [injuriesByYear, setInjuriesByYear] = useState({});
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -2000,6 +2001,7 @@ export default function App() {
       setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
       setProTeamsByYear(rec?.espnProTeamsByYear || {});
       setManagerNicknames(normalizeNicknameMap(rec?.managerNicknames || {}));
+      setInjuriesByYear(rec?.espnInjuriesByYear || {});
       const sched =
         rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
           ? rec.espnScheduleByYear
@@ -2027,6 +2029,7 @@ export default function App() {
       setLeagueIcon(makeDefaultLeagueIcon());
       setManagerNicknames({});
       setLeagueFontFamily(DEFAULT_LEAGUE_FONT_FAMILY);
+      setInjuriesByYear({});
     }
   }
 
@@ -2069,6 +2072,7 @@ export default function App() {
     setPlayoffTeamsOverrides(rec?.playoffTeamsOverrides || {});
     setProTeamsByYear(rec?.espnProTeamsByYear || {});
     setCurrentWeekBySeason(rec?.espnCurrentWeekBySeason || {});
+    setInjuriesByYear(rec?.espnInjuriesByYear || {});
     const sched =
       rec?.espnScheduleByYear && Object.keys(rec.espnScheduleByYear).length
         ? rec.espnScheduleByYear
@@ -2279,49 +2283,19 @@ export default function App() {
         window.__FL_PAYLOAD = data;
         (function normalizePickupsPayload(p) {
           let txByYear = {};
-          let weeklyByYear = {};
           if (p && p.transactionsSlim && !Array.isArray(p.transactionsSlim)) {
             txByYear = p.transactionsSlim;
           }
-          if (
-            p &&
-            p.weeklyPointsByPlayer &&
-            !Array.isArray(p.weeklyPointsByPlayer)
-          ) {
-            weeklyByYear = p.weeklyPointsByPlayer;
-          }
-          if (
-            (!txByYear || !Object.keys(txByYear).length) &&
-            Array.isArray(p?.seasons)
-          ) {
+          if ((!txByYear || !Object.keys(txByYear).length) && Array.isArray(p?.seasons)) {
             p.seasons.forEach((s) => {
               const y = Number(s?.seasonId);
               if (!y) return;
-              if (
-                Array.isArray(s?.transactionsSlim) &&
-                s.transactionsSlim.length
-              ) {
+              if (Array.isArray(s?.transactionsSlim) && s.transactionsSlim.length) {
                 txByYear[y] = s.transactionsSlim;
               }
             });
           }
-          if (
-            (!weeklyByYear || !Object.keys(weeklyByYear).length) &&
-            Array.isArray(p?.seasons)
-          ) {
-            p.seasons.forEach((s) => {
-              const y = Number(s?.seasonId);
-              if (!y) return;
-              if (
-                s?.weeklyPointsByPlayer &&
-                Object.keys(s.weeklyPointsByPlayer).length
-              ) {
-                weeklyByYear[y] = s.weeklyPointsByPlayer;
-              }
-            });
-          }
           p.transactionsSlim = txByYear;
-          p.weeklyPointsByPlayer = weeklyByYear;
           p.transactionsSlimFlat = Object.entries(txByYear).flatMap(
             ([yr, arr]) =>
               (Array.isArray(arr) ? arr : []).map((r) => ({
@@ -2424,6 +2398,14 @@ export default function App() {
         const proTeamsPayload =
           data?.proTeamsByYear || data?.espnProTeamsByYear || {};
         setProTeamsByYear(proTeamsPayload);
+
+        // NEW: injuries payload (supports several possible keys from popup)
+        const injuriesPayload =
+          data?.injuriesByYear ||
+          data?.injuryByYear ||
+          data?.injuryWeeksByYear ||
+          {};
+        setInjuriesByYear(injuriesPayload);
 
         const playoffTeamsFromSeasons = {};
         for (const s of seasons || []) {
@@ -2827,7 +2809,6 @@ export default function App() {
           moneyInputs: mergedMoney,
           activityBySeason: activityPreMerge,
           espnTransactionsByYear: data.transactionsSlim || {},
-          espnWeeklyPtsByYear: data.weeklyPointsByPlayer || {},
           espnOwnerByTeamByYear: ownerMap,
           espnTeamNamesByOwner: teamNamesFromData,
           espnOwnerFullByTeamByYear: ownerFullByTeamByYear,
@@ -2843,6 +2824,7 @@ export default function App() {
           leagueFontFamily,
           espnTradesDetailedBySeason: data.espnTradesDetailedBySeason || {},
           espnProTeamsByYear: proTeamsPayload,
+          espnInjuriesByYear: injuriesPayload,
         });
 
         setTimeout(() => {
@@ -2974,6 +2956,11 @@ export default function App() {
         ? league.currentWeekByYear
         : currentWeekBySeason;
 
+    const mergedInjuries =
+      league.espnInjuriesByYear && Object.keys(league.espnInjuriesByYear).length
+        ? league.espnInjuriesByYear
+        : injuriesByYear;
+
     return {
       ...league,
       hiddenManagers: Array.from(hiddenManagers),
@@ -2996,6 +2983,7 @@ export default function App() {
       currentWeekBySeason: league.currentWeekBySeason || mergedCurrentWeeks,
       espnCurrentWeekBySeason:
         league.espnCurrentWeekBySeason || mergedCurrentWeeks,
+      espnInjuriesByYear: mergedInjuries,
     };
   }, [
     league,
@@ -3009,6 +2997,7 @@ export default function App() {
     proTeamsByYear,
     rostersByYear,
     currentWeekBySeason,
+    injuriesByYear,
   ]);
 
   const currentWeekResolved = React.useMemo(() => {
@@ -3839,9 +3828,6 @@ export default function App() {
                         espnAddsByYear={
                           recForTrades.espnTransactionsByYear || {}
                         }
-                        espnWeeklyPtsByYear={
-                          recForTrades.espnWeeklyPtsByYear || {}
-                        }
                         espnOwnerByTeamByYear={
                           recForTrades.espnOwnerByTeamByYear ||
                           recForTrades.espnOwnerMapByYear ||
@@ -3857,6 +3843,7 @@ export default function App() {
                         espnOwnerFullByTeamByYear={
                           recForTrades.espnOwnerFullByTeamByYear || {}
                         }
+                        espnInjuriesByYear={recForTrades.espnInjuriesByYear || {}}
                       />
                     );
                   })()}
@@ -3906,9 +3893,8 @@ export default function App() {
                           fallbackTransactionsByYear={
                             recForTrading.espnTransactionsByYear || {}
                           }
-                          /* NEW: needed to compute PPG */
-                          espnWeeklyPtsByYear={
-                            recForTrading.espnWeeklyPtsByYear || {}
+                          espnInjuriesByYear={
+                            recForTrading.espnInjuriesByYear || {}
                           }
                         />
                       );
