@@ -1,46 +1,34 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
 const MIN_IDEA_LENGTH = 3;
 
-type Payload = {
-  idea?: unknown;
-  category?: unknown;
-  categoryValue?: unknown;
-  contact?: unknown;
-  page?: unknown;
-  company?: unknown;
-};
-
-const coerceString = (value: unknown): string | undefined =>
+const coerceString = (value) =>
   (typeof value === "string" ? value.trim() : undefined) || undefined;
 
-const parseBody = (req: VercelRequest): Payload => {
+const parseBody = (req) => {
   if (!req.body) return {};
   if (typeof req.body === "string") {
     try {
-      return JSON.parse(req.body) as Payload;
+      return JSON.parse(req.body);
     } catch {
       return {};
     }
   }
-  return req.body as Payload;
+  return req.body;
 };
 
-const pickFirst = (value: string | string[] | undefined): string | undefined => {
+const pickFirst = (value) => {
   if (!value) return undefined;
   return Array.isArray(value) ? value[0] : value;
 };
 
-const looksLikeEmail = (value: string | undefined): boolean =>
-  !!value && /.+@.+\..+/.test(value);
+const looksLikeEmail = (value) => !!value && /.+@.+\..+/.test(value);
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const body = parseBody(req);
+  const body = parseBody(req) || {};
   const idea = coerceString(body.idea);
   const category = coerceString(body.category);
   const categoryValue = coerceString(body.categoryValue);
@@ -98,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     subjectParts.push(`(${category})`);
   }
 
-  const emailPayload: Record<string, string> = {
+  const emailPayload = {
     from: fromEmail,
     to: ownerEmail,
     subject: subjectParts.join(" "),
