@@ -1,4 +1,7 @@
+import { request as httpsRequest } from "node:https";
+
 const MIN_IDEA_LENGTH = 3;
+const RESEND_ENDPOINT = new URL("https://api.resend.com/emails");
 
 const coerceString = (value) =>
   (typeof value === "string" ? value.trim() : undefined) || undefined;
@@ -21,6 +24,35 @@ const pickFirst = (value) => {
 };
 
 const looksLikeEmail = (value) => !!value && /.+@.+\..+/.test(value);
+
+const postJson = (url, body, headers) =>
+  new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body ?? {});
+    const request = httpsRequest(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+          ...headers,
+        },
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        response.on("error", reject);
+        response.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          resolve({ statusCode: response.statusCode ?? 0, text });
+        });
+      }
+    );
+
+    request.on("error", reject);
+    request.write(payload);
+    request.end();
+  });
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -98,18 +130,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailPayload),
+    const { statusCode, text } = await postJson(RESEND_ENDPOINT, emailPayload, {
+      Authorization: `Bearer ${resendKey}`,
     });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Resend API error", response.status, errorBody);
+    if (!statusCode || statusCode < 200 || statusCode >= 300) {
+      console.error("Resend API error", statusCode, text);
       return res
         .status(502)
         .json({ ok: false, error: "We couldn't send that just yet. Please try again." });
