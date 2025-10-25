@@ -1,5 +1,5 @@
 // All tab components bundled in one module.
-// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab, StrengthOfScheduleTab
+// Exports: SetupTab, MembersTab, CareerTab, H2HTab, PlacementsTab, YearlyRecapTab, MoneyTab, RecordsTab, TradesTab, StrengthOfScheduleTab, WeeklyOutlookTab, ScenarioTab, LuckIndexTab, TradingTab, UpdatesWhatsNewTab, UpdatesComingSoonTab
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import html2canvas from "html2canvas";
 import { PDFDocument } from "pdf-lib";
@@ -27933,6 +27933,214 @@ function __projectedPointsForSide(side, seasonId, week) {
   } catch {
     return null;
   }
+}
+
+export function UpdatesWhatsNewTab() {
+  const PATCH_NOTES = [
+    {
+      version: "1.01",
+      released: "October 2024",
+      notes: [
+        "Added the updates hub so everyone can follow new releases in one place.",
+        "Polished the sidebar layout for quicker access to your favorite insights.",
+        "Improved reliability when importing larger chunks of historical data.",
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card
+        title="Latest release notes"
+        subtitle="Catch up on the newest improvements to LeagueVault."
+      >
+        <div className="space-y-6">
+          {PATCH_NOTES.map((entry) => (
+            <div
+              key={entry.version}
+              className="rounded-2xl border border-white/20 bg-white/70 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  Version {entry.version}
+                </div>
+                <div className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-400">
+                  {entry.released}
+                </div>
+              </div>
+              <ul className="mt-4 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                {entry.notes.map((note) => (
+                  <li
+                    key={note}
+                    className="flex items-start gap-2 rounded-xl bg-white/70 px-3 py-2 shadow-sm dark:bg-white/5"
+                  >
+                    <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card
+        title="Behind the release"
+        subtitle="A quick snapshot of what this update means for your league."
+      >
+        <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          <li className="rounded-2xl border border-white/20 bg-white/70 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+            Faster navigation with clearer section groupings on the dashboard sidebar.
+          </li>
+          <li className="rounded-2xl border border-white/20 bg-white/70 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+            Stability upgrades ensure massive historical imports load without a hitch.
+          </li>
+          <li className="rounded-2xl border border-white/20 bg-white/70 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+            Introduced a dedicated Updates category so you always know what’s live and what’s next.
+          </li>
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+const ROADMAP_CATEGORIES = [
+  { value: "new-sport", label: "New sport" },
+  { value: "new-platform", label: "New fantasy platform" },
+  { value: "new-stats", label: "New statistics" },
+  { value: "new-graphics", label: "New graphics" },
+  { value: "other", label: "Other" },
+];
+
+const UPCOMING_FEATURES = [
+  "Auction drafts",
+  "Yahoo leagues",
+  "Fantasy baseball",
+  "Fantasy basketball",
+];
+
+export function UpdatesComingSoonTab() {
+  const [category, setCategory] = useState(ROADMAP_CATEGORIES[0].value);
+  const [idea, setIdea] = useState("");
+  const [status, setStatus] = useState({ type: "idle", message: "" });
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const trimmed = idea.trim();
+    if (!trimmed) {
+      setStatus({
+        type: "error",
+        message: "Please share a quick note before sending.",
+      });
+      return;
+    }
+
+    const selected =
+      ROADMAP_CATEGORIES.find((option) => option.value === category)?.label ||
+      category;
+
+    const subject = "fantasy vault change";
+    const body = `Category: ${selected}\n\n${trimmed}`;
+    const recipient = "mikedoto1@gmail.com";
+    const mailto = `mailto:${recipient}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    if (typeof window !== "undefined") {
+      window.location.href = mailto;
+    }
+
+    setStatus({
+      type: "success",
+      message: "Opening your email client…",
+    });
+    setIdea("");
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card
+        title="What we're building next"
+        subtitle="A peek at the features already in motion."
+      >
+        <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          {UPCOMING_FEATURES.map((feature) => (
+            <li
+              key={feature}
+              className="flex items-start gap-3 rounded-2xl border border-white/20 bg-white/70 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
+            >
+              <span className="mt-[6px] h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {feature}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card
+        title="Help shape the roadmap"
+        subtitle="We’re always listening for the next great idea."
+      >
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+            We are always looking to add more features that our community wants to
+            see. Tell us what you want next and we’ll put it on the list.
+          </p>
+          <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+            Category
+            <select
+              className="w-full rounded-2xl border border-white/40 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 dark:border-white/10 dark:bg-zinc-950/70 dark:text-slate-200"
+              value={category}
+              onChange={(event) => {
+                setCategory(event.target.value);
+                setStatus({ type: "idle", message: "" });
+              }}
+            >
+              {ROADMAP_CATEGORIES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+            Your idea
+            <textarea
+              rows={5}
+              className="min-h-[140px] w-full resize-y rounded-2xl border border-white/40 bg-white/80 px-3 py-3 text-sm leading-relaxed text-slate-700 shadow-sm placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 dark:border-white/10 dark:bg-zinc-950/70 dark:text-slate-200"
+              value={idea}
+              onChange={(event) => {
+                setIdea(event.target.value);
+                if (status.type !== "idle") {
+                  setStatus({ type: "idle", message: "" });
+                }
+              }}
+              placeholder="Share the feature, stat, or experience you want to see."
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center rounded-full border border-amber-300/60 bg-amber-200/80 px-5 py-2 text-sm font-semibold text-amber-900 shadow-[0_20px_45px_-30px_rgba(251,191,36,0.8)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 disabled:opacity-60 dark:bg-amber-400/30 dark:text-amber-100"
+              disabled={!idea.trim()}
+            >
+              Send to LeagueVault
+            </button>
+            {status.type === "error" && (
+              <div className="rounded-full border border-rose-300/50 bg-rose-100/80 px-4 py-1.5 text-xs font-semibold text-rose-700 shadow-sm dark:border-rose-400/40 dark:bg-rose-500/10 dark:text-rose-200">
+                {status.message}
+              </div>
+            )}
+            {status.type === "success" && (
+              <div className="rounded-full border border-emerald-300/50 bg-emerald-100/80 px-4 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                {status.message}
+              </div>
+            )}
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
 }
 
 function groupByOwner(rows) {
