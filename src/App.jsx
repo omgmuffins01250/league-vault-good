@@ -29,6 +29,8 @@ import {
   LuckIndexTab,
   YearlyRecapTab,
   TradingTab,
+  UpdatesWhatsNewTab,
+  UpdatesComingSoonTab,
   DEFAULT_LEAGUE_ICONS,
 } from "/project/workspace/src/Components/tabs.jsx";
 import { buildFromRows } from "/project/workspace/src/Utils/buildFromRows.jsx";
@@ -3649,6 +3651,25 @@ export default function App() {
                 </SidebarButton>
               </div>
             </div>
+            <div className="pt-4">
+              <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 dark:text-white/70">
+                Updates
+              </div>
+              <div className="mt-2 space-y-2">
+                <SidebarButton
+                  active={section === "updates-whats-new"}
+                  onClick={() => setSection("updates-whats-new")}
+                >
+                  What's New
+                </SidebarButton>
+                <SidebarButton
+                  active={section === "updates-coming"}
+                  onClick={() => setSection("updates-coming")}
+                >
+                  What's Coming
+                </SidebarButton>
+              </div>
+            </div>
           </aside>
           <main className="space-y-6 min-w-0">
             {/* Setup should always render */}
@@ -3912,6 +3933,8 @@ export default function App() {
                 )}
               </>
             )}
+            {section === "updates-whats-new" && <UpdatesWhatsNewTab />}
+            {section === "updates-coming" && <UpdatesComingSoonTab />}
           </main>
         </div>
         <Footer />
