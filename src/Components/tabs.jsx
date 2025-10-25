@@ -77,3 +77,4 @@
                 {status.message}
               </div>
             )}
+export { UpdatesComingSoonTab } from "./UpdatesComingSoonTab.jsx";
