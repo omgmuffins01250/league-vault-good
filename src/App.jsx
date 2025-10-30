@@ -10,7 +10,12 @@ import {
   primeOwnerMaps,
   ownerMapFor,
 } from "/project/workspace/src/ownerMaps.jsx";
-import { supabase, getLeaguesForCurrentUser } from "./Utils/supabaseClient";
+import {
+  supabase,
+  getLeaguesForCurrentUser,
+  listLeaguesForCurrentUser,
+  loadLeaguePayloadFromStorage,
+} from "./Utils/supabaseClient";
 console.log('Supabase connected:', supabase);
 import {
   SetupTab,
@@ -487,6 +492,78 @@ function writeStore(next) {
       } catch {}
     }
   }
+}
+
+async function testLoadFromSupabase() {
+  try {
+    const { data: leagues, error } = await listLeaguesForCurrentUser();
+    if (error) {
+      console.warn("[FL][supabase] listLeaguesForCurrentUser error", error);
+      return { error };
+    }
+
+    if (!leagues?.length) {
+      console.log("[FL][supabase] no remote leagues yet");
+      return { data: null };
+    }
+
+    const first = leagues[0];
+    const storagePath = first?.storage_path || first?.payload?.storage_path;
+    if (!storagePath) {
+      console.warn("[FL][supabase] selected league missing storage_path", first);
+      return { error: new Error("missing storage_path") };
+    }
+
+    const { data: payload, error: loadError } =
+      await loadLeaguePayloadFromStorage(storagePath);
+    if (loadError || !payload) {
+      console.warn("[FL][supabase] failed to load payload", loadError);
+      return { error: loadError || new Error("load failed") };
+    }
+
+    const leagueId =
+      payload.leagueKey ||
+      payload.leagueId ||
+      payload.league_id ||
+      payload.league_key ||
+      first?.league_key ||
+      first?.leagueKey ||
+      storagePath;
+
+    if (!leagueId) {
+      console.warn("[FL][supabase] could not derive league id", {
+        first,
+        payload,
+      });
+      return { error: new Error("missing league identifier") };
+    }
+
+    const currentStore = readStore();
+    const nextStore = {
+      ..._emptyStore(),
+      ...currentStore,
+      leaguesById: {
+        ...(currentStore?.leaguesById || {}),
+        [leagueId]: {
+          ...(currentStore?.leaguesById?.[leagueId] || {}),
+          ...payload,
+        },
+      },
+      lastSelectedLeagueId: leagueId,
+    };
+
+    writeStore(nextStore);
+    console.log("✅ rehydrated from Supabase!", { leagueId, storagePath });
+
+    return { data: payload };
+  } catch (err) {
+    console.warn("[FL][supabase] testLoadFromSupabase failed", err);
+    return { error: err };
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.__testLoadFromSupabase = testLoadFromSupabase;
 }
 
 function upsertLeague({
