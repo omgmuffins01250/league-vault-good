@@ -21,7 +21,7 @@ if (typeof window !== 'undefined') {
 
 // ------------ helpers we can reuse everywhere ------------
 
-// save or update 1 league for current user
+// save or update 1 league for current user (old way – full payload in DB)
 export async function saveLeagueForCurrentUser({ league_key, league_name, payload }) {
   const {
     data: { user },
@@ -60,4 +60,102 @@ export async function getLeaguesForCurrentUser() {
     .order('updated_at', { ascending: false });
 
   return { data: data || [], error };
+}
+
+// ================== NEW STORAGE-AWARE HELPERS ==================
+
+// 1) upload BIG JSON to Storage
+export async function uploadLeagueBlob({ userId, leagueKey, blob }) {
+  if (!userId) throw new Error('uploadLeagueBlob: missing userId');
+  if (!leagueKey) throw new Error('uploadLeagueBlob: missing leagueKey');
+
+  const path = `${userId}/${leagueKey}.json`;
+
+  const { error } = await supabase.storage
+    .from('league-payloads')
+    .upload(path, blob, {
+      upsert: true,
+      contentType: 'application/json',
+    });
+
+  if (error) {
+    console.error('[supabase] uploadLeagueBlob failed', error);
+    throw error;
+  }
+
+  return { path };
+}
+
+// 2) write the SMALL row to public.leagues, pointing to Storage
+export async function saveLeagueRow({ userId, leagueKey, leagueName, storagePath, meta = {} }) {
+  const { error } = await supabase
+    .from('leagues')
+    .upsert(
+      {
+        user_id: userId,
+        league_key: leagueKey,
+        league_name: leagueName,
+        payload: {
+          ...meta,
+          storage_path: storagePath,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,league_key' }
+    );
+
+  if (error) {
+    console.error('[supabase] saveLeagueRow failed', error);
+    throw error;
+  }
+}
+
+// 3) one-shot helper: take a full league payload → storage + row
+export async function saveFullLeagueToSupabase(fullLeaguePayload) {
+  // who is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not signed in – cannot save league');
+  }
+
+  // derive league key / name from payload
+  const leagueKey =
+    fullLeaguePayload.leagueKey ||
+    fullLeaguePayload.league_id ||
+    fullLeaguePayload.leagueId ||
+    fullLeaguePayload.league_key ||
+    'UNKNOWN_LEAGUE';
+
+  const leagueName =
+    fullLeaguePayload.leagueName ||
+    fullLeaguePayload.league_name ||
+    fullLeaguePayload.name ||
+    'Unknown League';
+
+  // string → blob
+  const json = JSON.stringify(fullLeaguePayload);
+  const blob = new Blob([json], { type: 'application/json' });
+
+  // upload to storage
+  const { path } = await uploadLeagueBlob({
+    userId: user.id,
+    leagueKey,
+    blob,
+  });
+
+  // write pointer row
+  await saveLeagueRow({
+    userId: user.id,
+    leagueKey,
+    leagueName,
+    storagePath: path,
+    meta: {
+      platform: fullLeaguePayload.platform,
+      seasons: fullLeaguePayload.seasons,
+    },
+  });
+
+  console.log('[supabase] saved league via storage →', { leagueKey, path });
 }
