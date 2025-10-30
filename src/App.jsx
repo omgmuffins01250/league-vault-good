@@ -431,18 +431,40 @@ function readStore() {
 }
 
 function writeStore(next) {
-  const normalized = next || _emptyStore();
-  const json = JSON.stringify(normalized);
-  const snapshot = (() => {
-    try {
-      return JSON.parse(json);
-    } catch {
-      return normalized;
+  const normalized = next && typeof next === "object" ? next : _emptyStore();
+  const pointer = (() => {
+    const slim = {
+      lastSelectedLeagueId: normalized.lastSelectedLeagueId || "",
+      leaguesById: {},
+    };
+
+    const leagues = normalized.leaguesById || {};
+    for (const [id, league] of Object.entries(leagues)) {
+      if (!league || typeof league !== "object") continue;
+      const summary = {
+        leagueId: league.leagueId || league.leagueKey || id,
+        leagueKey: league.leagueKey || league.leagueId || id,
+        name: league.name || league.leagueName || "",
+        platform: league.platform || league.provider || "ESPN",
+      };
+
+      if (league.updated_at) summary.updated_at = league.updated_at;
+      if (league.updatedAt) summary.updatedAt = league.updatedAt;
+      if (league.lastUpdated) summary.lastUpdated = league.lastUpdated;
+      if (league.storage_path) summary.storage_path = league.storage_path;
+
+      slim.leaguesById[id] = summary;
     }
+
+    return slim;
   })();
+
   if (typeof window !== "undefined") {
-    window.__FL_STORE_v1 = snapshot;
+    window.__FL_VOLATILE_STORE__ = normalized;
+    window.__FL_STORE_v1 = pointer;
   }
+
+  const json = JSON.stringify(pointer);
   const BK_KEY = `${LS_KEY}::backend`;
   try {
     // Try localStorage
@@ -476,8 +498,6 @@ function writeStore(next) {
       if (!back) throw new Error("sessionStorage read-back empty");
       sessionStorage.setItem(BK_KEY, "session");
 
-      // also clear any leftover volatile memory copy
-      if (window.__FL_VOLATILE_STORE__) delete window.__FL_VOLATILE_STORE__;
       console.log("[FL][storage] fell back to sessionStorage");
     } catch (e2) {
       console.warn(
@@ -486,7 +506,7 @@ function writeStore(next) {
         e2?.message,
         "→ using in-memory only"
       );
-      window.__FL_VOLATILE_STORE__ = snapshot;
+      window.__FL_VOLATILE_STORE__ = normalized;
       try {
         sessionStorage.removeItem(BK_KEY);
       } catch {}
@@ -3183,11 +3203,22 @@ export default function App() {
       let activeId = null;
       let stamp = null;
       try {
-        const fromWindow =
-          (typeof window !== "undefined" && window.__FL_STORE_v1) || null;
-        let store =
-          (fromWindow && typeof fromWindow === "object" ? fromWindow : null) ||
-          null;
+        let store = null;
+
+        if (typeof window !== "undefined") {
+          const volatile = window.__FL_VOLATILE_STORE__;
+          if (volatile && typeof volatile === "object") {
+            store = volatile;
+          }
+        }
+
+        if (!store) {
+          const fromWindow =
+            (typeof window !== "undefined" && window.__FL_STORE_v1) || null;
+          if (fromWindow && typeof fromWindow === "object") {
+            store = fromWindow;
+          }
+        }
 
         if (!store) {
           try {
@@ -3204,13 +3235,6 @@ export default function App() {
             if (rawSession) store = JSON.parse(rawSession);
           } catch (err) {
             console.warn("[FL][supabase] failed to parse session store:", err);
-          }
-        }
-
-        if (!store && typeof window !== "undefined") {
-          const volatile = window.__FL_VOLATILE_STORE__;
-          if (volatile && typeof volatile === "object") {
-            store = volatile;
           }
         }
 
