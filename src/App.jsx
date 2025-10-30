@@ -10,7 +10,11 @@ import {
   primeOwnerMaps,
   ownerMapFor,
 } from "/project/workspace/src/ownerMaps.jsx";
-import { supabase } from './Utils/supabaseClient';
+import {
+  supabase,
+  getLeaguesForCurrentUser,
+  saveLeagueForCurrentUser,
+} from './Utils/supabaseClient';
 console.log('Supabase connected:', supabase);
 import {
   SetupTab,
@@ -1854,6 +1858,29 @@ export default function App() {
   const [seasonsByYear, setSeasonsByYear] = useState({});
   const [scheduleByYear, setScheduleByYear] = useState({});
   const [injuriesByYear, setInjuriesByYear] = useState({});
+  const [remoteLeagues, setRemoteLeagues] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await getLeaguesForCurrentUser();
+        if (error) {
+          console.warn("[FL][supabase] failed to load leagues from Supabase:", error);
+          return;
+        }
+        setRemoteLeagues(data);
+        console.log("📦 loaded leagues from Supabase:", data);
+        // here is where you can hydrate your existing FL_STORE if you want
+      } catch (err) {
+        console.warn("[FL][supabase] getLeaguesForCurrentUser threw:", err);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!remoteLeagues.length) return;
+    console.log("[FL][supabase] remote leagues ready:", remoteLeagues);
+  }, [remoteLeagues]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -2275,7 +2302,7 @@ export default function App() {
     // ===========================
     // NEW: hot-path ingest function
     // ===========================
-    const bootstrapFromPayload = (data) => {
+    const bootstrapFromPayload = async (data) => {
       try {
         if (!data || !Object.keys(data).length) {
           console.warn("[FL] bootstrapFromPayload: no data");
@@ -2830,6 +2857,16 @@ export default function App() {
           espnInjuriesByYear: injuriesPayload,
         });
 
+        const { error: remoteError } = await saveLeagueForCurrentUser({
+          league_key:
+            selectedKey || resolvedLeagueId || data.leagueKey || data.leagueId || 'UNKNOWN',
+          league_name: resolvedLeagueName || data.leagueName || 'Unknown League',
+          payload: data,
+        });
+        if (remoteError) {
+          console.warn("[FL][supabase] failed to save league for current user:", remoteError);
+        }
+
         setTimeout(() => {
           const s = readStore();
           const backend =
@@ -2883,43 +2920,47 @@ export default function App() {
     if (typeof window !== "undefined") {
       window.FL_HANDLE_EXTENSION_PAYLOAD = (p) => {
         window.__FL_HANDOFF = p;
-        bootstrapFromPayload(p);
+        bootstrapFromPayload(p).catch((err) => {
+          console.warn("[FL] FL_HANDLE_EXTENSION_PAYLOAD bootstrap failed:", err);
+        });
       };
     }
 
     // cold boot path (unchanged: read from handoff channels once)
-    try {
-      const data =
-        window.__FL_HANDOFF ||
-        (() => {
-          try {
-            const ss = sessionStorage.getItem("FL_HANDOFF_RAW");
-            return ss ? JSON.parse(ss) : null;
-          } catch {
-            return null;
-          }
-        })() ||
-        (() => {
-          try {
-            return JSON.parse(window.name || "{}");
-          } catch {
-            return null;
-          }
-        })();
+    (async () => {
+      try {
+        const data =
+          window.__FL_HANDOFF ||
+          (() => {
+            try {
+              const ss = sessionStorage.getItem("FL_HANDOFF_RAW");
+              return ss ? JSON.parse(ss) : null;
+            } catch {
+              return null;
+            }
+          })() ||
+          (() => {
+            try {
+              return JSON.parse(window.name || "{}");
+            } catch {
+              return null;
+            }
+          })();
 
-      if (!data || !Object.keys(data).length) {
-        console.warn(
-          "[FL] No payload detected in __FL_HANDOFF / sessionStorage / window.name"
-        );
+        if (!data || !Object.keys(data).length) {
+          console.warn(
+            "[FL] No payload detected in __FL_HANDOFF / sessionStorage / window.name"
+          );
+          rebuildFromStore();
+          return;
+        }
+
+        await bootstrapFromPayload(data);
+      } catch (e) {
+        console.warn("Bootstrap failed; falling back to stored leagues:", e);
         rebuildFromStore();
-        return;
       }
-
-      bootstrapFromPayload(data);
-    } catch (e) {
-      console.warn("Bootstrap failed; falling back to stored leagues:", e);
-      rebuildFromStore();
-    }
+    })();
   }, []);
 
   const league =
