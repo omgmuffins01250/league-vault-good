@@ -10,7 +10,8 @@ import {
   primeOwnerMaps,
   ownerMapFor,
 } from "/project/workspace/src/ownerMaps.jsx";
-
+import { supabase } from './Utils/supabaseClient';
+console.log('Supabase connected:', supabase);
 import {
   SetupTab,
   MembersTab,
