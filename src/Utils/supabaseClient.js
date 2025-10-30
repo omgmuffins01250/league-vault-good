@@ -62,6 +62,21 @@ export async function getLeaguesForCurrentUser() {
   return { data: data || [], error };
 }
 
+export async function listLeaguesForCurrentUser() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { data: [], error: new Error('not signed in') };
+
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('league_key, league_name, storage_path, updated_at')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  return { data: data || [], error };
+}
+
 // ================== NEW STORAGE-AWARE HELPERS ==================
 
 // 1) upload BIG JSON to Storage
@@ -153,6 +168,18 @@ export async function saveFullLeagueToSupabase(fullLeaguePayload) {
   });
 
   console.log('[supabase] saved league via storage →', { leagueKey, path });
+}
+
+export async function loadLeaguePayloadFromStorage(storagePath) {
+  const { data, error } = await supabase.storage
+    .from('league-payloads')
+    .download(storagePath);
+
+  if (error) return { error, data: null };
+
+  const text = await data.text();
+  const json = JSON.parse(text);
+  return { data: json, error: null };
 }
 
 // 👇 ADD THIS SO YOU CAN CALL IT FROM THE BROWSER CONSOLE ON PROD
