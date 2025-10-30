@@ -432,85 +432,82 @@ function readStore() {
 
 function writeStore(next) {
   const normalized = next && typeof next === "object" ? next : _emptyStore();
-  const pointer = (() => {
-    const slim = {
-      lastSelectedLeagueId: normalized.lastSelectedLeagueId || "",
-      leaguesById: {},
-    };
-
-    const leagues = normalized.leaguesById || {};
-    for (const [id, league] of Object.entries(leagues)) {
-      if (!league || typeof league !== "object") continue;
-      const summary = {
-        leagueId: league.leagueId || league.leagueKey || id,
-        leagueKey: league.leagueKey || league.leagueId || id,
-        name: league.name || league.leagueName || "",
-        platform: league.platform || league.provider || "ESPN",
-      };
-
-      if (league.updated_at) summary.updated_at = league.updated_at;
-      if (league.updatedAt) summary.updatedAt = league.updatedAt;
-      if (league.lastUpdated) summary.lastUpdated = league.lastUpdated;
-      if (league.storage_path) summary.storage_path = league.storage_path;
-
-      slim.leaguesById[id] = summary;
-    }
-
-    return slim;
-  })();
+  const BK_KEY = "FL_STORE_BACKEND";
 
   if (typeof window !== "undefined") {
     window.__FL_VOLATILE_STORE__ = normalized;
-    window.__FL_STORE_v1 = pointer;
+    window.__FL_STORE_v1 = normalized;
   }
 
-  const json = JSON.stringify(pointer);
-  const BK_KEY = `${LS_KEY}::backend`;
-  try {
-    // Try localStorage
-    localStorage.setItem(LS_KEY, json);
-    const back = localStorage.getItem(LS_KEY);
-    if (!back) throw new Error("localStorage read-back empty");
+  const json = JSON.stringify(normalized);
 
-    // Mark backend + clear session copy so it can't shadow later
-    localStorage.setItem(BK_KEY, "local");
-    sessionStorage.removeItem(LS_KEY);
-    sessionStorage.removeItem(BK_KEY);
-  } catch (e1) {
-    console.warn(
-      "[FL][storage] localStorage.setItem failed:",
-      e1?.name,
-      e1?.message,
-      "len=",
-      json.length
-    );
+  // 3 MB-ish safety cap — browsers usually die around 5 MB
+  const MAX_SAFE = 3 * 1024 * 1024;
 
-    // ensure no stale/bad local value can shadow session
+  // If it’s small, do the normal path
+  if (json.length < MAX_SAFE) {
     try {
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(`${LS_KEY}::backend`);
-    } catch {}
-
-    try {
-      // Fallback to sessionStorage
-      sessionStorage.setItem(LS_KEY, json);
-      const back = sessionStorage.getItem(LS_KEY);
-      if (!back) throw new Error("sessionStorage read-back empty");
-      sessionStorage.setItem(BK_KEY, "session");
-
-      console.log("[FL][storage] fell back to sessionStorage");
-    } catch (e2) {
-      console.warn(
-        "[FL][storage] sessionStorage.setItem failed:",
-        e2?.name,
-        e2?.message,
-        "→ using in-memory only"
-      );
-      window.__FL_VOLATILE_STORE__ = normalized;
-      try {
-        sessionStorage.removeItem(BK_KEY);
-      } catch {}
+      localStorage.setItem(LS_KEY, json);
+      localStorage.setItem(BK_KEY, "localStorage");
+      if (window.__FL_VOLATILE_STORE__) delete window.__FL_VOLATILE_STORE__;
+      if (typeof window !== "undefined") {
+        window.__FL_STORE_v1 = normalized;
+      }
+      return;
+    } catch (e) {
+      console.warn("[FL][storage] small write failed, falling back", e);
     }
+  }
+
+  // If we got here, it’s too big → write a trimmed version
+  try {
+    // build a tiny shell: keep ids + lastSelectedLeagueId but DROP big rows
+    const tiny = {
+      lastSelectedLeagueId: normalized.lastSelectedLeagueId,
+      leaguesById: {},
+      // we’ll mark that a remote copy exists
+      __remoteBacked: true,
+    };
+
+    const leagues = normalized.leaguesById || {};
+    const ids = Object.keys(leagues);
+
+    ids.forEach((id) => {
+      const lg = leagues[id] || {};
+      tiny.leaguesById[id] = {
+        leagueId: lg.leagueId || id,
+        leagueKey: lg.leagueKey || id,
+        name: lg.name,
+        platform: lg.platform,
+        lastUpdated: lg.lastUpdated,
+        // IMPORTANT: remember where the real JSON lives
+        storage_path: lg.storage_path,
+      };
+    });
+
+    localStorage.setItem(LS_KEY, JSON.stringify(tiny));
+    localStorage.setItem(BK_KEY, "localStorage");
+    if (typeof window !== "undefined") {
+      window.__FL_STORE_v1 = tiny;
+    }
+    if (typeof window !== "undefined") {
+      window.__FL_VOLATILE_STORE__ = normalized; // keep full copy in memory for THIS tab
+    }
+
+    console.log(
+      "[FL][storage] big league → stored tiny shell locally, full in memory"
+    );
+  } catch (e3) {
+    console.warn(
+      "[FL][storage] even tiny shell failed, going memory-only",
+      e3
+    );
+    if (typeof window !== "undefined") {
+      window.__FL_VOLATILE_STORE__ = normalized;
+    }
+    try {
+      sessionStorage.removeItem(BK_KEY);
+    } catch {}
   }
 }
 
