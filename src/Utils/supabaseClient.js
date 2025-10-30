@@ -1,14 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-// These values will come from your .env file
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Pulled from your .env (Vite requires VITE_ prefix)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Create and export the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Create a single client for the whole app
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    persistSession: true,        // keep user logged in on refresh
-    autoRefreshToken: true,      // refresh tokens automatically
-    detectSessionInUrl: true,    // handle auth redirects
+    persistSession: true,        // stay logged in on refresh
+    autoRefreshToken: true,      // keep session fresh
+    detectSessionInUrl: true,    // handle email-link/OAuth redirects if you enable them
   },
 });
+
+// TEMP: expose client for quick console testing (remove later)
+if (typeof window !== 'undefined') {
+  window.__sb = supabase;
+}
