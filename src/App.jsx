@@ -10,11 +10,7 @@ import {
   primeOwnerMaps,
   ownerMapFor,
 } from "/project/workspace/src/ownerMaps.jsx";
-import {
-  supabase,
-  getLeaguesForCurrentUser,
-  saveLeagueForCurrentUser,
-} from './Utils/supabaseClient';
+import { supabase, getLeaguesForCurrentUser } from "./Utils/supabaseClient";
 console.log('Supabase connected:', supabase);
 import {
   SetupTab,
@@ -430,7 +426,18 @@ function readStore() {
 }
 
 function writeStore(next) {
-  const json = JSON.stringify(next || _emptyStore());
+  const normalized = next || _emptyStore();
+  const json = JSON.stringify(normalized);
+  const snapshot = (() => {
+    try {
+      return JSON.parse(json);
+    } catch {
+      return normalized;
+    }
+  })();
+  if (typeof window !== "undefined") {
+    window.__FL_STORE_v1 = snapshot;
+  }
   const BK_KEY = `${LS_KEY}::backend`;
   try {
     // Try localStorage
@@ -474,7 +481,7 @@ function writeStore(next) {
         e2?.message,
         "→ using in-memory only"
       );
-      window.__FL_VOLATILE_STORE__ = JSON.parse(json);
+      window.__FL_VOLATILE_STORE__ = snapshot;
       try {
         sessionStorage.removeItem(BK_KEY);
       } catch {}
@@ -1900,6 +1907,7 @@ export default function App() {
 
   const leagueMenuButtonRef = React.useRef(null);
   const leagueMenuRef = React.useRef(null);
+  const lastSupabaseAutoSaveRef = React.useRef({ key: null, stamp: null });
   const currentYear = React.useMemo(() => {
     const yrs = Object.keys(currentWeekBySeason || {})
       .map(Number)
@@ -2857,16 +2865,6 @@ export default function App() {
           espnInjuriesByYear: injuriesPayload,
         });
 
-        const { error: remoteError } = await saveLeagueForCurrentUser({
-          league_key:
-            selectedKey || resolvedLeagueId || data.leagueKey || data.leagueId || 'UNKNOWN',
-          league_name: resolvedLeagueName || data.leagueName || 'Unknown League',
-          payload: data,
-        });
-        if (remoteError) {
-          console.warn("[FL][supabase] failed to save league for current user:", remoteError);
-        }
-
         setTimeout(() => {
           const s = readStore();
           const backend =
@@ -3099,6 +3097,123 @@ export default function App() {
     scheduleByYear,
     proTeamsByYear,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let cancelled = false;
+
+    (async () => {
+      let activeId = null;
+      let stamp = null;
+      try {
+        const fromWindow =
+          (typeof window !== "undefined" && window.__FL_STORE_v1) || null;
+        let store =
+          (fromWindow && typeof fromWindow === "object" ? fromWindow : null) ||
+          null;
+
+        if (!store) {
+          try {
+            const rawLocal = window.localStorage?.getItem(LS_KEY) || "";
+            if (rawLocal) store = JSON.parse(rawLocal);
+          } catch (err) {
+            console.warn("[FL][supabase] failed to parse local store:", err);
+          }
+        }
+
+        if (!store) {
+          try {
+            const rawSession = window.sessionStorage?.getItem(LS_KEY) || "";
+            if (rawSession) store = JSON.parse(rawSession);
+          } catch (err) {
+            console.warn("[FL][supabase] failed to parse session store:", err);
+          }
+        }
+
+        if (!store && typeof window !== "undefined") {
+          const volatile = window.__FL_VOLATILE_STORE__;
+          if (volatile && typeof volatile === "object") {
+            store = volatile;
+          }
+        }
+
+        if (!store || typeof store !== "object") {
+          store = readStore();
+        }
+
+        activeId = store?.lastSelectedLeagueId;
+        const leagueToSave = store?.leaguesById?.[activeId];
+        if (!leagueToSave) return;
+
+        stamp = `${activeId || ""}::${
+          leagueToSave.lastUpdated ||
+          leagueToSave.updated_at ||
+          leagueToSave.updatedAt ||
+          0
+        }`;
+        const prev = lastSupabaseAutoSaveRef.current || {};
+        if (prev.key === activeId && prev.stamp === stamp) {
+          if (prev.pending) return;
+          if (prev.error === false) return;
+        }
+
+        lastSupabaseAutoSaveRef.current = {
+          key: activeId,
+          stamp,
+          pending: true,
+        };
+
+        if (typeof window.__saveFullLeagueToSupabase === "function") {
+          await window.__saveFullLeagueToSupabase({
+            leagueKey:
+              leagueToSave.leagueKey ||
+              leagueToSave.leagueId ||
+              activeId ||
+              leagueToSave.id,
+            leagueName:
+              leagueToSave.name ||
+              leagueToSave.leagueName ||
+              "Unknown League",
+            platform: leagueToSave.platform || "ESPN",
+            ...leagueToSave,
+          });
+          if (!cancelled) {
+            console.log("[FL][supabase] auto-saved active league");
+          }
+          lastSupabaseAutoSaveRef.current = {
+            key: activeId,
+            stamp,
+            pending: false,
+            error: false,
+          };
+        } else {
+          lastSupabaseAutoSaveRef.current = {
+            key: activeId,
+            stamp,
+            pending: false,
+            error: true,
+          };
+          console.warn("[FL][supabase] helper not found on window");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[FL][supabase] auto-save failed (non-blocking):", err);
+        }
+        if (activeId) {
+          lastSupabaseAutoSaveRef.current = {
+            key: activeId,
+            stamp,
+            pending: false,
+            error: true,
+          };
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLeagueId, rawRows]);
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.FL_debugRoster = (year, teamId, week) => {
