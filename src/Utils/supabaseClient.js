@@ -112,7 +112,6 @@ export async function saveLeagueRow({ userId, leagueKey, leagueName, storagePath
 
 // 3) one-shot helper: take a full league payload → storage + row
 export async function saveFullLeagueToSupabase(fullLeaguePayload) {
-  // who is logged in
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -120,7 +119,6 @@ export async function saveFullLeagueToSupabase(fullLeaguePayload) {
     throw new Error('Not signed in – cannot save league');
   }
 
-  // derive league key / name from payload
   const leagueKey =
     fullLeaguePayload.leagueKey ||
     fullLeaguePayload.league_id ||
@@ -134,18 +132,15 @@ export async function saveFullLeagueToSupabase(fullLeaguePayload) {
     fullLeaguePayload.name ||
     'Unknown League';
 
-  // string → blob
   const json = JSON.stringify(fullLeaguePayload);
   const blob = new Blob([json], { type: 'application/json' });
 
-  // upload to storage
   const { path } = await uploadLeagueBlob({
     userId: user.id,
     leagueKey,
     blob,
   });
 
-  // write pointer row
   await saveLeagueRow({
     userId: user.id,
     leagueKey,
@@ -158,4 +153,9 @@ export async function saveFullLeagueToSupabase(fullLeaguePayload) {
   });
 
   console.log('[supabase] saved league via storage →', { leagueKey, path });
+}
+
+// 👇 ADD THIS SO YOU CAN CALL IT FROM THE BROWSER CONSOLE ON PROD
+if (typeof window !== 'undefined') {
+  window.__saveFullLeagueToSupabase = saveFullLeagueToSupabase;
 }
