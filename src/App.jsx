@@ -574,6 +574,18 @@ async function testLoadFromSupabase() {
 
     writeStore(nextStore);
     console.log("✅ rehydrated from Supabase!", { leagueId, storagePath });
+    // 👇 ensure UI refreshes after writing store
+if (typeof window !== "undefined" && typeof window.rebuildFromStore === "function") {
+  console.log("[FL][supabase] calling rebuildFromStore after rehydration");
+  window.rebuildFromStore();
+} else {
+  try {
+    const appRoot = document.querySelector("#root") || document.body;
+    console.log("[FL][supabase] forcing soft reload");
+    window.location.reload();
+  } catch {}
+}
+
 
     return { data: payload };
   } catch (err) {
@@ -2167,6 +2179,9 @@ export default function App() {
       setInjuriesByYear({});
     }
   }
+if (typeof window !== "undefined") {
+  window.rebuildFromStore = rebuildFromStore;
+}
 
   function switchLeagueById(id) {
     const store = readStore();
