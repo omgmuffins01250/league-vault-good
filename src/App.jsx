@@ -459,45 +459,48 @@ function writeStore(next) {
     }
   }
 
-  // If we got here, it’s too big → write a trimmed version
-  try {
-    // build a tiny shell: keep ids + lastSelectedLeagueId but DROP big rows
-    const tiny = {
-      lastSelectedLeagueId: normalized.lastSelectedLeagueId,
-      leaguesById: {},
-      // we’ll mark that a remote copy exists
-      __remoteBacked: true,
+ // If we got here, it’s too big → write a trimmed version
+try {
+  const tiny = {
+    lastSelectedLeagueId: normalized.lastSelectedLeagueId,
+    leaguesById: {},
+    __remoteBacked: true,
+  };
+
+  const leagues = normalized.leaguesById || {};
+  const ids = Object.keys(leagues);
+
+  ids.forEach((id) => {
+    const lg = leagues[id] || {};
+    tiny.leaguesById[id] = {
+      leagueId: lg.leagueId || id,
+      leagueKey: lg.leagueKey || id,
+      name: lg.name,
+      platform: lg.platform,
+      lastUpdated: lg.lastUpdated,
+      storage_path: lg.storage_path,
     };
+  });
 
-    const leagues = normalized.leaguesById || {};
-    const ids = Object.keys(leagues);
+  // 1) tiny to localStorage
+  localStorage.setItem(LS_KEY, JSON.stringify(tiny));
+  localStorage.setItem(BK_KEY, "localStorage");
 
-    ids.forEach((id) => {
-      const lg = leagues[id] || {};
-      tiny.leaguesById[id] = {
-        leagueId: lg.leagueId || id,
-        leagueKey: lg.leagueKey || id,
-        name: lg.name,
-        platform: lg.platform,
-        lastUpdated: lg.lastUpdated,
-        // IMPORTANT: remember where the real JSON lives
-        storage_path: lg.storage_path,
-      };
-    });
+  // 2) full to sessionStorage if we can
+  try {
+    sessionStorage.setItem(LS_KEY, JSON.stringify(normalized));
+    sessionStorage.setItem(BK_KEY, "sessionStorage");
+  } catch (ssErr) {
+    console.warn("[FL][storage] full sessionStorage write failed, memory-only", ssErr);
+  }
 
-    localStorage.setItem(LS_KEY, JSON.stringify(tiny));
-    localStorage.setItem(BK_KEY, "localStorage");
-    if (typeof window !== "undefined") {
-      window.__FL_STORE_v1 = tiny;
-    }
-    if (typeof window !== "undefined") {
-      window.__FL_VOLATILE_STORE__ = normalized; // keep full copy in memory for THIS tab
-    }
+  if (typeof window !== "undefined") {
+    window.__FL_STORE_v1 = tiny;
+    window.__FL_VOLATILE_STORE__ = normalized;
+  }
 
-    console.log(
-      "[FL][storage] big league → stored tiny shell locally, full in memory"
-    );
-  } catch (e3) {
+  console.log("[FL][storage] big league → stored tiny shell locally, full in memory");
+} catch (e3) {
     console.warn(
       "[FL][storage] even tiny shell failed, going memory-only",
       e3
